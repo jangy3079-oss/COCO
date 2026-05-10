@@ -1,0 +1,26 @@
+spring:
+  datasource:
+    url: jdbc:postgresql://localhost:5432/coco_db
+    username: ${DB_USERNAME:coco}
+    password: ${DB_PASSWORD:coco1234}
+    driver-class-name: org.postgresql.Driver
+
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: true
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+        format_sql: true
+
+server:
+  port: 8080
+
+jwt:
+  secret: ${JWT_SECRET:coco-secret-key-for-development-only}
+  expiration: 86400000   # 24시간 (ms)
+
+tour-api:
+  base-url: https://apis.data.go.kr/B551011
+  key: ${TOUR_API_KEY:}
