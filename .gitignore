@@ -1,5 +1,25 @@
-.idea/
 .gradle/
 build/
+# ── Backend (Java/Spring Boot) ───────
+backend/target/
+backend/.mvn/
+backend/*.iml
 *.class
 application.properties
+*.jar
+*.war
+.env
+
+# ── Frontend (Flutter) ───────────────
+frontend/.dart_tool/
+frontend/.flutter-plugins
+frontend/.flutter-plugins-dependencies
+frontend/build/
+frontend/.packages
+frontend/pubspec.lock
+
+# ── IDE ──────────────────────────────
+.idea/
+*.iml
+.vscode/
+.DS_Store
