@@ -11,12 +11,12 @@ application.properties
 .env
 
 # ── Frontend (Flutter) ───────────────
-frontend/.dart_tool/
-frontend/.flutter-plugins
-frontend/.flutter-plugins-dependencies
-frontend/build/
-frontend/.packages
-frontend/pubspec.lock
+coco_frontend/.dart_tool/
+coco_frontend/.flutter-plugins
+coco_frontend/.flutter-plugins-dependencies
+coco_frontend/build/
+coco_frontend/.packages
+coco_frontend/pubspec.lock
 
 # ── IDE ──────────────────────────────
 .idea/
