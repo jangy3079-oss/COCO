@@ -1,11 +1,12 @@
 .gradle/
 build/
+
 # ── Backend (Java/Spring Boot) ───────
-backend/target/
-backend/.mvn/
-backend/*.iml
+coco_backend/.gradle/
+coco_backend/build/
+coco_backend/out/
+coco_backend/*.iml
 *.class
-application.properties
 *.jar
 *.war
 .env
