@@ -10,33 +10,35 @@ import org.hibernate.annotations.CreationTimestamp;
 import java.time.LocalDateTime;
 
 @Entity
-@Table(name = "qna_posts")
+@Table(name = "feed_comments")
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
-public class QnaPost {
+public class FeedComment {
+
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
-    @Column(name = "qna_post_id")
+    @Column(name = "feed_comment_id")
     private Long id;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "feed_post_id", nullable = false)
+    private FeedPost feedPost;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "user_id", nullable = false)
     private User user;
 
-    @Column(length = 500)
-    private String question;
-
-    @Column(length = 5)
-    private String language;
+    @Column(length = 300)
+    private String content;
 
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
 
     @Builder
-    public QnaPost(User user, String question, String language) {
+    public FeedComment(FeedPost feedPost, User user, String content) {
+        this.feedPost = feedPost;
         this.user = user;
-        this.question = question;
-        this.language = language;
+        this.content = content;
     }
 }
