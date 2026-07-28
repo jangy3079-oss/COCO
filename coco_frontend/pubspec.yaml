@@ -17,15 +17,23 @@ dependencies:
   dio: ^5.4.0
 
   # 지도
-  flutter_naver_map: ^1.2.0
+  # TODO: flutter_naver_map이 끌어오는 jni 패키지가 현재 Flutter/Gradle 툴체인과 충돌해서
+  # 빌드가 실패함(assembleDebug 시 ':jni' 프로젝트에서 kotlin() 에러). 지도 기능 붙일 때
+  # flutter_naver_map 최신 버전 확인하거나 Gradle/Kotlin 버전 맞춰서 재설정 필요.
+  # flutter_naver_map: ^1.2.0
 
   # 로케일 / 다국어
   flutter_localizations:
     sdk: flutter
-  intl: ^0.19.0
+  intl: ^0.20.2
 
   # 이미지
-  cached_network_image: ^3.3.1
+  # TODO: cached_network_image → flutter_cache_manager → path_provider_android가
+  # jni 패키지를 끌어오는데, 이게 현재 Flutter/Gradle 툴체인(AGP 9.0.1 / Kotlin 2.3.20)과
+  # 충돌해서 빌드가 깨짐(:jni 프로젝트 kotlin() 에러, flutter_naver_map과 동일 원인).
+  # 갤러리 기능 붙일 때 path_provider_android 버전 고정(dependency_overrides)하거나
+  # 패키지 업데이트 확인 후 재활성화 필요.
+  # cached_network_image: ^3.3.1
   image_picker: ^1.0.7
 
   # 위치
@@ -42,6 +50,7 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
+  generate: true
   assets:
     - assets/images/
     - assets/icons/

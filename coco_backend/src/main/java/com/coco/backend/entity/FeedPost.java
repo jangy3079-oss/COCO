@@ -4,11 +4,14 @@ import jakarta.persistence.*;
 import lombok.*;
 import java.time.LocalDateTime;
 
-@Entity @Table(name = "feed_posts")
+@Entity
+@Table(name = "feed_posts")
 @Getter @Setter @NoArgsConstructor @AllArgsConstructor @Builder
 public class FeedPost {
+
     @Id @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Long id;
+    @Column(name = "feed_post_id")
+    private Long feedPostId;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "user_id")
@@ -18,16 +21,20 @@ public class FeedPost {
     @JoinColumn(name = "spot_id")
     private Spot spot;
 
+    @Column(name = "image_url", columnDefinition = "TEXT")
     private String imageUrl;
 
     @Column(length = 500)
     private String description;
 
+    @Column(name = "like_count", columnDefinition = "INT DEFAULT 0")
     private int likeCount;
 
-    @Column(updatable = false)
+    @Column(name = "created_at", updatable = false)
     private LocalDateTime createdAt;
 
     @PrePersist
-    public void prePersist() { this.createdAt = LocalDateTime.now(); }
+    public void prePersist() {
+        this.createdAt = LocalDateTime.now();
+    }
 }

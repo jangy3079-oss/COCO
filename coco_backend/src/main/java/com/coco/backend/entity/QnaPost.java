@@ -5,11 +5,14 @@ import lombok.*;
 import java.time.LocalDateTime;
 import java.util.List;
 
-@Entity @Table(name = "qna_posts")
+@Entity
+@Table(name = "qna_posts")
 @Getter @Setter @NoArgsConstructor @AllArgsConstructor @Builder
 public class QnaPost {
+
     @Id @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Long id;
+    @Column(name = "qna_post_id")
+    private Long qnaPostId;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "user_id")
@@ -18,14 +21,17 @@ public class QnaPost {
     @Column(length = 500)
     private String question;
 
-    private String locale;              // 질문 언어
+    @Column(length = 5)
+    private String locale;              // ko | en | ja
 
-    @OneToMany(mappedBy = "qnaPost", cascade = CascadeType.ALL)
+    @OneToMany(mappedBy = "qnaPost", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<QnaAnswer> answers;
 
-    @Column(updatable = false)
+    @Column(name = "created_at", updatable = false)
     private LocalDateTime createdAt;
 
     @PrePersist
-    public void prePersist() { this.createdAt = LocalDateTime.now(); }
+    public void prePersist() {
+        this.createdAt = LocalDateTime.now();
+    }
 }

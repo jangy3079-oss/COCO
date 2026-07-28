@@ -4,11 +4,14 @@ import jakarta.persistence.*;
 import lombok.*;
 import java.time.LocalDateTime;
 
-@Entity @Table(name = "qna_answers")
+@Entity
+@Table(name = "qna_answers")
 @Getter @Setter @NoArgsConstructor @AllArgsConstructor @Builder
 public class QnaAnswer {
+
     @Id @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Long id;
+    @Column(name = "qna_answer_id")
+    private Long qnaAnswerId;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "qna_post_id")
@@ -21,11 +24,13 @@ public class QnaAnswer {
     @Column(length = 1000)
     private String content;
 
-    private boolean adopted;
+    private Boolean adopted;
 
-    @Column(updatable = false)
+    @Column(name = "created_at", updatable = false)
     private LocalDateTime createdAt;
 
     @PrePersist
-    public void prePersist() { this.createdAt = LocalDateTime.now(); }
+    public void prePersist() {
+        this.createdAt = LocalDateTime.now();
+    }
 }

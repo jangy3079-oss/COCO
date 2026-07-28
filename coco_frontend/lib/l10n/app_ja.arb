@@ -1,0 +1,37 @@
+{
+  "@@locale": "ja",
+
+  "appName": "COCO",
+  "appTagline": "観光地図の外へ、路地の中へ。",
+
+  "loginTitle": "ログイン",
+  "emailLabel": "メールアドレス",
+  "emailHint": "example@email.com",
+  "passwordLabel": "パスワード",
+  "loginButton": "ログイン",
+  "orDivider": "または",
+  "noAccountPrompt": "アカウントをお持ちでないですか?",
+  "goToSignup": "新規登録",
+  "emailRequired": "メールアドレスを入力してください",
+  "emailInvalid": "正しいメールアドレスを入力してください",
+  "passwordRequired": "パスワードを入力してください",
+  "passwordTooShort": "パスワードは8文字以上で入力してください",
+
+  "signupTitle": "新規登録",
+  "userTypeLabel": "会員タイプ",
+  "userTypeLocal": "地元住民",
+  "userTypeLocalDesc": "自分の町を紹介する",
+  "userTypeTourist": "観光客",
+  "userTypeTouristDesc": "隠れた路地を探検する",
+  "nicknameLabel": "ニックネーム",
+  "nicknameHint": "他の人に表示される名前",
+  "nicknameRequired": "ニックネームを入力してください",
+  "confirmPasswordLabel": "パスワード確認",
+  "confirmPasswordMismatch": "パスワードが一致しません",
+  "agreeTermsLabel": "利用規約およびプライバシーポリシーに同意します",
+  "agreeTermsRequired": "登録するには規約に同意してください",
+  "signupButton": "登録する",
+  "alreadyHaveAccountPrompt": "すでにアカウントをお持ちですか?",
+  "goToLogin": "ログイン",
+  "signupSuccessMessage": "登録が完了しました"
+}
