@@ -31,10 +31,11 @@ public class User {
     @Column(nullable = false, length = 10)
     private String language;
 
-    @Column(length = 10)
-    private String role;
-
+    @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 10)
+    private Role role;
+
+    @Column(length = 10)
     private String nationality;
 
     @CreationTimestamp
@@ -42,7 +43,7 @@ public class User {
     private LocalDateTime createdAt;
 
     @Builder
-    public User(String email, String password, String nickname, String language, String role, String nationality, LocalDateTime createdAt) {
+    public User(String email, String password, String nickname, String language, Role role, String nationality, LocalDateTime createdAt) {
         this.email = email;
         this.password = password;
         this.nickname = nickname;

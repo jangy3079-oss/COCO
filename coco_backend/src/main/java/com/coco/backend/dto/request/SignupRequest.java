@@ -13,4 +13,6 @@ public class SignupRequest {
     @NotBlank
     private String nickname;
     private String locale;   // ko | en | ja
+    @NotBlank
+    private String role;     // LOCAL | TOURIST
 }
