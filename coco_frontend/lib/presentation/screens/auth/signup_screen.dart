@@ -54,7 +54,7 @@ class _SignupScreenState extends State<SignupScreen> {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text(l10n.signupSuccessMessage)),
     );
-    context.go('/home');
+    context.go('/feed');
   }
 
   @override
