@@ -1,11 +1,9 @@
 package com.coco.backend.repository;
 
-import com.coco.entity.FeedPost;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.Pageable;
+import com.coco.backend.entity.FeedPost;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.stereotype.Repository;
 
+@Repository
 public interface FeedPostRepository extends JpaRepository<FeedPost, Long> {
-    Page<FeedPost> findAllByOrderByCreatedAtDesc(Pageable pageable);
-    Page<FeedPost> findBySpotId(Long spotId, Pageable pageable);
 }

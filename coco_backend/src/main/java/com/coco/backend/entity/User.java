@@ -1,19 +1,27 @@
 package com.coco.backend.entity;
 
 import jakarta.persistence.*;
-import lombok.*;
+import lombok.AccessLevel;
+import lombok.Builder;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import org.hibernate.annotations.CreationTimestamp;
 import java.time.LocalDateTime;
 
 @Entity
 @Table(name = "users")
-@Getter @Setter @NoArgsConstructor @AllArgsConstructor @Builder
+
+@Getter
+@NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class User {
 
-    @Id @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
     @Column(name = "user_id")
-    private Long userId;
+    private Long id;
 
-    @Column(nullable = false, unique = true, length = 100)
+    @Column(nullable = false, length = 100)
+
     private String email;
 
     @Column(nullable = false, length = 255)
@@ -22,20 +30,27 @@ public class User {
     @Column(nullable = false, length = 50)
     private String nickname;
 
-    @Column(length = 5)
-    private String locale;          // ko | en | ja
+    @Column(nullable = false, length = 10)
+    private String language;
 
-    @Column(length = 10)
-    private String role;            // USER | LOCAL
-
-    @Column(name = "created_at", updatable = false)
-    private LocalDateTime createdAt;
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 10)
+    private Role role;
 
     @Column(length = 10)
     private String nationality;
 
-    @PrePersist
-    public void prePersist() {
-        this.createdAt = LocalDateTime.now();
+    @CreationTimestamp
+    @Column(name = "created_at", nullable = false, updatable = false)
+    private LocalDateTime createdAt;
+
+    @Builder
+    public User(String email, String password, String nickname, String language, Role role, String nationality, LocalDateTime createdAt) {
+        this.email = email;
+        this.password = password;
+        this.nickname = nickname;
+        this.language = language;
+        this.role = role;
+        this.nationality = nationality;
     }
 }

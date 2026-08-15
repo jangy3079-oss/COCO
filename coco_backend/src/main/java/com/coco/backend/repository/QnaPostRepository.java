@@ -1,10 +1,9 @@
 package com.coco.backend.repository;
 
-import com.coco.entity.QnaPost;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.Pageable;
+import com.coco.backend.entity.QnaPost;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.stereotype.Repository;
 
+@Repository
 public interface QnaPostRepository extends JpaRepository<QnaPost, Long> {
-    Page<QnaPost> findAllByOrderByCreatedAtDesc(Pageable pageable);
 }

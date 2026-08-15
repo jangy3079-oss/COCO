@@ -1,31 +1,35 @@
 package com.coco.backend.entity;
 
 import jakarta.persistence.*;
-import lombok.*;
+import lombok.AccessLevel;
+import lombok.Builder;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import org.hibernate.annotations.CreationTimestamp;
+
 import java.time.LocalDateTime;
 
 @Entity
 @Table(name = "spots")
-@Getter @Setter @NoArgsConstructor @AllArgsConstructor @Builder
+@Getter
+@NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class Spot {
-
-    @Id @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
     @Column(name = "spot_id")
-    private Long spotId;
+    private Long id;
 
     @Column(name = "tour_apiid", length = 20)
-    private String tourApiId;
+    private String tourApiid;
 
-    @Column(name = "title_ko", length = 100)
-    private String titleKo;
+    @Column(length = 100)
+    private String title;
 
-    @Column(name = "title_en", length = 100)
-    private String titleEn;
 
-    @Column(name = "title_ja", length = 100)
-    private String titleJa;
-
+    @Column(nullable = false)
     private Double lat;
+
+    @Column(nullable = false)
 
     private Double lng;
 
@@ -33,16 +37,26 @@ public class Spot {
     private String address;
 
     @Column(length = 20)
-    private String category;    // 노포 | 공원 | 카페 | 골목
+    private String category;
+
 
     @Column(name = "image_url", columnDefinition = "TEXT")
     private String imageUrl;
 
-    @Column(name = "created_at", updatable = false)
+    @CreationTimestamp
+    @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
 
-    @PrePersist
-    public void prePersist() {
-        this.createdAt = LocalDateTime.now();
+    @Builder
+    public Spot(String tourApiid, String title, Double lat, Double lng, String address, String category, String imageUrl) {
+        this.tourApiid = tourApiid;
+        this.title = title;
+        this.lat = lat;
+        this.lng = lng;
+        this.address = address;
+        this.category = category;
+        this.imageUrl = imageUrl;
+        // createdAt은 @CreationTimestamp가 알아서 해주므로 Builder 에서 제외.
+
     }
 }

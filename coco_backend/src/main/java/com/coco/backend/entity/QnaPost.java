@@ -1,37 +1,46 @@
 package com.coco.backend.entity;
 
 import jakarta.persistence.*;
-import lombok.*;
+import lombok.AccessLevel;
+import lombok.Builder;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import org.hibernate.annotations.CreationTimestamp;
+
 import java.time.LocalDateTime;
-import java.util.List;
 
 @Entity
 @Table(name = "qna_posts")
-@Getter @Setter @NoArgsConstructor @AllArgsConstructor @Builder
-public class QnaPost {
 
-    @Id @GeneratedValue(strategy = GenerationType.IDENTITY)
+@Getter
+@NoArgsConstructor(access = AccessLevel.PROTECTED)
+public class QnaPost {
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
     @Column(name = "qna_post_id")
-    private Long qnaPostId;
+    private Long id;
+
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "user_id")
+    @JoinColumn(name = "user_id", nullable = false)
     private User user;
 
     @Column(length = 500)
     private String question;
 
     @Column(length = 5)
-    private String locale;              // ko | en | ja
 
-    @OneToMany(mappedBy = "qnaPost", cascade = CascadeType.ALL, orphanRemoval = true)
-    private List<QnaAnswer> answers;
+    private String language;
 
-    @Column(name = "created_at", updatable = false)
+    @CreationTimestamp
+    @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
 
-    @PrePersist
-    public void prePersist() {
-        this.createdAt = LocalDateTime.now();
+    @Builder
+    public QnaPost(User user, String question, String language) {
+        this.user = user;
+        this.question = question;
+        this.language = language;
     }
 }
+

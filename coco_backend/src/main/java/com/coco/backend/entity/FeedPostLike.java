@@ -10,40 +10,30 @@ import org.hibernate.annotations.CreationTimestamp;
 import java.time.LocalDateTime;
 
 @Entity
-@Table(name = "qna_answers")
-
+@Table(name = "feed_post_likes")
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
-public class QnaAnswer {
+public class FeedPostLike {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
-    @Column(name = "qna_answer_id")
+    @Column(name = "feed_post_like_id")
     private Long id;
-
-
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "qna_post_id", nullable = false)
-    private QnaPost qnaPost;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "user_id", nullable = false)
     private User user;
 
-    @Column(length = 1000)
-    private String content;
-
-    private Boolean adopted;
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "feed_post_id", nullable = false)
+    private FeedPost feedPost;
 
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
 
     @Builder
-    public QnaAnswer(QnaPost qnaPost, User user, String content, Boolean adopted) {
-        this.qnaPost = qnaPost;
+    public FeedPostLike(User user, FeedPost feedPost) {
         this.user = user;
-        this.content = content;
-        this.adopted = adopted;
+        this.feedPost = feedPost;
     }
 }
-
