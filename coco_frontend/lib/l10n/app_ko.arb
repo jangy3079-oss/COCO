@@ -1,0 +1,37 @@
+{
+  "@@locale": "ko",
+
+  "appName": "COCO",
+  "appTagline": "관광지도의 바깥, 골목의 안쪽으로",
+
+  "loginTitle": "로그인",
+  "emailLabel": "이메일",
+  "emailHint": "example@email.com",
+  "passwordLabel": "비밀번호",
+  "loginButton": "로그인",
+  "orDivider": "또는",
+  "noAccountPrompt": "아직 계정이 없으신가요?",
+  "goToSignup": "회원가입",
+  "emailRequired": "이메일을 입력해주세요",
+  "emailInvalid": "올바른 이메일 형식이 아니에요",
+  "passwordRequired": "비밀번호를 입력해주세요",
+  "passwordTooShort": "비밀번호는 8자 이상이어야 해요",
+
+  "signupTitle": "회원가입",
+  "userTypeLabel": "가입 유형",
+  "userTypeLocal": "로컬 주민",
+  "userTypeLocalDesc": "우리 동네를 소개해요",
+  "userTypeTourist": "관광객",
+  "userTypeTouristDesc": "숨은 골목을 탐험해요",
+  "nicknameLabel": "닉네임",
+  "nicknameHint": "다른 사람에게 보여질 이름",
+  "nicknameRequired": "닉네임을 입력해주세요",
+  "confirmPasswordLabel": "비밀번호 확인",
+  "confirmPasswordMismatch": "비밀번호가 일치하지 않아요",
+  "agreeTermsLabel": "이용약관 및 개인정보처리방침에 동의합니다",
+  "agreeTermsRequired": "약관에 동의해야 가입할 수 있어요",
+  "signupButton": "가입하기",
+  "alreadyHaveAccountPrompt": "이미 계정이 있으신가요?",
+  "goToLogin": "로그인",
+  "signupSuccessMessage": "회원가입이 완료됐어요"
+}

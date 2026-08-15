@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
 class CocoTheme {
-  static const Color primary   = Color(0xFFFF5A36);
+  static const Color primary   = Color(0xFF2F8FE0); // 브랜드 블루
   static const Color secondary = Color(0xFF1A1A1A);
   static const Color surface   = Color(0xFFF8F8F8);
 

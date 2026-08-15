@@ -11,6 +11,7 @@ import java.time.LocalDateTime;
 
 @Entity
 @Table(name = "qna_posts")
+
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class QnaPost {
@@ -18,6 +19,7 @@ public class QnaPost {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     @Column(name = "qna_post_id")
     private Long id;
+
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "user_id", nullable = false)
@@ -27,6 +29,7 @@ public class QnaPost {
     private String question;
 
     @Column(length = 5)
+
     private String language;
 
     @CreationTimestamp
@@ -40,3 +43,4 @@ public class QnaPost {
         this.language = language;
     }
 }
+

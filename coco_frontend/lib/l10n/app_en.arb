@@ -1,0 +1,37 @@
+{
+  "@@locale": "en",
+
+  "appName": "COCO",
+  "appTagline": "Beyond the tourist map, into the alleys.",
+
+  "loginTitle": "Log In",
+  "emailLabel": "Email",
+  "emailHint": "example@email.com",
+  "passwordLabel": "Password",
+  "loginButton": "Log In",
+  "orDivider": "or",
+  "noAccountPrompt": "Don't have an account?",
+  "goToSignup": "Sign Up",
+  "emailRequired": "Please enter your email",
+  "emailInvalid": "Please enter a valid email",
+  "passwordRequired": "Please enter your password",
+  "passwordTooShort": "Password must be at least 8 characters",
+
+  "signupTitle": "Sign Up",
+  "userTypeLabel": "Account Type",
+  "userTypeLocal": "Local",
+  "userTypeLocalDesc": "Introduce your neighborhood",
+  "userTypeTourist": "Tourist",
+  "userTypeTouristDesc": "Explore hidden alleys",
+  "nicknameLabel": "Nickname",
+  "nicknameHint": "The name others will see",
+  "nicknameRequired": "Please enter a nickname",
+  "confirmPasswordLabel": "Confirm Password",
+  "confirmPasswordMismatch": "Passwords don't match",
+  "agreeTermsLabel": "I agree to the Terms of Service and Privacy Policy",
+  "agreeTermsRequired": "You must agree to the terms to sign up",
+  "signupButton": "Sign Up",
+  "alreadyHaveAccountPrompt": "Already have an account?",
+  "goToLogin": "Log In",
+  "signupSuccessMessage": "Sign up complete"
+}

@@ -11,6 +11,7 @@ import java.time.LocalDateTime;
 
 @Entity
 @Table(name = "feed_posts")
+
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class FeedPost {
@@ -18,6 +19,7 @@ public class FeedPost {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     @Column(name = "feed_post_id")
     private Long id;
+
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "user_id", nullable = false)
@@ -32,6 +34,7 @@ public class FeedPost {
 
     @Column(length = 500)
     private String description;
+
 
     @Column(name = "like_count", nullable = false)
     private Integer likeCount;

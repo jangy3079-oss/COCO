@@ -11,6 +11,7 @@ import java.time.LocalDateTime;
 
 @Entity
 @Table(name = "qna_answers")
+
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class QnaAnswer {
@@ -18,6 +19,7 @@ public class QnaAnswer {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     @Column(name = "qna_answer_id")
     private Long id;
+
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "qna_post_id", nullable = false)
@@ -44,3 +46,4 @@ public class QnaAnswer {
         this.adopted = adopted;
     }
 }
+

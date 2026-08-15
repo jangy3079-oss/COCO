@@ -10,6 +10,7 @@ import java.time.LocalDateTime;
 
 @Entity
 @Table(name = "users")
+
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class User {
@@ -20,6 +21,7 @@ public class User {
     private Long id;
 
     @Column(nullable = false, length = 100)
+
     private String email;
 
     @Column(nullable = false, length = 255)

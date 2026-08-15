@@ -25,10 +25,12 @@ public class Spot {
     @Column(length = 100)
     private String title;
 
+
     @Column(nullable = false)
     private Double lat;
 
     @Column(nullable = false)
+
     private Double lng;
 
     @Column(length = 200)
@@ -36,6 +38,7 @@ public class Spot {
 
     @Column(length = 20)
     private String category;
+
 
     @Column(name = "image_url", columnDefinition = "TEXT")
     private String imageUrl;
@@ -54,5 +57,6 @@ public class Spot {
         this.category = category;
         this.imageUrl = imageUrl;
         // createdAt은 @CreationTimestamp가 알아서 해주므로 Builder 에서 제외.
+
     }
 }

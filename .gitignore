@@ -17,7 +17,7 @@ coco_frontend/.flutter-plugins
 coco_frontend/.flutter-plugins-dependencies
 coco_frontend/build/
 coco_frontend/.packages
-coco_frontend/pubspec.lock
+# pubspec.lock은 앱(패키지 아님)이라 커밋해서 팀원끼리 동일한 의존성 버전 유지 (일부러 추적함)
 
 # ── IDE ──────────────────────────────
 .idea/
