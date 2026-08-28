@@ -13,7 +13,19 @@ class SpotDetailScreen extends StatefulWidget {
 
 class _SpotDetailScreenState extends State<SpotDetailScreen> {
   bool _liked = true;
-  bool _saved = false;
+
+  // 찜(저장) 상태는 map_mock_data.dart의 공유 savedSpotIds를 그대로 사용한다
+  // (지도 탭 북마크·MY탭 "찜한 스팟"과 같은 상태를 봐야 하므로 화면 로컬 State가 아님).
+  bool get _saved => savedSpotIds.contains(widget.spotId);
+  void _toggleSaved() {
+    setState(() {
+      if (_saved) {
+        savedSpotIds.remove(widget.spotId);
+      } else {
+        savedSpotIds.add(widget.spotId);
+      }
+    });
+  }
 
   MockSpot? get _spot {
     for (final spot in mockSpots) {
@@ -45,7 +57,7 @@ class _SpotDetailScreenState extends State<SpotDetailScreen> {
               liked: _liked,
               saved: _saved,
               onToggleLiked: () => setState(() => _liked = !_liked),
-              onToggleSaved: () => setState(() => _saved = !_saved),
+              onToggleSaved: _toggleSaved,
             ),
             Padding(
               padding: const EdgeInsets.all(20),
@@ -78,7 +90,7 @@ class _SpotDetailScreenState extends State<SpotDetailScreen> {
                           label: _saved ? '저장됨' : '저장',
                           active: _saved,
                           activeColor: CocoTheme.secondary,
-                          onTap: () => setState(() => _saved = !_saved),
+                          onTap: _toggleSaved,
                         ),
                       ),
                       const SizedBox(width: 10),

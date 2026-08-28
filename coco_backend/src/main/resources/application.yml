@@ -1,6 +1,6 @@
 spring:
   datasource:
-    url: jdbc:postgresql://localhost:5432/coco_db
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/coco_db}
     username: ${DB_USERNAME:coco}
     password: ${DB_PASSWORD:coco1234}
     driver-class-name: org.postgresql.Driver

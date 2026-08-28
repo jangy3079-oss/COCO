@@ -95,8 +95,11 @@ class _RouteBuilderScreenState extends State<RouteBuilderScreen> {
       );
       return;
     }
+    final name = _nameController.text.trim();
+    // MY탭 "내가 만든 골목지도"/"저장한 코스"에서 보여줄 수 있도록 공유 리스트에 반영.
+    mockMyRoutes.insert(0, MockRoute(id: 'route-${DateTime.now().millisecondsSinceEpoch}', name: name, stops: List.of(_stops)));
     context.push('/map/route/preview', extra: {
-      'name': _nameController.text.trim(),
+      'name': name,
       'stops': _stops,
     });
   }

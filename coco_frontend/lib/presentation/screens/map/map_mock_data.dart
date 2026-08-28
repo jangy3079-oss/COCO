@@ -44,6 +44,40 @@ class MockSpot {
       };
 }
 
+// 스팟 찜(저장) 상태 — 지도 탭(주변 스팟 목록 북마크)과 스팟 상세 화면,
+// 마이(MY) 탭(나의 지도·저장한 스팟 목록)이 함께 참조하는 공유 상태.
+// 예전엔 각 화면이 자기만의 로컬 State로 들고 있어서 화면을 벗어나면
+// 사라졌는데, MY탭에서 "찜한 스팟"을 보여주려면 공유 상태가 필요해서 승격함.
+final Set<String> savedSpotIds = {'spot-1', 'spot-2', 'spot-4'};
+
+/// 골목지도(코스). 지도 탭에서 "코스 저장하기"로 만든 코스가 여기 쌓이고,
+/// 마이(MY) 탭의 "내가 만든 골목지도"/"저장한 코스"에서 보여준다.
+/// TODO: 백엔드 연동 시 routes/route_stops 테이블 조회 결과로 교체 (신규 테이블 필요, MY_TAB_SPEC.md 참고).
+class MockRoute {
+  final String id;
+  final String name;
+  final List<MockSpot> stops;
+
+  MockRoute({required this.id, required this.name, required this.stops});
+
+  double get distanceKm => stops.length * 0.3;
+}
+
+final List<MockRoute> mockMyRoutes = [
+  MockRoute(
+    id: 'route-1',
+    name: '겨울밤 노포 투어',
+    stops: [mockSpotById('spot-1'), mockSpotById('spot-2'), mockSpotById('spot-3'), mockSpotById('spot-5')],
+  ),
+  MockRoute(
+    id: 'route-2',
+    name: '영도 한바퀴',
+    stops: [mockSpotById('spot-4'), mockSpotById('spot-1'), mockSpotById('spot-2')],
+  ),
+];
+
+MockSpot mockSpotById(String id) => mockSpots.firstWhere((s) => s.id == id);
+
 const mockSpots = [
   MockSpot(
     id: 'spot-1',

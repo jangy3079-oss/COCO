@@ -1,3 +1,5 @@
+import 'dart:ui';
+
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/theme/app_theme.dart';
@@ -15,19 +17,18 @@ class _MapScreenState extends State<MapScreen> {
   static const _categories = ['전체', '노포', '골목', '공원', '카페'];
   String _selectedCategory = '전체';
 
-  // 골목지도(코스)에 담을 스팟 — "주변 스팟" 목록에서 북마크로 선택
-  final Set<String> _savedSpotIds = {};
-
   List<MockSpot> get _filteredSpots => _selectedCategory == '전체'
       ? mockSpots
       : mockSpots.where((s) => s.category == _selectedCategory).toList();
 
+  // 찜(저장) 상태는 map_mock_data.dart의 공유 savedSpotIds를 그대로 사용한다
+  // (스팟 상세 화면·MY탭과 동일한 상태를 공유해야 하므로 화면 로컬 State가 아님).
   void _toggleSaved(String spotId) {
     setState(() {
-      if (_savedSpotIds.contains(spotId)) {
-        _savedSpotIds.remove(spotId);
+      if (savedSpotIds.contains(spotId)) {
+        savedSpotIds.remove(spotId);
       } else {
-        _savedSpotIds.add(spotId);
+        savedSpotIds.add(spotId);
       }
     });
   }
@@ -37,14 +38,14 @@ class _MapScreenState extends State<MapScreen> {
   }
 
   void _handleSaveCourse() {
-    if (_savedSpotIds.isEmpty) {
+    if (savedSpotIds.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('담고 싶은 스팟을 먼저 북마크해주세요')),
       );
       return;
     }
     final selectedStops =
-        mockSpots.where((s) => _savedSpotIds.contains(s.id)).toList();
+        mockSpots.where((s) => savedSpotIds.contains(s.id)).toList();
     context.push('/map/route/new', extra: selectedStops);
   }
 
@@ -55,92 +56,139 @@ class _MapScreenState extends State<MapScreen> {
       // 검색창 포커스로 키보드가 뜰 때 지도 레이아웃 전체가 눌려서 바텀시트가
       // 찌그러지는 걸 방지 (지도 화면은 키보드가 위에 떠 있는 형태가 자연스러움)
       resizeToAvoidBottomInset: false,
-      body: Column(
-        children: [
-          SafeArea(
-            bottom: false,
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(20, 12, 20, 12),
-              child: const _MapHeaderBar(),
-            ),
-          ),
-          Expanded(
-            child: LayoutBuilder(
-              builder: (context, constraints) {
-                final sheetCollapsedHeight = constraints.maxHeight * 0.32;
-                return Stack(
-                  children: [
-                    // 지도 영역 — 좌우/여백 없이 화면 전체를 채움
-                    Positioned.fill(
-                      child: _MockMapBackground(
-                        spots: _filteredSpots,
-                        onSpotTap: _openSpotDetail,
-                      ),
-                    ),
-                    // 검색창 + 카테고리 필터 (지도 위에 떠 있는 형태)
-                    Positioned(
-                      left: 20,
-                      right: 20,
-                      top: 16,
-                      child: Column(
-                        children: [
-                          const _MapSearchBar(),
-                          const SizedBox(height: 12),
-                          _CategoryChipsRow(
-                            categories: _categories,
-                            selected: _selectedCategory,
-                            onSelected: (c) => setState(() => _selectedCategory = c),
+      body: LayoutBuilder(
+        builder: (context, constraints) {
+          final sheetCollapsedHeight = constraints.maxHeight * 0.32;
+          return Stack(
+            children: [
+              // 지도 영역 — 좌우/여백 없이 화면 전체를 채움
+              Positioned.fill(
+                child: MockMapBackground(
+                  spots: _filteredSpots,
+                  onSpotTap: _openSpotDetail,
+                ),
+              ),
+              // 타이틀 + 검색창 + 카테고리 필터 (지도 위에 블러 그라데이션과 함께 떠 있는 형태.
+              // 피드/커뮤니티 탭과 동일한 타이틀 스타일 적용)
+              // ShaderMask(dstIn)로 블러 레이어 자체의 알파를 아래쪽으로 갈수록 서서히 줄여서,
+              // 블러가 있다가 갑자기 뚝 끊기지 않고 점점 옅어지며 사라지도록 처리.
+              Positioned(
+                left: 0,
+                right: 0,
+                top: 0,
+                child: ShaderMask(
+                  shaderCallback: (rect) => const LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [Colors.white, Colors.white, Colors.transparent],
+                    stops: [0.0, 0.68, 1.0],
+                  ).createShader(rect),
+                  blendMode: BlendMode.dstIn,
+                  child: ClipRect(
+                    child: BackdropFilter(
+                      filter: ImageFilter.blur(sigmaX: 14, sigmaY: 14),
+                      child: Container(
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            begin: Alignment.topCenter,
+                            end: Alignment.bottomCenter,
+                            stops: const [0.0, 0.55, 1.0],
+                            colors: [
+                              Colors.white.withOpacity(0.82),
+                              Colors.white.withOpacity(0.45),
+                              Colors.white.withOpacity(0.0),
+                            ],
                           ),
-                        ],
+                        ),
+                        child: SafeArea(
+                          bottom: false,
+                          child: Padding(
+                            padding: const EdgeInsets.fromLTRB(20, 14, 20, 16),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Text(
+                                  '지도',
+                                  style: TextStyle(fontSize: 24, fontWeight: FontWeight.w800, color: CocoTheme.secondary),
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  '내 주변 골목과 노포를 찾아보세요',
+                                  style: TextStyle(fontSize: 13, color: Colors.grey.shade600),
+                                ),
+                                const SizedBox(height: 12),
+                                Row(
+                                  children: [
+                                    const Expanded(child: _MapSearchBar()),
+                                    const SizedBox(width: 10),
+                                    const _MapAvatarButton(),
+                                  ],
+                                ),
+                                const SizedBox(height: 10),
+                                _CategoryChipsRow(
+                                  categories: _categories,
+                                  selected: _selectedCategory,
+                                  onSelected: (c) => setState(() => _selectedCategory = c),
+                                ),
+                                // 블러가 서서히 사라질 여백(페이드 테일) — 이 구간에서
+                                // ShaderMask 알파가 1→0으로 떨어지며 블러도 함께 옅어진다.
+                                const SizedBox(height: 44),
+                              ],
+                            ),
+                          ),
+                        ),
                       ),
                     ),
-                    // 현재 위치로 재중심 버튼
-                    Positioned(
-                      right: 16,
-                      bottom: sheetCollapsedHeight + 16,
-                      child: const _RecenterButton(),
-                    ),
-                    // 하단 "주변 스팟" 바텀시트 (드래그로 확장 가능)
-                    _NearbySpotsSheet(
-                      spots: _filteredSpots,
-                      savedSpotIds: _savedSpotIds,
-                      onToggleSaved: _toggleSaved,
-                      onSpotTap: _openSpotDetail,
-                      onSaveCourse: _handleSaveCourse,
-                    ),
-                  ],
-                );
-              },
-            ),
-          ),
-        ],
+                  ),
+                ),
+              ),
+              // 현재 위치로 재중심 버튼
+              Positioned(
+                right: 16,
+                bottom: sheetCollapsedHeight + 16,
+                child: const _RecenterButton(),
+              ),
+              // 하단 "주변 스팟" 바텀시트 (드래그로 확장 가능)
+              _NearbySpotsSheet(
+                spots: _filteredSpots,
+                savedSpotIds: savedSpotIds,
+                onToggleSaved: _toggleSaved,
+                onSpotTap: _openSpotDetail,
+                onSaveCourse: _handleSaveCourse,
+              ),
+            ],
+          );
+        },
       ),
     );
   }
 }
 
-class _MapHeaderBar extends StatelessWidget {
-  const _MapHeaderBar();
+class _MapAvatarButton extends StatelessWidget {
+  const _MapAvatarButton();
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-      children: [
-        const Text(
-          'COCO',
-          style: TextStyle(
-            color: CocoTheme.primary,
-            fontSize: 22,
-            fontWeight: FontWeight.w900,
-            letterSpacing: 0.5,
+    return Container(
+      width: 44,
+      height: 44,
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+        color: Colors.white,
+        shape: BoxShape.circle,
+        border: Border.all(color: Colors.black.withOpacity(0.06)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.06),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
           ),
-        ),
-        const CircleAvatar(
-          radius: 16,
-          backgroundColor: Color(0xFFEFEAE4),
-        ),
-      ],
+        ],
+      ),
+      child: const Text(
+        '나',
+        style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: CocoTheme.secondary),
+      ),
     );
   }
 }
@@ -254,10 +302,12 @@ class _CategoryChip extends StatelessWidget {
   }
 }
 
-class _MockMapBackground extends StatelessWidget {
+/// 목업 지도 배경(건물/도로 블록 + 스팟 핀). 지도 탭 본문뿐 아니라
+/// MY탭의 "나의 지도" 전체화면(my_map_screen.dart)에서도 재사용한다.
+class MockMapBackground extends StatelessWidget {
   final List<MockSpot> spots;
   final ValueChanged<MockSpot> onSpotTap;
-  const _MockMapBackground({required this.spots, required this.onSpotTap});
+  const MockMapBackground({super.key, required this.spots, required this.onSpotTap});
 
   @override
   Widget build(BuildContext context) {

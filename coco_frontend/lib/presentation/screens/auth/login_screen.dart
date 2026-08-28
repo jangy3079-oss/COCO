@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/theme/app_theme.dart';
-import '../../../l10n/generated/app_localizations.dart';
+import '../../widgets/common/coco_mark.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -11,11 +11,14 @@ class LoginScreen extends StatefulWidget {
 }
 
 class _LoginScreenState extends State<LoginScreen> {
-  final _formKey = GlobalKey<FormState>();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
-  bool _obscurePassword = true;
+  bool _showPassword = false;
+  bool _keepSignedIn = true;
   bool _isLoading = false;
+
+  bool get _canLogin =>
+      _emailController.text.trim().isNotEmpty && _passwordController.text.isNotEmpty;
 
   @override
   void dispose() {
@@ -25,13 +28,10 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   Future<void> _handleLogin() async {
-    if (!_formKey.currentState!.validate()) return;
-
+    if (!_canLogin) return;
     setState(() => _isLoading = true);
-
     // TODO(backend): POST /api/auth/login 연동 후 토큰 저장 로직으로 교체
     await Future.delayed(const Duration(milliseconds: 400));
-
     if (!mounted) return;
     setState(() => _isLoading = false);
     context.go('/feed');
@@ -39,126 +39,195 @@ class _LoginScreenState extends State<LoginScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context)!;
-
     return Scaffold(
+      backgroundColor: Colors.white,
       body: SafeArea(
-        child: Center(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.symmetric(horizontal: 32),
-            child: Form(
-              key: _formKey,
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  const SizedBox(height: 48),
-                  Center(
-                    child: Container(
-                      width: 72,
-                      height: 72,
-                      decoration: BoxDecoration(
-                        color: CocoTheme.primary,
-                        borderRadius: BorderRadius.circular(20),
-                      ),
-                      alignment: Alignment.center,
-                      child: Text(
-                        l10n.appName,
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 20,
-                          fontWeight: FontWeight.w800,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(8, 8, 8, 0),
+              child: IconButton(
+                onPressed: () => context.pop(),
+                icon: const Icon(Icons.arrow_back_rounded),
+              ),
+            ),
+            Expanded(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.fromLTRB(24, 8, 24, 24),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const CocoMark(width: 48, height: 42),
+                    const SizedBox(height: 16),
+                    const Text(
+                      '다시 만나서 반가워요',
+                      style: TextStyle(fontSize: 26, fontWeight: FontWeight.w800, color: CocoTheme.secondary),
+                    ),
+                    const SizedBox(height: 8),
+                    Text('이메일로 로그인해 주세요', style: TextStyle(fontSize: 14, color: Colors.grey.shade600)),
+                    const SizedBox(height: 32),
+                    _AuthField(
+                      label: '이메일',
+                      controller: _emailController,
+                      hintText: 'you@example.com',
+                      keyboardType: TextInputType.emailAddress,
+                      onChanged: (_) => setState(() {}),
+                    ),
+                    const SizedBox(height: 16),
+                    _AuthField(
+                      label: '비밀번호',
+                      controller: _passwordController,
+                      hintText: '••••••••',
+                      obscureText: !_showPassword,
+                      onChanged: (_) => setState(() {}),
+                      suffix: TextButton(
+                        onPressed: () => setState(() => _showPassword = !_showPassword),
+                        child: Text(
+                          _showPassword ? '숨기기' : '보기',
+                          style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: CocoTheme.primary),
                         ),
                       ),
                     ),
-                  ),
-                  const SizedBox(height: 16),
-                  Text(
-                    l10n.appTagline,
-                    textAlign: TextAlign.center,
-                    style: TextStyle(color: Colors.grey.shade600, fontSize: 13),
-                  ),
-                  const SizedBox(height: 40),
-                  TextFormField(
-                    controller: _emailController,
-                    keyboardType: TextInputType.emailAddress,
-                    decoration: InputDecoration(
-                      labelText: l10n.emailLabel,
-                      hintText: l10n.emailHint,
-                      border: const OutlineInputBorder(),
+                    const SizedBox(height: 16),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        InkWell(
+                          onTap: () => setState(() => _keepSignedIn = !_keepSignedIn),
+                          child: Row(
+                            children: [
+                              _CheckBox(checked: _keepSignedIn),
+                              const SizedBox(width: 8),
+                              Text('로그인 상태 유지', style: TextStyle(fontSize: 13, color: Colors.grey.shade700)),
+                            ],
+                          ),
+                        ),
+                        InkWell(
+                          onTap: () => ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text('준비 중이에요'), duration: Duration(seconds: 1)),
+                          ),
+                          child: Text('비밀번호 찾기', style: TextStyle(fontSize: 13, color: Colors.grey.shade500)),
+                        ),
+                      ],
                     ),
-                    validator: (value) {
-                      if (value == null || value.trim().isEmpty) {
-                        return l10n.emailRequired;
-                      }
-                      if (!RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$').hasMatch(value.trim())) {
-                        return l10n.emailInvalid;
-                      }
-                      return null;
-                    },
-                  ),
-                  const SizedBox(height: 16),
-                  TextFormField(
-                    controller: _passwordController,
-                    obscureText: _obscurePassword,
-                    decoration: InputDecoration(
-                      labelText: l10n.passwordLabel,
-                      border: const OutlineInputBorder(),
-                      suffixIcon: IconButton(
-                        icon: Icon(_obscurePassword
-                            ? Icons.visibility_off_outlined
-                            : Icons.visibility_outlined),
-                        onPressed: () =>
-                            setState(() => _obscurePassword = !_obscurePassword),
+                    const SizedBox(height: 28),
+                    SizedBox(
+                      width: double.infinity,
+                      child: FilledButton(
+                        style: FilledButton.styleFrom(
+                          backgroundColor: _canLogin ? CocoTheme.primary : const Color(0xFFE8E8E6),
+                          foregroundColor: _canLogin ? Colors.white : Colors.black.withOpacity(0.3),
+                          padding: const EdgeInsets.symmetric(vertical: 16),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                        ),
+                        onPressed: (_canLogin && !_isLoading) ? _handleLogin : null,
+                        child: _isLoading
+                            ? const SizedBox(
+                                width: 20,
+                                height: 20,
+                                child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                              )
+                            : const Text('로그인', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
                       ),
                     ),
-                    validator: (value) {
-                      if (value == null || value.isEmpty) {
-                        return l10n.passwordRequired;
-                      }
-                      if (value.length < 8) {
-                        return l10n.passwordTooShort;
-                      }
-                      return null;
-                    },
-                  ),
-                  const SizedBox(height: 24),
-                  FilledButton(
-                    style: FilledButton.styleFrom(
-                      backgroundColor: CocoTheme.primary,
-                      padding: const EdgeInsets.symmetric(vertical: 16),
-                    ),
-                    onPressed: _isLoading ? null : _handleLogin,
-                    child: _isLoading
-                        ? const SizedBox(
-                            width: 20,
-                            height: 20,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              color: Colors.white,
+                    const SizedBox(height: 20),
+                    Center(
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text('계정이 없으신가요? ', style: TextStyle(fontSize: 13, color: Colors.grey.shade600)),
+                          InkWell(
+                            onTap: () => context.push('/signup'),
+                            child: const Text(
+                              '회원가입',
+                              style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: CocoTheme.primary),
                             ),
-                          )
-                        : Text(l10n.loginButton),
-                  ),
-                  const SizedBox(height: 24),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Text(l10n.noAccountPrompt,
-                          style: TextStyle(color: Colors.grey.shade700)),
-                      TextButton(
-                        onPressed: () => context.push('/signup'),
-                        child: Text(l10n.goToSignup),
+                          ),
+                        ],
                       ),
-                    ],
-                  ),
-                  const SizedBox(height: 24),
-                ],
+                    ),
+                  ],
+                ),
               ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _AuthField extends StatelessWidget {
+  final String label;
+  final TextEditingController controller;
+  final String hintText;
+  final bool obscureText;
+  final TextInputType? keyboardType;
+  final ValueChanged<String>? onChanged;
+  final Widget? suffix;
+
+  const _AuthField({
+    required this.label,
+    required this.controller,
+    required this.hintText,
+    this.obscureText = false,
+    this.keyboardType,
+    this.onChanged,
+    this.suffix,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final filled = controller.text.isNotEmpty;
+    final borderColor = filled ? CocoTheme.primary : Colors.grey.shade300;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(label, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: Colors.grey.shade600)),
+        const SizedBox(height: 8),
+        TextField(
+          controller: controller,
+          obscureText: obscureText,
+          keyboardType: keyboardType,
+          onChanged: onChanged,
+          style: const TextStyle(fontSize: 15, color: CocoTheme.secondary),
+          decoration: InputDecoration(
+            hintText: hintText,
+            hintStyle: TextStyle(color: Colors.grey.shade400),
+            filled: true,
+            fillColor: Colors.white,
+            suffixIcon: suffix,
+            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+            border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide(color: borderColor)),
+            enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide(color: borderColor)),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(14),
+              borderSide: const BorderSide(color: CocoTheme.primary, width: 1.5),
             ),
           ),
         ),
+      ],
+    );
+  }
+}
+
+class _CheckBox extends StatelessWidget {
+  final bool checked;
+  const _CheckBox({required this.checked});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 18,
+      height: 18,
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+        color: checked ? CocoTheme.primary : Colors.white,
+        borderRadius: BorderRadius.circular(5),
+        border: Border.all(color: checked ? CocoTheme.primary : Colors.grey.shade400, width: 1.6),
       ),
+      child: checked ? const Icon(Icons.check, size: 12, color: Colors.white) : null,
     );
   }
 }
