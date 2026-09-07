@@ -1,0 +1,349 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <!--
+    If you are serving your web app in a path other than the root, change the
+    href value below to reflect the base path you are serving from.
+
+    The path provided below has to start and end with a slash "/" in order for
+    it to work correctly.
+
+    For more details:
+    * https://developer.mozilla.org/en-US/docs/Web/HTML/Element/base
+
+    This is a placeholder for base href that will be replaced by the value of
+    the `--base-href` argument provided to `flutter build`.
+  -->
+  <base href="$FLUTTER_BASE_HREF">
+
+  <meta charset="UTF-8">
+  <meta content="IE=Edge" http-equiv="X-UA-Compatible">
+  <meta name="description" content="A new Flutter project.">
+
+  <!-- iOS meta tags & icons -->
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black">
+  <meta name="apple-mobile-web-app-title" content="coco_frontend">
+  <link rel="apple-touch-icon" href="icons/Icon-192.png">
+
+  <!-- Favicon -->
+  <link rel="icon" type="image/png" href="favicon.png"/>
+
+  <title>coco_frontend</title>
+  <link rel="manifest" href="manifest.json">
+</head>
+<body>
+  <!--
+    You can customize the "flutter_bootstrap.js" script.
+    This is useful to provide a custom configuration to the Flutter loader
+    or to give the user feedback during the initialization process.
+
+    For more details:
+    * https://docs.flutter.dev/platform-integration/web/initialization
+  -->
+  <script src="flutter_bootstrap.js" async></script>
+  <script>
+    // COCO 카카오맵 JS interop 브릿지. Dart(kakao_map_view_web.dart)에서 직접 호출한다.
+    window.__cocoKakaoMaps = {}; // divId -> kakao.maps.Map 인스턴스
+    window.__cocoKakaoMarkers = {}; // divId -> kakao.maps.CustomOverlay[] 배열 (핀 또는 클러스터 버블)
+    window.__cocoKakaoOverlays = {}; // divId -> kakao.maps.CustomOverlay[] 배열 (마커 위 이름 태그)
+    window.__cocoKakaoMarkersRaw = {}; // divId -> 마지막으로 받은 원본 마커 데이터(재클러스터링용)
+    window.__cocoMarkerClickHandlers = {}; // divId -> onMarkerClick 콜백
+    window.__cocoBoundsChangedHandlers = {}; // divId -> onBoundsChanged 콜백 (뷰포트 쿼리용)
+    window.__cocoKakaoLoadPromise = null;
+
+    // 핀이 몰릴 때(핀 천국) 화면 픽셀 기준으로 가까운 마커끼리 묶어서 하나의
+    // 클러스터 버블로 보여준다. 카카오 공식 MarkerClusterer는 kakao.maps.Marker만
+    // 지원해서(우리는 CustomOverlay로 직접 그리기 때문에 못 씀) 간단한 격자(grid)
+    // 기반 클러스터링을 직접 구현한다: 지도를 픽셀 격자로 나누고, 같은 칸에 들어온
+    // 마커들을 하나로 묶는다. 줌/이동으로 화면이 바뀔 때마다(=idle 이벤트) 다시 계산한다.
+    var COCO_CLUSTER_CELL_PX = 110;
+
+    function cocoRenderClusters(divId) {
+      var map = window.__cocoKakaoMaps[divId];
+      var raw = window.__cocoKakaoMarkersRaw[divId] || [];
+      if (!map) return;
+
+      (window.__cocoKakaoMarkers[divId] || []).forEach(function (m) { m.setMap(null); });
+      (window.__cocoKakaoOverlays[divId] || []).forEach(function (o) { o.setMap(null); });
+
+      var projection = map.getProjection();
+      var onMarkerClick = window.__cocoMarkerClickHandlers[divId];
+
+      // 격자 칸 -> 그 칸에 속한 원본 마커들
+      var cells = {};
+      raw.forEach(function (m) {
+        var point = projection.pointFromCoords(new kakao.maps.LatLng(m.lat, m.lng));
+        var cellX = Math.floor(point.x / COCO_CLUSTER_CELL_PX);
+        var cellY = Math.floor(point.y / COCO_CLUSTER_CELL_PX);
+        var key = cellX + '_' + cellY;
+        if (!cells[key]) cells[key] = [];
+        cells[key].push(m);
+      });
+
+      var newMarkers = [];
+      var newOverlays = [];
+
+      Object.keys(cells).forEach(function (key) {
+        var group = cells[key];
+        if (group.length === 1) {
+          renderSinglePin(group[0]);
+        } else {
+          renderClusterBubble(group);
+        }
+      });
+
+      function renderSinglePin(m) {
+        var position = new kakao.maps.LatLng(m.lat, m.lng);
+        var pin = document.createElement('div');
+        pin.style.cssText =
+          'width:22px;height:22px;border-radius:50%;background:#2F8FE0;' +
+          'border:3px solid #fff;box-shadow:0 2px 6px rgba(0,0,0,0.35);cursor:pointer;';
+        pin.addEventListener('click', function () { if (onMarkerClick) onMarkerClick(m.id); });
+        var pinOverlay = new kakao.maps.CustomOverlay({
+          position: position, content: pin, xAnchor: 0.5, yAnchor: 0.5, clickable: true,
+        });
+        pinOverlay.setMap(map);
+        newMarkers.push(pinOverlay);
+
+        if (m.name) {
+          var tag = document.createElement('div');
+          tag.textContent = m.name;
+          tag.style.cssText =
+            'background:#fff;border-radius:12px;padding:3px 10px;' +
+            'font-family:NotoSansKR,sans-serif;font-size:12px;font-weight:700;color:#1A1A1A;' +
+            'box-shadow:0 1px 4px rgba(0,0,0,0.25);white-space:nowrap;cursor:pointer;';
+          tag.addEventListener('click', function () { if (onMarkerClick) onMarkerClick(m.id); });
+          var overlay = new kakao.maps.CustomOverlay({
+            position: position, content: tag, yAnchor: 1.9, clickable: true,
+          });
+          overlay.setMap(map);
+          newOverlays.push(overlay);
+        }
+      }
+
+      function renderClusterBubble(group) {
+        var avgLat = group.reduce(function (s, m) { return s + m.lat; }, 0) / group.length;
+        var avgLng = group.reduce(function (s, m) { return s + m.lng; }, 0) / group.length;
+        var position = new kakao.maps.LatLng(avgLat, avgLng);
+
+        var size = Math.min(34 + group.length * 4, 64); // 개수가 많을수록 커지되 상한을 둠
+        // 커질수록 아래 지도가 살짝 비쳐 보이도록 더 반투명하게 — 뭉친 핀 느낌을 줄인다.
+        var alpha = Math.max(0.45, 0.75 - group.length * 0.03);
+        var bubble = document.createElement('div');
+        bubble.style.cssText =
+          'width:' + size + 'px;height:' + size + 'px;border-radius:50%;' +
+          'background:rgba(27,95,168,' + alpha + ');border:3px solid #fff;box-shadow:0 2px 8px rgba(0,0,0,0.35);' +
+          'display:flex;align-items:center;justify-content:center;cursor:pointer;' +
+          'color:#fff;font-family:NotoSansKR,sans-serif;font-weight:800;font-size:13px;';
+        bubble.textContent = String(group.length);
+        bubble.addEventListener('click', function () {
+          // 클러스터를 탭하면 그 위치로 확대 — 낱개 핀이 보일 때까지 계속 눌러 들어갈 수 있다.
+          map.setLevel(Math.max(map.getLevel() - 2, 1), { anchor: position });
+          map.setCenter(position);
+        });
+        var bubbleOverlay = new kakao.maps.CustomOverlay({
+          position: position, content: bubble, xAnchor: 0.5, yAnchor: 0.5, zIndex: 5, clickable: true,
+        });
+        bubbleOverlay.setMap(map);
+        newMarkers.push(bubbleOverlay);
+      }
+
+      window.__cocoKakaoMarkers[divId] = newMarkers;
+      window.__cocoKakaoOverlays[divId] = newOverlays;
+    }
+
+    window.cocoLoadKakaoSdk = function (appKey) {
+      if (window.__cocoKakaoLoadPromise) return window.__cocoKakaoLoadPromise;
+      window.__cocoKakaoLoadPromise = new Promise(function (resolve, reject) {
+        var script = document.createElement('script');
+        script.src = 'https://dapi.kakao.com/v2/maps/sdk.js?appkey=' + appKey + '&autoload=false';
+        script.onload = function () {
+          kakao.maps.load(function () { resolve(); });
+        };
+        script.onerror = function () { reject(new Error('카카오맵 SDK 로드 실패')); };
+        document.head.appendChild(script);
+      });
+      return window.__cocoKakaoLoadPromise;
+    };
+
+    window.cocoInitKakaoMap = function (divId, lat, lng, level) {
+      var container = document.getElementById(divId);
+      var map = new kakao.maps.Map(container, {
+        center: new kakao.maps.LatLng(lat, lng),
+        level: level,
+      });
+      window.__cocoKakaoMaps[divId] = map;
+      window.__cocoKakaoMarkers[divId] = [];
+      window.__cocoKakaoOverlays[divId] = [];
+      window.__cocoKakaoMarkersRaw[divId] = [];
+
+      // 지도가 멈출 때(드래그/줌 종료)마다: ① 클러스터를 화면 픽셀 기준으로 다시 계산하고,
+      // ② 뷰포트 쿼리용 bounds 콜백이 등록돼 있으면 현재 화면 범위를 알려준다.
+      kakao.maps.event.addListener(map, 'idle', function () {
+        cocoRenderClusters(divId);
+        var onBoundsChanged = window.__cocoBoundsChangedHandlers[divId];
+        if (onBoundsChanged) {
+          var bounds = map.getBounds();
+          var sw = bounds.getSouthWest();
+          var ne = bounds.getNorthEast();
+          onBoundsChanged(sw.getLat(), sw.getLng(), ne.getLat(), ne.getLng());
+        }
+      });
+    };
+
+    window.cocoSetKakaoMarkers = function (divId, markersJson, onMarkerClick) {
+      var map = window.__cocoKakaoMaps[divId];
+      if (!map) return;
+      window.__cocoKakaoMarkersRaw[divId] = JSON.parse(markersJson);
+      window.__cocoMarkerClickHandlers[divId] = onMarkerClick;
+      cocoRenderClusters(divId);
+    };
+
+    // 지도 화면(뷰포트)이 바뀔 때마다 그 범위를 Dart로 알려준다 — 화면에 보이는
+    // 영역만큼만 서버에 다시 요청해서 표시하고 싶을 때(핀 밀집 방지) 사용.
+    window.cocoSetBoundsChangedHandler = function (divId, onBoundsChanged) {
+      window.__cocoBoundsChangedHandlers[divId] = onBoundsChanged;
+    };
+
+    window.cocoSetKakaoCenter = function (divId, lat, lng) {
+      var map = window.__cocoKakaoMaps[divId];
+      if (map) map.setCenter(new kakao.maps.LatLng(lat, lng));
+    };
+
+    // 지도를 직접 눌러서 좌표를 찍는 용도(스팟 등록 화면의 "지도를 눌러 위치를
+    // 직접 찍을 수 있어요" 기능). divId당 한 번만 리스너를 붙인다.
+    window.__cocoMapClickHandlers = {};
+
+    window.cocoSetMapClickHandler = function (divId, onClick) {
+      var map = window.__cocoKakaoMaps[divId];
+      if (!map || window.__cocoMapClickHandlers[divId]) return;
+      var listener = function (mouseEvent) {
+        onClick(mouseEvent.latLng.getLat(), mouseEvent.latLng.getLng());
+      };
+      kakao.maps.event.addListener(map, 'click', listener);
+      window.__cocoMapClickHandlers[divId] = listener;
+    };
+
+    // 내 위치(GPS) 표시 — 스팟 핀(밝은 블루 단색 원)과 헷갈리지 않도록
+    // 진한 남색 점 + 정확도 원 + 나침반 연동 방향 부채꼴로 구성한다.
+    // divId당 오버레이 하나만 유지하고, 위치가 바뀌면 새로 만들지 않고 위치만 갱신한다.
+    window.__cocoKakaoMyLocationOverlay = {};
+    window.__cocoKakaoMyLocationCone = {}; // divId -> 방향 부채꼴 DOM (나침반 값으로 회전)
+    window.__cocoHeadingWatchers = {}; // divId -> 리스너 해제 함수 (중복 등록 방지)
+
+    window.cocoSetMyLocation = function (divId, lat, lng) {
+      var map = window.__cocoKakaoMaps[divId];
+      if (!map) return;
+      var position = new kakao.maps.LatLng(lat, lng);
+      var existing = window.__cocoKakaoMyLocationOverlay[divId];
+      if (existing) {
+        existing.setPosition(position);
+        return;
+      }
+
+      var wrap = document.createElement('div');
+      wrap.style.cssText = 'position:relative;width:60px;height:60px;pointer-events:none;';
+
+      // 정확도 표시 원 (옅은 파랑)
+      var halo = document.createElement('div');
+      halo.style.cssText =
+        'position:absolute;top:50%;left:50%;width:46px;height:46px;margin:-23px 0 0 -23px;' +
+        'border-radius:50%;background:rgba(47,143,224,0.15);';
+      wrap.appendChild(halo);
+
+      // 방향 부채꼴 — 나침반(deviceorientation) heading 값으로 회전시켜 "보는 방향"을 표시.
+      // 스팟 핀에는 없는, 내 위치 마커 전용 요소라 시각적으로도 명확히 구분된다.
+      // translate(-50%,-100%)로 부채꼴 자신의 크기 기준으로 중심을 맞춘 뒤 같은 transform
+      // 안에서 회전시켜야, margin 계산 오차 없이 항상 점(dot) 중심을 정확히 축으로 회전한다.
+      var cone = document.createElement('div');
+      cone.style.cssText =
+        'position:absolute;top:50%;left:50%;width:0;height:0;' +
+        'border-left:7px solid transparent;border-right:7px solid transparent;' +
+        'border-bottom:22px solid rgba(27,95,168,0.45);' +
+        'transform-origin:50% 100%;transform:translate(-50%,-100%) rotate(0deg);' +
+        'transition:transform 0.15s linear;';
+      wrap.appendChild(cone);
+      window.__cocoKakaoMyLocationCone[divId] = cone;
+
+      // 중심 점 — 스팟 핀(#2F8FE0)과 구분되는 진한 남색 + 흰 테두리
+      var dot = document.createElement('div');
+      dot.style.cssText =
+        'position:absolute;top:50%;left:50%;width:16px;height:16px;margin:-8px 0 0 -8px;' +
+        'border-radius:50%;background:#1B5FA8;border:3px solid #fff;' +
+        'box-shadow:0 0 0 1px rgba(27,95,168,0.5),0 1px 4px rgba(0,0,0,0.35);z-index:2;';
+      wrap.appendChild(dot);
+
+      var overlay = new kakao.maps.CustomOverlay({
+        position: position,
+        content: wrap,
+        xAnchor: 0.5,
+        yAnchor: 0.5,
+        zIndex: 10,
+      });
+      overlay.setMap(map);
+      window.__cocoKakaoMyLocationOverlay[divId] = overlay;
+
+      window.cocoStartHeadingWatch(divId);
+    };
+
+    window.cocoSetMyHeading = function (divId, heading) {
+      var cone = window.__cocoKakaoMyLocationCone[divId];
+      if (!cone || typeof heading !== 'number' || isNaN(heading)) return;
+      // translate로 중심을 맞춘 뒤 그 상태에서 회전해야 하므로, 두 transform을 함께 적용한다.
+      cone.style.transform = 'translate(-50%,-100%) rotate(' + heading + 'deg)';
+    };
+
+    // 기기 나침반(지자기 센서) 연동 — 브라우저/기기별로 지원 여부와 정확도가 갈리는
+    // 베스트 에포트 기능이다. 실패해도 조용히 무시한다(방향 부채꼴이 고정된 채로 남을 뿐,
+    // 위치 점 표시 자체는 정상 동작).
+    window.cocoStartHeadingWatch = function (divId) {
+      if (window.__cocoHeadingWatchers[divId]) return; // 이미 등록됨
+
+      function handleOrientation(event) {
+        var heading = null;
+        if (typeof event.webkitCompassHeading === 'number') {
+          // iOS Safari — 이미 화면 기준 나침반 방향(0~360)을 제공.
+          heading = event.webkitCompassHeading;
+        } else if (event.absolute && typeof event.alpha === 'number') {
+          // Android Chrome(deviceorientationabsolute) — alpha는 반시계 기준이라 보정.
+          heading = (360 - event.alpha) % 360;
+        }
+        if (heading !== null) {
+          window.cocoSetMyHeading(divId, heading);
+        }
+      }
+
+      function attach() {
+        if (window.__cocoHeadingWatchers[divId]) return;
+        var useAbsolute = 'ondeviceorientationabsolute' in window;
+        var eventName = useAbsolute ? 'deviceorientationabsolute' : 'deviceorientation';
+        window.addEventListener(eventName, handleOrientation);
+        window.__cocoHeadingWatchers[divId] = function () {
+          window.removeEventListener(eventName, handleOrientation);
+        };
+      }
+
+      // iOS 13+는 사용자 제스처 컨텍스트 안에서 명시적 권한 요청이 필요하다.
+      if (typeof DeviceOrientationEvent !== 'undefined' &&
+          typeof DeviceOrientationEvent.requestPermission === 'function') {
+        DeviceOrientationEvent.requestPermission().then(function (state) {
+          if (state === 'granted') attach();
+        }).catch(function () {
+          // 권한 거부/실패 — 방향 표시 없이 위치 점만 보여준다.
+        });
+      } else {
+        attach();
+      }
+    };
+
+    window.cocoStopHeadingWatch = function (divId) {
+      var detach = window.__cocoHeadingWatchers[divId];
+      if (detach) {
+        detach();
+        delete window.__cocoHeadingWatchers[divId];
+      }
+    };
+  </script>
+</body>
+</html>
