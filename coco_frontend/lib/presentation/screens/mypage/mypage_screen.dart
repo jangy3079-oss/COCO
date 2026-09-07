@@ -61,7 +61,7 @@ class _MypageScreenState extends State<MypageScreen> {
             Divider(height: 1, color: Colors.black.withOpacity(0.07)),
             _MenuRow(icon: Icons.article_outlined, label: '내가 쓴 글', onTap: () => _open('/mypage/posts')),
             _MenuRow(icon: Icons.favorite_border_rounded, label: '저장 · 좋아요', onTap: () => _open('/mypage/saved')),
-            _MenuRow(icon: Icons.map_outlined, label: '내가 만든 골목지도', onTap: () => _open('/mypage/saved', extra: 'routes')),
+            _MenuRow(icon: Icons.map_outlined, label: '내가 만든 골목지도', onTap: () => _open('/mypage/routes')),
             _MenuRow(icon: Icons.forum_outlined, label: '내 질문 · 답변 활동', onTap: () => _open('/mypage/posts', extra: 'qna')),
             _MenuRow(icon: Icons.person_outline_rounded, label: '프로필 수정', onTap: () => _open('/mypage/profile/edit')),
             _MenuRow(icon: Icons.notifications_outlined, label: '알림 설정', onTap: () => _open('/mypage/settings')),
