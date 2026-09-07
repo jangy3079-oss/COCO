@@ -1,8 +1,10 @@
 import 'dart:ui';
 
 import 'package:flutter/material.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../widgets/map/kakao_map_view.dart';
 import 'map_mock_data.dart';
 
 class MapScreen extends StatefulWidget {
@@ -17,9 +19,74 @@ class _MapScreenState extends State<MapScreen> {
   static const _categories = ['전체', '노포', '골목', '공원', '카페'];
   String _selectedCategory = '전체';
 
-  List<MockSpot> get _filteredSpots => _selectedCategory == '전체'
-      ? mockSpots
-      : mockSpots.where((s) => s.category == _selectedCategory).toList();
+  // 지도 중심 좌표 — 진입 시 현재 위치로 재설정을 시도하고, 권한 거부/실패 시
+  // mapDefaultCenterLat/Lng(부산 남포동)를 그대로 쓴다.
+  double _centerLat = mapDefaultCenterLat;
+  double _centerLng = mapDefaultCenterLng;
+  // GPS로 실제 위치를 구했을 때만 true — 지도 위 "내 위치" 파란 점은 이 값이
+  // true일 때만 표시한다(기본 좌표로 조용히 폴백한 경우에는 점을 띄우지 않음).
+  bool _locationAvailable = false;
+
+  // 지도 화면(뷰포트) 범위 — 드래그/줌이 끝날 때마다 갱신되며, 이 범위 안에 있는
+  // 스팟만 지도/하단 시트에 표시한다(핀 밀집 방지). null이면 아직 한 번도 idle
+  // 이벤트가 안 온 것이므로 전체를 보여준다. 실제 서버 연동 시에는 이 콜백에서
+  // `/api/spot?swLat=...&neLat=...` 뷰포트 쿼리를 호출하도록 교체하면 된다.
+  double? _swLat, _swLng, _neLat, _neLng;
+
+  void _onBoundsChanged(double swLat, double swLng, double neLat, double neLng) {
+    setState(() {
+      _swLat = swLat;
+      _swLng = swLng;
+      _neLat = neLat;
+      _neLng = neLng;
+    });
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _loadCurrentLocation();
+  }
+
+  Future<void> _loadCurrentLocation() async {
+    try {
+      final serviceEnabled = await Geolocator.isLocationServiceEnabled();
+      if (!serviceEnabled) return;
+
+      var permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+      }
+      if (permission == LocationPermission.denied || permission == LocationPermission.deniedForever) {
+        return;
+      }
+
+      final position = await Geolocator.getCurrentPosition(
+        desiredAccuracy: LocationAccuracy.medium,
+      );
+      if (!mounted) return;
+      setState(() {
+        _centerLat = position.latitude;
+        _centerLng = position.longitude;
+        _locationAvailable = true;
+      });
+    } catch (_) {
+      // 위치 조회 실패 시 기본 좌표(부산 남포동) 유지 — 지도 자체는 정상 동작해야 하므로 조용히 무시.
+    }
+  }
+
+  List<MockSpot> get _filteredSpots {
+    final byCategory = _selectedCategory == '전체'
+        ? mockSpots
+        : mockSpots.where((s) => s.category == _selectedCategory).toList();
+    final swLat = _swLat, swLng = _swLng, neLat = _neLat, neLng = _neLng;
+    if (swLat == null || swLng == null || neLat == null || neLng == null) {
+      return byCategory;
+    }
+    return byCategory
+        .where((s) => s.lat >= swLat && s.lat <= neLat && s.lng >= swLng && s.lng <= neLng)
+        .toList();
+  }
 
   // 찜(저장) 상태는 map_mock_data.dart의 공유 savedSpotIds를 그대로 사용한다
   // (스팟 상세 화면·MY탭과 동일한 상태를 공유해야 하므로 화면 로컬 State가 아님).
@@ -63,9 +130,17 @@ class _MapScreenState extends State<MapScreen> {
             children: [
               // 지도 영역 — 좌우/여백 없이 화면 전체를 채움
               Positioned.fill(
-                child: MockMapBackground(
-                  spots: _filteredSpots,
-                  onSpotTap: _openSpotDetail,
+                child: KakaoMapView(
+                  centerLat: _centerLat,
+                  centerLng: _centerLng,
+                  markers: [
+                    for (final spot in _filteredSpots)
+                      KakaoMapMarker(id: spot.id, lat: spot.lat, lng: spot.lng, name: spot.name),
+                  ],
+                  onMarkerTap: (spotId) => _openSpotDetail(mockSpotById(spotId)),
+                  myLocationLat: _locationAvailable ? _centerLat : null,
+                  myLocationLng: _locationAvailable ? _centerLng : null,
+                  onBoundsChanged: _onBoundsChanged,
                 ),
               ),
               // 타이틀 + 검색창 + 카테고리 필터 (지도 위에 블러 그라데이션과 함께 떠 있는 형태.
@@ -92,10 +167,10 @@ class _MapScreenState extends State<MapScreen> {
                           gradient: LinearGradient(
                             begin: Alignment.topCenter,
                             end: Alignment.bottomCenter,
-                            stops: const [0.0, 0.55, 1.0],
+                            stops: const [0.0, 0.6, 1.0],
                             colors: [
-                              Colors.white.withOpacity(0.82),
-                              Colors.white.withOpacity(0.45),
+                              Colors.white.withOpacity(0.96),
+                              Colors.white.withOpacity(0.78),
                               Colors.white.withOpacity(0.0),
                             ],
                           ),
@@ -142,11 +217,19 @@ class _MapScreenState extends State<MapScreen> {
                   ),
                 ),
               ),
-              // 현재 위치로 재중심 버튼
+              // 우측 하단 버튼 묶음 — 스팟 등록 + 현재 위치로 재중심을 같은 줄에 나란히 배치
               Positioned(
+                left: 16,
                 right: 16,
                 bottom: sheetCollapsedHeight + 16,
-                child: const _RecenterButton(),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    _RegisterSpotButton(onTap: () => context.push('/map/register/search')),
+                    const SizedBox(width: 10),
+                    _RecenterButton(onTap: _loadCurrentLocation),
+                  ],
+                ),
               ),
               // 하단 "주변 스팟" 바텀시트 (드래그로 확장 가능)
               _NearbySpotsSheet(
@@ -437,26 +520,55 @@ class _SpotPin extends StatelessWidget {
 }
 
 class _RecenterButton extends StatelessWidget {
-  const _RecenterButton();
+  final VoidCallback onTap;
+  const _RecenterButton({required this.onTap});
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      width: 44,
-      height: 44,
-      alignment: Alignment.center,
-      decoration: BoxDecoration(
-        color: Colors.white,
-        shape: BoxShape.circle,
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.15),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
-          ),
-        ],
+    return Material(
+      color: Colors.white,
+      shape: const CircleBorder(),
+      elevation: 3,
+      child: InkWell(
+        onTap: onTap,
+        customBorder: const CircleBorder(),
+        child: const SizedBox(
+          width: 44,
+          height: 44,
+          child: Icon(Icons.my_location_rounded, color: CocoTheme.primary, size: 20),
+        ),
       ),
-      child: Icon(Icons.my_location_rounded, color: CocoTheme.primary, size: 20),
+    );
+  }
+}
+
+/// 지도 위 "스팟 등록" 플로팅 버튼 — 탭하면 장소 검색(스팟 등록 ①)으로 이동.
+class _RegisterSpotButton extends StatelessWidget {
+  final VoidCallback onTap;
+  const _RegisterSpotButton({required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: CocoTheme.primary,
+      borderRadius: BorderRadius.circular(22),
+      elevation: 4,
+      shadowColor: CocoTheme.primary.withOpacity(0.4),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(22),
+        child: const Padding(
+          padding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.add_rounded, size: 16, color: Colors.white),
+              SizedBox(width: 6),
+              Text('스팟 등록', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: Colors.white)),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }

@@ -88,7 +88,10 @@ class _RoutePreviewScreenState extends State<RoutePreviewScreen> {
                           count: null,
                           active: false,
                           activeColor: CocoTheme.secondary,
-                          onTap: () {},
+                          onTap: () => context.push('/feed/compose-route', extra: {
+                            'name': widget.routeName,
+                            'stops': widget.stops,
+                          }),
                         ),
                       ),
                     ],
