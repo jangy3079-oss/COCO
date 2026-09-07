@@ -1,6 +1,6 @@
 package com.coco.backend.repository;
 
-import com.coco.entity.User;
+import com.coco.backend.entity.User;
 import org.springframework.data.jpa.repository.JpaRepository;
 import java.util.Optional;
 
