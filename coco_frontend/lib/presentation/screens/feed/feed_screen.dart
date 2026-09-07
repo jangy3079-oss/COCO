@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'dart:math';
 import 'package:flutter/material.dart';
-import 'package:flutter/rendering.dart' show ScrollDirection;
 import 'package:go_router/go_router.dart';
 import '../../../core/theme/app_theme.dart';
 import 'feed_mock_data.dart';
@@ -14,21 +13,13 @@ class FeedScreen extends StatefulWidget {
 }
 
 class _FeedScreenState extends State<FeedScreen> {
-  static const _categories = ['노포', '골목', '공원', '카페'];
-
-  String? _sourceFilter; // null = 전체
-  String? _categoryFilter; // null = 전체
-  String _sortBy = 'latest'; // latest | popular | distance
-  bool _locationGranted = false;
-  bool _showLocationPrompt = false;
-  bool _refreshing = false;
+  FeedPostType? _typeFilter; // null = 전체
+  String _dongId = 'nampo'; // feedDongOptions 참고. 'all' = 전체 동네
+  String _sortBy = 'latest'; // latest | likes | saves
   int _visibleCount = 5;
   bool _loadingMore = false;
-  bool _filtersVisible = true;
 
   final _scrollController = ScrollController();
-  String? _toastMessage;
-  Timer? _toastTimer;
 
   @override
   void initState() {
@@ -40,24 +31,22 @@ class _FeedScreenState extends State<FeedScreen> {
   void dispose() {
     _scrollController.removeListener(_onScroll);
     _scrollController.dispose();
-    _toastTimer?.cancel();
     super.dispose();
   }
 
+  bool get _isRankingView => _typeFilter == FeedPostType.route;
+
   List<FeedItem> get _filteredSorted {
-    var list = mockFeedItems.where((it) {
-      final sourceOk = _sourceFilter == null ||
-          (_sourceFilter == 'coco' ? it.source == FeedSource.coco : it.source == FeedSource.user);
-      final categoryOk = _categoryFilter == null || it.category == _categoryFilter;
-      return sourceOk && categoryOk;
-    }).toList();
+    var list = mockFeedItems
+        .where((it) => (_dongId == 'all' || it.dongId == _dongId) && (_typeFilter == null || it.type == _typeFilter))
+        .toList();
 
     switch (_sortBy) {
-      case 'popular':
-        list.sort((a, b) => (b.likes + b.saves) - (a.likes + a.saves));
+      case 'likes':
+        list.sort((a, b) => b.likeCount - a.likeCount);
         break;
-      case 'distance':
-        list.sort((a, b) => a.distanceMin - b.distanceMin);
+      case 'saves':
+        list.sort((a, b) => b.saveCount - a.saveCount);
         break;
       default:
         list.sort((a, b) => b.ts - a.ts);
@@ -69,18 +58,7 @@ class _FeedScreenState extends State<FeedScreen> {
 
   void _onScroll() {
     final position = _scrollController.position;
-
-    // 스크롤 방향에 따라 상단 필터 영역(검색바/소스버튼/카테고리칩/정렬행)을
-    // 접었다 펼친다. 맨 위 근처에서는 항상 펼쳐진 상태로 고정.
-    if (position.pixels <= 0) {
-      if (!_filtersVisible) setState(() => _filtersVisible = true);
-    } else if (position.userScrollDirection == ScrollDirection.reverse && _filtersVisible) {
-      setState(() => _filtersVisible = false);
-    } else if (position.userScrollDirection == ScrollDirection.forward && !_filtersVisible) {
-      setState(() => _filtersVisible = true);
-    }
-
-    if (_loadingMore || !_hasMore) return;
+    if (_loadingMore || !_hasMore || _isRankingView) return;
     if (position.pixels >= position.maxScrollExtent - 80) {
       _loadMore();
     }
@@ -97,46 +75,28 @@ class _FeedScreenState extends State<FeedScreen> {
     });
   }
 
-  void _handleRefresh() {
-    setState(() => _refreshing = true);
-    Future.delayed(const Duration(milliseconds: 700), () {
-      if (!mounted) return;
-      setState(() {
-        _refreshing = false;
-        _visibleCount = 5;
-      });
-      _showToast('최신 피드로 업데이트했어요');
-    });
-  }
-
-  void _handleSortDistanceTap() {
-    if (_locationGranted) {
-      setState(() {
-        _sortBy = 'distance';
-        _visibleCount = 5;
-      });
-    } else {
-      setState(() => _showLocationPrompt = true);
-    }
-  }
-
-  void _allowLocation() {
-    setState(() {
-      _locationGranted = true;
-      _sortBy = 'distance';
-      _showLocationPrompt = false;
-      _visibleCount = 5;
-    });
-  }
-
-  void _denyLocation() => setState(() => _showLocationPrompt = false);
-
-  void _showToast(String msg) {
-    _toastTimer?.cancel();
-    setState(() => _toastMessage = msg);
-    _toastTimer = Timer(const Duration(milliseconds: 1800), () {
-      if (mounted) setState(() => _toastMessage = null);
-    });
+  Future<void> _openFilterSheet() async {
+    await showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (_) => StatefulBuilder(
+        builder: (sheetContext, setSheetState) => _FilterSheet(
+          dongId: _dongId,
+          sortBy: _sortBy,
+          resultCount: _filteredSorted.length,
+          onDongSelected: (id) => setSheetState(() => _dongId = id),
+          onSortSelected: (v) => setSheetState(() => _sortBy = v),
+          onReset: () => setSheetState(() {
+            _dongId = 'nampo';
+            _sortBy = 'latest';
+          }),
+          onApply: () => Navigator.of(sheetContext).pop(),
+        ),
+      ),
+    );
+    if (mounted) setState(() => _visibleCount = 5);
   }
 
   Future<void> _openDetail(FeedItem item) async {
@@ -149,91 +109,59 @@ class _FeedScreenState extends State<FeedScreen> {
     if (mounted) setState(() {});
   }
 
+  void _share(FeedItem item) {
+    setState(() => item.shares += 1);
+    showShareSheet(context);
+  }
+
   @override
   Widget build(BuildContext context) {
     final visibleItems = _filteredSorted.take(_visibleCount).toList();
+    final isDefaultFilter = _dongId == 'nampo' && _sortBy == 'latest';
 
     return Scaffold(
       backgroundColor: Colors.white,
       floatingActionButton: FloatingActionButton(
         backgroundColor: CocoTheme.primary,
+        shape: const CircleBorder(),
         onPressed: _openComposer,
         child: const Icon(Icons.add, color: Colors.white),
       ),
       body: SafeArea(
-        child: Stack(
+        child: Column(
           children: [
-            Column(
-              children: [
-                _FeedHeaderBar(),
-                // 검색바/소스버튼/카테고리칩/정렬행 — 아래로 스크롤하면 접히고
-                // 위로 스크롤하면 다시 펼쳐진다 (_onScroll에서 _filtersVisible 토글).
-                ClipRect(
-                  child: AnimatedAlign(
-                    duration: const Duration(milliseconds: 220),
-                    curve: Curves.easeInOut,
-                    alignment: Alignment.topCenter,
-                    heightFactor: _filtersVisible ? 1 : 0,
-                    child: AnimatedOpacity(
-                      duration: const Duration(milliseconds: 220),
-                      opacity: _filtersVisible ? 1 : 0,
-                      child: Column(
-                        children: [
-                          const Padding(
-                            padding: EdgeInsets.fromLTRB(16, 12, 16, 0),
-                            child: _DecorativeSearchBar(),
-                          ),
-                          Padding(
-                            padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-                            child: _SourceSegmentedRow(
-                              selected: _sourceFilter,
-                              onSelected: (v) => setState(() {
-                                _sourceFilter = v;
-                                _visibleCount = 5;
-                              }),
-                            ),
-                          ),
-                          Padding(
-                            padding: const EdgeInsets.fromLTRB(16, 10, 16, 0),
-                            child: _CategoryChipsRow(
-                              categories: _categories,
-                              selected: _categoryFilter,
-                              onSelected: (v) => setState(() {
-                                _categoryFilter = v;
-                                _visibleCount = 5;
-                              }),
-                            ),
-                          ),
-                          Padding(
-                            padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
-                            child: _SortRow(
-                              sortBy: _sortBy,
-                              refreshing: _refreshing,
-                              onSortLatest: () => setState(() {
-                                _sortBy = 'latest';
-                                _visibleCount = 5;
-                              }),
-                              onSortPopular: () => setState(() {
-                                _sortBy = 'popular';
-                                _visibleCount = 5;
-                              }),
-                              onSortDistance: _handleSortDistanceTap,
-                              onRefresh: _handleRefresh,
-                            ),
-                          ),
-                          if (_showLocationPrompt)
-                            Padding(
-                              padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-                              child: _LocationPrompt(onAllow: _allowLocation, onDeny: _denyLocation),
-                            ),
-                        ],
-                      ),
-                    ),
-                  ),
+            _FeedHeaderBar(dongLabel: feedDongLabel(_dongId)),
+            // 필터 영역 — 스크롤 여부와 상관없이 항상 고정으로 보여준다.
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 14, 16, 0),
+              child: _FilterRow(
+                isDefaultFilter: isDefaultFilter,
+                onOpenSheet: _openFilterSheet,
+                typeFilter: _typeFilter,
+                onTypeSelected: (v) => setState(() {
+                  _typeFilter = v;
+                  _visibleCount = 5;
+                }),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 10),
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  '${feedDongLabel(_dongId)} · ${feedSortLabels[_sortBy]}',
+                  style: TextStyle(fontSize: 12, color: Colors.black.withOpacity(0.4)),
                 ),
-                Expanded(
-                  child: visibleItems.isEmpty
-                      ? const _EmptyState()
+              ),
+            ),
+            Expanded(
+              child: visibleItems.isEmpty
+                  ? const _EmptyState()
+                  : _isRankingView
+                      ? _RouteRankingList(
+                          items: visibleItems,
+                          onToggleSave: (item) => setState(() => item.saved = !item.saved),
+                        )
                       : ListView.builder(
                           controller: _scrollController,
                           itemCount: visibleItems.length + 1,
@@ -249,170 +177,176 @@ class _FeedScreenState extends State<FeedScreen> {
                               item: item,
                               onToggleLike: () => setState(() => item.liked = !item.liked),
                               onToggleSave: () => setState(() => item.saved = !item.saved),
-                              onPrevImg: () => setState(
-                                  () => item.imgIndex = (item.imgIndex - 1 + item.imgCount) % item.imgCount),
-                              onNextImg: () =>
-                                  setState(() => item.imgIndex = (item.imgIndex + 1) % item.imgCount),
+                              onShare: () => _share(item),
+                              onPrevImg: () =>
+                                  setState(() => item.imgIndex = (item.imgIndex - 1 + item.imgCount) % item.imgCount),
+                              onNextImg: () => setState(() => item.imgIndex = (item.imgIndex + 1) % item.imgCount),
                               onOpenDetail: () => _openDetail(item),
-                              onReport: () => _showToast('신고가 접수되었습니다'),
                             );
                           },
                         ),
-                ),
-              ],
             ),
-            if (_toastMessage != null)
-              Positioned(
-                left: 0,
-                right: 0,
-                bottom: 16,
-                child: Center(child: _Toast(message: _toastMessage!)),
-              ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+/// 인스타그램 등 외부 SNS 공유를 흉내낸 목업 시트.
+/// TODO: 실제 OS 공유 시트 연동 시 share_plus 등으로 교체.
+void showShareSheet(BuildContext context) {
+  showModalBottomSheet(
+    context: context,
+    backgroundColor: Colors.white,
+    shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+    builder: (context) => SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(20, 20, 20, 24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text('공유하기', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: CocoTheme.secondary)),
+            const SizedBox(height: 18),
+            Row(
+              children: [
+                _ShareTile(icon: Icons.chat_bubble_rounded, color: const Color(0xFFFEE500), label: '카카오톡', onTap: () => Navigator.of(context).pop()),
+                const SizedBox(width: 16),
+                _ShareTile(icon: Icons.camera_alt_rounded, color: const Color(0xFFE1306C), label: '인스타그램', onTap: () => Navigator.of(context).pop()),
+                const SizedBox(width: 16),
+                _ShareTile(icon: Icons.sms_rounded, color: Colors.grey.shade600, label: '메시지', onTap: () => Navigator.of(context).pop()),
+              ],
+            ),
+          ],
+        ),
+      ),
+    ),
+  );
+}
+
+class _ShareTile extends StatelessWidget {
+  final IconData icon;
+  final Color color;
+  final String label;
+  final VoidCallback onTap;
+  const _ShareTile({required this.icon, required this.color, required this.label, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(12),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          CircleAvatar(radius: 26, backgroundColor: color, child: Icon(icon, color: Colors.white, size: 22)),
+          const SizedBox(height: 8),
+          Text(label, style: const TextStyle(fontSize: 12, color: CocoTheme.secondary)),
+        ],
       ),
     );
   }
 }
 
 class _FeedHeaderBar extends StatelessWidget {
+  final String dongLabel;
+  const _FeedHeaderBar({required this.dongLabel});
+
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 4, 16, 0),
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
       child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          const Text(
-            'COCO',
-            style: TextStyle(color: CocoTheme.primary, fontSize: 22, fontWeight: FontWeight.w900, letterSpacing: 0.5),
-          ),
-          Row(
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Container(
-                width: 32,
-                height: 32,
-                alignment: Alignment.center,
-                decoration: const BoxDecoration(color: Color(0xFFF0ECE6), shape: BoxShape.circle),
-                child: Icon(Icons.notifications_none_rounded, size: 18, color: Colors.grey.shade700),
-              ),
-              const SizedBox(width: 10),
-              const CircleAvatar(
-                radius: 18,
-                backgroundColor: Color(0xFFF0ECE6),
-                child: Text('나', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: CocoTheme.secondary)),
+              const Text('피드', style: TextStyle(fontSize: 28, fontWeight: FontWeight.w800, color: CocoTheme.secondary)),
+              const SizedBox(height: 6),
+              Row(
+                children: [
+                  const Icon(Icons.location_on_rounded, size: 14, color: CocoTheme.primary),
+                  const SizedBox(width: 4),
+                  Text(dongLabel, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: CocoTheme.primary)),
+                  const SizedBox(width: 4),
+                  Text('기준', style: TextStyle(fontSize: 13, color: Colors.black.withOpacity(0.35))),
+                ],
               ),
             ],
           ),
+          const CircleAvatar(
+            radius: 17,
+            backgroundColor: Color(0xFFF0ECE6),
+            child: Text('나', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: CocoTheme.secondary)),
+          ),
         ],
       ),
     );
   }
 }
 
-class _DecorativeSearchBar extends StatelessWidget {
-  const _DecorativeSearchBar();
+class _FilterRow extends StatelessWidget {
+  final bool isDefaultFilter;
+  final VoidCallback onOpenSheet;
+  final FeedPostType? typeFilter;
+  final ValueChanged<FeedPostType?> onTypeSelected;
 
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      height: 44,
-      padding: const EdgeInsets.symmetric(horizontal: 16),
-      decoration: BoxDecoration(
-        color: const Color(0xFFF6F5F2),
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: Colors.black.withOpacity(0.06)),
-      ),
-      child: Row(
-        children: [
-          Icon(Icons.search, size: 16, color: Colors.grey.shade500),
-          const SizedBox(width: 8),
-          Text('골목, 노포, 공원 검색...', style: TextStyle(fontSize: 14, color: Colors.grey.shade500)),
-        ],
-      ),
-    );
-  }
-}
-
-class _SourceSegmentedRow extends StatelessWidget {
-  final String? selected;
-  final ValueChanged<String?> onSelected;
-  const _SourceSegmentedRow({required this.selected, required this.onSelected});
+  const _FilterRow({
+    required this.isDefaultFilter,
+    required this.onOpenSheet,
+    required this.typeFilter,
+    required this.onTypeSelected,
+  });
 
   @override
   Widget build(BuildContext context) {
     return Row(
       children: [
-        Expanded(child: _SegmentButton(label: '전체', active: selected == null, onTap: () => onSelected(null))),
-        const SizedBox(width: 6),
-        Expanded(child: _SegmentButton(label: 'COCO 추천', active: selected == 'coco', onTap: () => onSelected('coco'))),
-        const SizedBox(width: 6),
-        Expanded(child: _SegmentButton(label: '이웃 게시물', active: selected == 'user', onTap: () => onSelected('user'))),
+        InkWell(
+          onTap: onOpenSheet,
+          borderRadius: BorderRadius.circular(19),
+          child: Container(
+            width: 38,
+            height: 38,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: isDefaultFilter ? Colors.white : CocoTheme.primary.withOpacity(0.12),
+              border: Border.all(color: isDefaultFilter ? Colors.grey.shade300 : CocoTheme.primary),
+            ),
+            child: Icon(Icons.tune_rounded, size: 18, color: isDefaultFilter ? Colors.black.withOpacity(0.45) : CocoTheme.primary),
+          ),
+        ),
+        const SizedBox(width: 8),
+        Container(width: 1, height: 22, color: Colors.black.withOpacity(0.1)),
+        const SizedBox(width: 8),
+        Expanded(
+          child: SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              children: [
+                _TypeChip(label: '전체', selected: typeFilter == null, onTap: () => onTypeSelected(null)),
+                const SizedBox(width: 8),
+                _TypeChip(label: '일상', selected: typeFilter == FeedPostType.spot, onTap: () => onTypeSelected(FeedPostType.spot)),
+                const SizedBox(width: 8),
+                _TypeChip(label: '골목지도', selected: typeFilter == FeedPostType.route, onTap: () => onTypeSelected(FeedPostType.route)),
+              ],
+            ),
+          ),
+        ),
       ],
     );
   }
 }
 
-class _SegmentButton extends StatelessWidget {
-  final String label;
-  final bool active;
-  final VoidCallback onTap;
-  const _SegmentButton({required this.label, required this.active, required this.onTap});
-
-  @override
-  Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(10),
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 9),
-        alignment: Alignment.center,
-        decoration: BoxDecoration(
-          color: active ? CocoTheme.primary : const Color(0xFFF6F5F2),
-          borderRadius: BorderRadius.circular(10),
-        ),
-        child: Text(
-          label,
-          style: TextStyle(
-            fontSize: 12.5,
-            fontWeight: FontWeight.w600,
-            color: active ? Colors.white : Colors.grey.shade700,
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _CategoryChipsRow extends StatelessWidget {
-  final List<String> categories;
-  final String? selected;
-  final ValueChanged<String?> onSelected;
-  const _CategoryChipsRow({required this.categories, required this.selected, required this.onSelected});
-
-  @override
-  Widget build(BuildContext context) {
-    return SingleChildScrollView(
-      scrollDirection: Axis.horizontal,
-      child: Row(
-        children: [
-          _CategoryChip(label: '전체', selected: selected == null, onTap: () => onSelected(null)),
-          const SizedBox(width: 8),
-          for (final c in categories) ...[
-            _CategoryChip(label: c, selected: c == selected, onTap: () => onSelected(c)),
-            const SizedBox(width: 8),
-          ],
-        ],
-      ),
-    );
-  }
-}
-
-class _CategoryChip extends StatelessWidget {
+class _TypeChip extends StatelessWidget {
   final String label;
   final bool selected;
   final VoidCallback onTap;
-  const _CategoryChip({required this.label, required this.selected, required this.onTap});
+  const _TypeChip({required this.label, required this.selected, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
@@ -420,7 +354,7 @@ class _CategoryChip extends StatelessWidget {
       onTap: onTap,
       borderRadius: BorderRadius.circular(20),
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
         decoration: BoxDecoration(
           color: selected ? CocoTheme.primary : Colors.white,
           borderRadius: BorderRadius.circular(20),
@@ -439,120 +373,151 @@ class _CategoryChip extends StatelessWidget {
   }
 }
 
-class _SortRow extends StatelessWidget {
+/// 필터 아이콘 탭 시 뜨는 바텀시트 — 동네 칩 + 정렬 칩 + 적용 버튼.
+class _FilterSheet extends StatelessWidget {
+  final String dongId;
   final String sortBy;
-  final bool refreshing;
-  final VoidCallback onSortLatest;
-  final VoidCallback onSortPopular;
-  final VoidCallback onSortDistance;
-  final VoidCallback onRefresh;
+  final int resultCount;
+  final ValueChanged<String> onDongSelected;
+  final ValueChanged<String> onSortSelected;
+  final VoidCallback onReset;
+  final VoidCallback onApply;
 
-  const _SortRow({
+  const _FilterSheet({
+    required this.dongId,
     required this.sortBy,
-    required this.refreshing,
-    required this.onSortLatest,
-    required this.onSortPopular,
-    required this.onSortDistance,
-    required this.onRefresh,
+    required this.resultCount,
+    required this.onDongSelected,
+    required this.onSortSelected,
+    required this.onReset,
+    required this.onApply,
   });
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-      children: [
-        Row(
+    return SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.only(top: 14, bottom: 16),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            _SortLabel(label: '최신순', active: sortBy == 'latest', onTap: onSortLatest),
-            const SizedBox(width: 14),
-            _SortLabel(label: '인기순', active: sortBy == 'popular', onTap: onSortPopular),
-            const SizedBox(width: 14),
-            _SortLabel(label: '거리순', active: sortBy == 'distance', onTap: onSortDistance),
+            Center(
+              child: Container(width: 36, height: 4, decoration: BoxDecoration(color: Colors.black.withOpacity(0.15), borderRadius: BorderRadius.circular(2))),
+            ),
+            const SizedBox(height: 14),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text('피드 필터', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: CocoTheme.secondary)),
+                  TextButton(
+                    onPressed: onReset,
+                    style: TextButton.styleFrom(padding: EdgeInsets.zero, minimumSize: Size.zero),
+                    child: Text('초기화', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: Colors.black.withOpacity(0.4))),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 8),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20),
+              child: Row(
+                children: [
+                  Text('동네', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Colors.black.withOpacity(0.45))),
+                  const SizedBox(width: 8),
+                  Text('현재 위치 중구 남포동', style: TextStyle(fontSize: 11, color: Colors.black.withOpacity(0.32))),
+                ],
+              ),
+            ),
+            const SizedBox(height: 8),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20),
+              child: Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  for (final d in feedDongOptions)
+                    _SheetChip(
+                      label: d.label,
+                      selected: dongId == d.id,
+                      icon: d.near ? Icons.location_on_rounded : null,
+                      onTap: () => onDongSelected(d.id),
+                    ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20),
+              child: Text('정렬', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Colors.black.withOpacity(0.45))),
+            ),
+            const SizedBox(height: 8),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20),
+              child: Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  for (final entry in feedSortLabels.entries)
+                    _SheetChip(
+                      label: entry.value,
+                      selected: sortBy == entry.key,
+                      onTap: () => onSortSelected(entry.key),
+                    ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 18),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20),
+              child: FilledButton(
+                style: FilledButton.styleFrom(
+                  backgroundColor: CocoTheme.primary,
+                  minimumSize: const Size.fromHeight(50),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                ),
+                onPressed: onApply,
+                child: Text('$resultCount개 게시물 보기', style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
+              ),
+            ),
           ],
-        ),
-        InkWell(
-          onTap: refreshing ? null : onRefresh,
-          borderRadius: BorderRadius.circular(14),
-          child: Container(
-            width: 28,
-            height: 28,
-            alignment: Alignment.center,
-            decoration: const BoxDecoration(color: Color(0xFFF6F5F2), shape: BoxShape.circle),
-            child: refreshing
-                ? const SizedBox(
-                    width: 13,
-                    height: 13,
-                    child: CircularProgressIndicator(strokeWidth: 1.8, color: CocoTheme.primary),
-                  )
-                : Icon(Icons.refresh_rounded, size: 15, color: Colors.grey.shade700),
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _SortLabel extends StatelessWidget {
-  final String label;
-  final bool active;
-  final VoidCallback onTap;
-  const _SortLabel({required this.label, required this.active, required this.onTap});
-
-  @override
-  Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onTap,
-      child: Text(
-        label,
-        style: TextStyle(
-          fontSize: 13,
-          fontWeight: active ? FontWeight.w700 : FontWeight.w400,
-          color: active ? CocoTheme.secondary : Colors.grey.shade500,
         ),
       ),
     );
   }
 }
 
-class _LocationPrompt extends StatelessWidget {
-  final VoidCallback onAllow;
-  final VoidCallback onDeny;
-  const _LocationPrompt({required this.onAllow, required this.onDeny});
+class _SheetChip extends StatelessWidget {
+  final String label;
+  final bool selected;
+  final IconData? icon;
+  final VoidCallback onTap;
+  const _SheetChip({required this.label, required this.selected, this.icon, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-      decoration: BoxDecoration(color: const Color(0xFFEAF3FC), borderRadius: BorderRadius.circular(12)),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text('내 주변 스팟을 보려면 위치 권한이 필요해요.', style: TextStyle(fontSize: 13, color: CocoTheme.secondary)),
-          const SizedBox(height: 8),
-          Row(
-            children: [
-              Expanded(
-                child: FilledButton(
-                  style: FilledButton.styleFrom(
-                    backgroundColor: CocoTheme.primary,
-                    minimumSize: const Size.fromHeight(34),
-                    padding: EdgeInsets.zero,
-                  ),
-                  onPressed: onAllow,
-                  child: const Text('허용', style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600)),
-                ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: OutlinedButton(
-                  style: OutlinedButton.styleFrom(minimumSize: const Size.fromHeight(34), padding: EdgeInsets.zero),
-                  onPressed: onDeny,
-                  child: const Text('취소', style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: CocoTheme.secondary)),
-                ),
-              ),
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(20),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
+        decoration: BoxDecoration(
+          color: selected ? CocoTheme.primary : Colors.white,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: selected ? CocoTheme.primary : Colors.grey.shade300),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(label, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: selected ? Colors.white : CocoTheme.secondary)),
+            if (icon != null) ...[
+              const SizedBox(width: 5),
+              Icon(icon, size: 12, color: selected ? Colors.white : CocoTheme.primary),
             ],
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -569,7 +534,7 @@ class _EmptyState extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Text('조건에 맞는 스팟이 없어요', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: Colors.grey.shade700)),
+            Text('조건에 맞는 게시물이 없어요', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: Colors.grey.shade700)),
             const SizedBox(height: 6),
             Text('필터를 바꿔서 다시 찾아보세요', style: TextStyle(fontSize: 13, color: Colors.grey.shade500)),
           ],
@@ -613,37 +578,23 @@ class _ListFooter extends StatelessWidget {
   }
 }
 
-class _Toast extends StatelessWidget {
-  final String message;
-  const _Toast({required this.message});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
-      decoration: BoxDecoration(color: Colors.black.withOpacity(0.85), borderRadius: BorderRadius.circular(20)),
-      child: Text(message, style: const TextStyle(color: Colors.white, fontSize: 13)),
-    );
-  }
-}
-
 class _FeedCard extends StatelessWidget {
   final FeedItem item;
   final VoidCallback onToggleLike;
   final VoidCallback onToggleSave;
+  final VoidCallback onShare;
   final VoidCallback onPrevImg;
   final VoidCallback onNextImg;
   final VoidCallback onOpenDetail;
-  final VoidCallback onReport;
 
   const _FeedCard({
     required this.item,
     required this.onToggleLike,
     required this.onToggleSave,
+    required this.onShare,
     required this.onPrevImg,
     required this.onNextImg,
     required this.onOpenDetail,
-    required this.onReport,
   });
 
   @override
@@ -655,60 +606,26 @@ class _FeedCard extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              if (item.source == FeedSource.coco)
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                  decoration: BoxDecoration(color: CocoTheme.primary.withOpacity(0.12), borderRadius: BorderRadius.circular(14)),
-                  child: const Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(Icons.star_rounded, size: 13, color: CocoTheme.primary),
-                      SizedBox(width: 3),
-                      Text('COCO 추천', style: TextStyle(color: CocoTheme.primary, fontSize: 11, fontWeight: FontWeight.w700)),
-                    ],
-                  ),
-                )
-              else
-                Row(
-                  children: [
-                    CircleAvatar(
-                      radius: 13,
-                      backgroundColor: const Color(0xFFF0ECE6),
-                      child: Text(item.authorInitial, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: CocoTheme.secondary)),
-                    ),
-                    const SizedBox(width: 8),
-                    Text(item.author ?? '', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: CocoTheme.secondary)),
-                  ],
-                ),
-              // COCO 추천 게시물은 신고 대상이 아니라 메뉴 버튼 자체를 숨김
-              // (PopupMenuButton은 항목이 1개 이상 있어야 해서 빈 메뉴를 띄울 수 없음)
-              if (item.source == FeedSource.user)
-                PopupMenuButton<String>(
-                  icon: Icon(Icons.more_horiz, color: Colors.grey.shade500),
-                  onSelected: (v) {
-                    if (v == 'report') onReport();
-                  },
-                  itemBuilder: (context) => [
-                    const PopupMenuItem(value: 'report', child: Text('신고', style: TextStyle(color: Color(0xFFB4433A)))),
-                  ],
-                )
-              else
-                const SizedBox(width: 28, height: 28),
+              CircleAvatar(
+                radius: 14,
+                backgroundColor: const Color(0xFFF0ECE6),
+                child: Text(item.authorInitial, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: CocoTheme.secondary)),
+              ),
+              const SizedBox(width: 8),
+              Text(item.author ?? '', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: CocoTheme.secondary)),
+              const SizedBox(width: 6),
+              const _LocalBadge(),
+              const Spacer(),
+              Text(item.timeLabel, style: TextStyle(fontSize: 12, color: Colors.grey.shade500)),
             ],
           ),
-          _FeedCardPhoto(item: item, onTap: onOpenDetail, onPrevImg: onPrevImg, onNextImg: onNextImg),
           const SizedBox(height: 10),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
-            decoration: BoxDecoration(color: const Color(0xFFF0ECE6), borderRadius: BorderRadius.circular(12)),
-            child: Text(item.category, style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Colors.grey.shade700)),
-          ),
-          const SizedBox(height: 8),
+          _FeedCardPhoto(item: item, onTap: onOpenDetail, onPrevImg: onPrevImg, onNextImg: onNextImg),
+          const SizedBox(height: 12),
           InkWell(
             onTap: onOpenDetail,
-            child: Text(item.place, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: CocoTheme.secondary)),
+            child: Text(item.displayTitle, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: CocoTheme.secondary)),
           ),
           const SizedBox(height: 4),
           Text(
@@ -717,9 +634,7 @@ class _FeedCard extends StatelessWidget {
             overflow: TextOverflow.ellipsis,
             style: TextStyle(fontSize: 14, height: 1.4, color: Colors.grey.shade700),
           ),
-          const SizedBox(height: 6),
-          Text('${item.neighborhood} · 도보 ${item.distanceMin}분', style: TextStyle(fontSize: 12.5, color: Colors.grey.shade500)),
-          const SizedBox(height: 12),
+          const SizedBox(height: 10),
           Row(
             children: [
               _ActionIcon(
@@ -730,24 +645,42 @@ class _FeedCard extends StatelessWidget {
               ),
               const SizedBox(width: 18),
               _ActionIcon(
-                icon: item.saved ? Icons.bookmark_rounded : Icons.bookmark_border_rounded,
-                iconColor: item.saved ? CocoTheme.secondary : Colors.grey.shade600,
-                label: '${item.saveCount}',
-                onTap: onToggleSave,
-              ),
-              const SizedBox(width: 18),
-              _ActionIcon(icon: Icons.ios_share_rounded, iconColor: Colors.grey.shade600, label: '공유', onTap: () {}),
-              const Spacer(),
-              _ActionIcon(
                 icon: Icons.mode_comment_outlined,
                 iconColor: Colors.grey.shade600,
                 label: '${item.comments.length}',
                 onTap: onOpenDetail,
               ),
+              const SizedBox(width: 18),
+              _ActionIcon(
+                icon: Icons.share_outlined,
+                iconColor: Colors.grey.shade600,
+                label: '${item.shares}',
+                onTap: onShare,
+              ),
+              const Spacer(),
+              _ActionIcon(
+                icon: item.saved ? Icons.bookmark_rounded : Icons.bookmark_border_rounded,
+                iconColor: item.saved ? CocoTheme.secondary : Colors.grey.shade600,
+                label: '${item.saveCount}',
+                onTap: onToggleSave,
+              ),
             ],
           ),
         ],
       ),
+    );
+  }
+}
+
+class _LocalBadge extends StatelessWidget {
+  const _LocalBadge();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+      decoration: BoxDecoration(color: CocoTheme.primary.withOpacity(0.12), borderRadius: BorderRadius.circular(10)),
+      child: const Text('로컬', style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w700, color: CocoTheme.primary)),
     );
   }
 }
@@ -762,9 +695,11 @@ class _FeedCardPhoto extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final color = categoryColor(item.category);
+    final isRoute = item.type == FeedPostType.route;
+    final color = isRoute ? CocoTheme.primary : categoryColor(item.category);
+
     return AspectRatio(
-      aspectRatio: 4 / 3,
+      aspectRatio: 16 / 9,
       child: ClipRRect(
         borderRadius: BorderRadius.circular(14),
         child: GestureDetector(
@@ -776,9 +711,43 @@ class _FeedCardPhoto extends StatelessWidget {
                 child: Container(
                   color: color.withOpacity(0.12),
                   alignment: Alignment.center,
-                  child: Icon(categoryIcon(item.category), size: 36, color: color.withOpacity(0.4)),
+                  child: Icon(
+                    isRoute ? Icons.signpost_rounded : categoryIcon(item.category),
+                    size: 36,
+                    color: color.withOpacity(0.4),
+                  ),
                 ),
               ),
+              if (isRoute)
+                Positioned(
+                  left: 10,
+                  top: 10,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                    decoration: BoxDecoration(color: Colors.white.withOpacity(0.92), borderRadius: BorderRadius.circular(12)),
+                    child: Text(
+                      '골목지도 · 스팟 ${item.stopCount ?? 0}곳',
+                      style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: CocoTheme.primary),
+                    ),
+                  ),
+                )
+              else
+                Positioned(
+                  left: 10,
+                  bottom: 10,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                    decoration: BoxDecoration(color: Colors.white.withOpacity(0.92), borderRadius: BorderRadius.circular(12)),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(item.dong, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: CocoTheme.primary)),
+                        const SizedBox(width: 6),
+                        Text(item.place, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: CocoTheme.secondary)),
+                      ],
+                    ),
+                  ),
+                ),
               if (item.imgCount > 1) ...[
                 Positioned(
                   left: 8,
@@ -862,4 +831,119 @@ class _ActionIcon extends StatelessWidget {
       ),
     );
   }
+}
+
+/// 골목지도 탭 전용 랭킹 리스트 — 카드 피드 대신 순위·통계 중심으로 보여준다.
+class _RouteRankingList extends StatelessWidget {
+  final List<FeedItem> items;
+  final ValueChanged<FeedItem> onToggleSave;
+  const _RouteRankingList({required this.items, required this.onToggleSave});
+
+  @override
+  Widget build(BuildContext context) {
+    return ListView(
+      children: [
+        for (int i = 0; i < items.length; i++) _RouteRankRow(rank: i + 1, item: items[i], onToggleSave: () => onToggleSave(items[i])),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(20, 14, 20, 24),
+          child: Text(
+            '저장한 골목지도는 지도 탭 › 나의 지도에서 다시 볼 수 있어요',
+            style: TextStyle(fontSize: 11, height: 1.5, color: Colors.black.withOpacity(0.35)),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _RouteRankRow extends StatelessWidget {
+  final int rank;
+  final FeedItem item;
+  final VoidCallback onToggleSave;
+  const _RouteRankRow({required this.rank, required this.item, required this.onToggleSave});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+      decoration: BoxDecoration(border: Border(bottom: BorderSide(color: Colors.black.withOpacity(0.06)))),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          SizedBox(
+            width: 26,
+            child: Text(
+              '$rank',
+              textAlign: TextAlign.center,
+              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: rank == 1 ? CocoTheme.primary : Colors.black.withOpacity(0.3)),
+            ),
+          ),
+          const SizedBox(width: 12),
+          const _RouteThumb(),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(item.displayTitle, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: CocoTheme.secondary)),
+                const SizedBox(height: 3),
+                Text('@${item.author} · ${item.dong} · 스팟 ${item.stopCount ?? 0}곳', style: TextStyle(fontSize: 12, color: Colors.black.withOpacity(0.45))),
+                const SizedBox(height: 5),
+                Text('저장 ${item.saveCount} · 좋아요 ${item.likeCount} · 공유 ${item.shares}', style: TextStyle(fontSize: 11, color: Colors.black.withOpacity(0.4))),
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+          InkWell(
+            onTap: onToggleSave,
+            borderRadius: BorderRadius.circular(16),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+              decoration: BoxDecoration(
+                color: item.saved ? const Color(0xFFFF5A36) : Colors.white,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: item.saved ? const Color(0xFFFF5A36) : Colors.grey.shade300),
+              ),
+              child: Text(
+                item.saved ? '저장됨' : '저장',
+                style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: item.saved ? Colors.white : Colors.black.withOpacity(0.6)),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// 골목지도 랭킹 항목의 64x64 장식용 썸네일 — 실제 좌표 없이 골목지도 느낌만 낸다.
+class _RouteThumb extends StatelessWidget {
+  const _RouteThumb();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 64,
+      height: 64,
+      decoration: BoxDecoration(color: const Color(0xFFEAE8E2), borderRadius: BorderRadius.circular(12)),
+      clipBehavior: Clip.hardEdge,
+      child: Stack(
+        children: [
+          Positioned(left: 0, top: 28, right: 0, height: 4, child: Container(color: Colors.white)),
+          Positioned(left: 23, top: 0, bottom: 0, width: 3, child: Container(color: Colors.white)),
+          Positioned(left: 9, top: 14, child: _pin()),
+          Positioned(left: 37, top: 37, child: _pin()),
+        ],
+      ),
+    );
+  }
+
+  Widget _pin() => Transform.rotate(
+        angle: -0.78,
+        child: Container(
+          width: 10,
+          height: 10,
+          decoration: const BoxDecoration(color: CocoTheme.primary, borderRadius: BorderRadius.only(topLeft: Radius.circular(5), topRight: Radius.circular(5), bottomRight: Radius.circular(5))),
+        ),
+      );
 }

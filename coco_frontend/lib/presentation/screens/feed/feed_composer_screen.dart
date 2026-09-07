@@ -93,6 +93,7 @@ class _FeedComposerScreenState extends State<FeedComposerScreen> {
         place: _selectedLocation!,
         desc: desc,
         neighborhood: '내 동네',
+        dongId: 'nampo',
         distanceMin: 1,
         likes: 0,
         saves: 0,
