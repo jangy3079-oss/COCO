@@ -7,6 +7,13 @@ import '../../../core/theme/app_theme.dart';
 import '../../widgets/map/kakao_map_view.dart';
 import 'map_mock_data.dart';
 
+// 하단 "주변 스팟" 시트의 스냅 지점(화면 높이 대비 비율) — 시트 자신과, 그 위에 떠
+// 있는 플로팅 버튼(스팟등록/현재위치) 둘 다 이 값을 기준으로 위치를 맞춰야 하므로
+// 파일 상단에 공유 상수로 뺐다.
+const double kSheetCollapsedExtent = 0.09; // 아예 내리기 — 핸들+제목만 살짝 보임
+const double kSheetMidExtent = 0.32; // 기본 상태
+const double kSheetExpandedExtent = 0.92; // 아예 올리기 — 거의 전체화면
+
 class MapScreen extends StatefulWidget {
   const MapScreen({super.key});
 
@@ -42,10 +49,21 @@ class _MapScreenState extends State<MapScreen> {
     });
   }
 
+  // 하단 시트가 지금 화면의 몇 %를 차지하고 있는지 — 시트 위에 뜬 플로팅 버튼이
+  // 시트를 따라 같이 움직이게 하려고 ValueNotifier로 공유한다(Stack 전체를
+  // setState로 다시 그리지 않고 버튼 위치만 가볍게 갱신하기 위함).
+  final ValueNotifier<double> _sheetExtent = ValueNotifier(kSheetMidExtent);
+
   @override
   void initState() {
     super.initState();
     _loadCurrentLocation();
+  }
+
+  @override
+  void dispose() {
+    _sheetExtent.dispose();
+    super.dispose();
   }
 
   Future<void> _loadCurrentLocation() async {
@@ -125,7 +143,6 @@ class _MapScreenState extends State<MapScreen> {
       resizeToAvoidBottomInset: false,
       body: LayoutBuilder(
         builder: (context, constraints) {
-          final sheetCollapsedHeight = constraints.maxHeight * 0.32;
           return Stack(
             children: [
               // 지도 영역 — 좌우/여백 없이 화면 전체를 채움
@@ -196,7 +213,7 @@ class _MapScreenState extends State<MapScreen> {
                                   children: [
                                     const Expanded(child: _MapSearchBar()),
                                     const SizedBox(width: 10),
-                                    const _MapAvatarButton(),
+                                    _MyRoutesButton(onTap: () => context.push('/mypage/routes')),
                                   ],
                                 ),
                                 const SizedBox(height: 10),
@@ -217,11 +234,17 @@ class _MapScreenState extends State<MapScreen> {
                   ),
                 ),
               ),
-              // 우측 하단 버튼 묶음 — 스팟 등록 + 현재 위치로 재중심을 같은 줄에 나란히 배치
-              Positioned(
-                left: 16,
-                right: 16,
-                bottom: sheetCollapsedHeight + 16,
+              // 우측 하단 버튼 묶음 — 스팟 등록 + 현재 위치로 재중심을 같은 줄에 나란히 배치.
+              // 시트를 드래그하면 _sheetExtent가 바뀌고, 이 버튼들도 바로 따라 움직인다
+              // (ValueListenableBuilder라 이 버튼 부분만 다시 그려지고 지도는 그대로 유지됨).
+              ValueListenableBuilder<double>(
+                valueListenable: _sheetExtent,
+                builder: (context, extent, child) => Positioned(
+                  left: 16,
+                  right: 16,
+                  bottom: constraints.maxHeight * extent + 16,
+                  child: child!,
+                ),
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.end,
                   children: [
@@ -233,6 +256,7 @@ class _MapScreenState extends State<MapScreen> {
               ),
               // 하단 "주변 스팟" 바텀시트 (드래그로 확장 가능)
               _NearbySpotsSheet(
+                extentNotifier: _sheetExtent,
                 spots: _filteredSpots,
                 savedSpotIds: savedSpotIds,
                 onToggleSaved: _toggleSaved,
@@ -247,30 +271,28 @@ class _MapScreenState extends State<MapScreen> {
   }
 }
 
-class _MapAvatarButton extends StatelessWidget {
-  const _MapAvatarButton();
+/// 검색창 우측의 원형 버튼 — 탭하면 "내가 만든 코스" 화면(MY탭)으로 이동한다.
+class _MyRoutesButton extends StatelessWidget {
+  final VoidCallback onTap;
+  const _MyRoutesButton({required this.onTap});
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      width: 44,
-      height: 44,
-      alignment: Alignment.center,
-      decoration: BoxDecoration(
+    return Tooltip(
+      message: '내 코스',
+      child: Material(
         color: Colors.white,
-        shape: BoxShape.circle,
-        border: Border.all(color: Colors.black.withOpacity(0.06)),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.06),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
+        shape: const CircleBorder(side: BorderSide(color: Color(0x0F000000))),
+        elevation: 2,
+        child: InkWell(
+          onTap: onTap,
+          customBorder: const CircleBorder(),
+          child: const SizedBox(
+            width: 44,
+            height: 44,
+            child: Icon(Icons.route_outlined, color: CocoTheme.primary, size: 20),
           ),
-        ],
-      ),
-      child: const Text(
-        '나',
-        style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: CocoTheme.secondary),
+        ),
       ),
     );
   }
@@ -386,7 +408,7 @@ class _CategoryChip extends StatelessWidget {
 }
 
 /// 목업 지도 배경(건물/도로 블록 + 스팟 핀). 지도 탭 본문뿐 아니라
-/// MY탭의 "나의 지도" 전체화면(my_map_screen.dart)에서도 재사용한다.
+/// MY탭의 "내가 만든 코스" 화면(my_routes_screen.dart)의 지도 탭에서도 재사용한다.
 class MockMapBackground extends StatelessWidget {
   final List<MockSpot> spots;
   final ValueChanged<MockSpot> onSpotTap;
@@ -573,7 +595,14 @@ class _RegisterSpotButton extends StatelessWidget {
   }
 }
 
-class _NearbySpotsSheet extends StatelessWidget {
+// DraggableScrollableSheet는 리스트 항목 수가 적어서 스크롤할 내용이 시트 안에
+// 다 들어차지 않으면(=오버스크롤 여유가 없으면), 살짝 흔들리는 탭 제스처까지도
+// "리사이즈 드래그"로 가로채 버려서 탭이 잘 안 먹는 문제가 있다(Flutter의 알려진 동작).
+// 그래서 리사이즈 제스처는 핸들 영역에서만 받고, 리스트는 별도 스크롤뷰로 분리해서
+// 탭이 항상 정상 동작하도록 직접 구현한다. 핸들을 드래그하면 완전히 접힘/기본/거의
+// 전체화면 세 지점 중 가까운 곳으로 스냅된다.
+class _NearbySpotsSheet extends StatefulWidget {
+  final ValueNotifier<double> extentNotifier;
   final List<MockSpot> spots;
   final Set<String> savedSpotIds;
   final ValueChanged<String> onToggleSaved;
@@ -581,6 +610,7 @@ class _NearbySpotsSheet extends StatelessWidget {
   final VoidCallback onSaveCourse;
 
   const _NearbySpotsSheet({
+    required this.extentNotifier,
     required this.spots,
     required this.savedSpotIds,
     required this.onToggleSaved,
@@ -589,68 +619,141 @@ class _NearbySpotsSheet extends StatelessWidget {
   });
 
   @override
+  State<_NearbySpotsSheet> createState() => _NearbySpotsSheetState();
+}
+
+class _NearbySpotsSheetState extends State<_NearbySpotsSheet> {
+  // 핸들+제목 줄만 있을 때 필요한 최소 높이(px) — 완전히 접힌 상태에서도 이 정도는
+  // 있어야 오버플로우가 안 난다.
+  static const double _headerMinPx = 74;
+  // 리스트/버튼까지 같이 보이려면 필요한 최소 높이(px). 이보다 낮아지면 리스트/버튼을
+  // 안 그려서, 줄어드는 도중에 고정 크기 위젯들이 공간을 못 찾아 오버플로우
+  // 나는 걸 막는다. extent(비율) 기준이 아니라 실제 픽셀 기준으로 판단해야
+  // 화면 크기가 달라도 항상 안전하다.
+  static const double _bodyMinPx = 190;
+
+  bool _dragging = false;
+
+  void _snapToNearest(double current, double maxHeight) {
+    final points = [_collapsedFloor(maxHeight), kSheetMidExtent, kSheetExpandedExtent];
+    var nearest = points.first;
+    var best = (points.first - current).abs();
+    for (final p in points) {
+      final d = (p - current).abs();
+      if (d < best) {
+        best = d;
+        nearest = p;
+      }
+    }
+    widget.extentNotifier.value = nearest;
+    setState(() => _dragging = false);
+  }
+
+  // 화면이 아주 낮을 때(가로모드 등)는 0.09 비율만으로는 핸들 영역조차 다 못
+  // 그릴 수 있어서, "핀 영역에 필요한 최소 픽셀"을 비율로 환산해 둘 중 더 큰
+  // 쪽을 완전히 접힌 상태의 실제 하한으로 쓴다.
+  double _collapsedFloor(double maxHeight) =>
+      kSheetCollapsedExtent > _headerMinPx / maxHeight ? kSheetCollapsedExtent : _headerMinPx / maxHeight;
+
+  @override
   Widget build(BuildContext context) {
-    return DraggableScrollableSheet(
-      initialChildSize: 0.32,
-      minChildSize: 0.18,
-      maxChildSize: 0.75,
-      builder: (context, scrollController) {
-        return Container(
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
-            boxShadow: [
-              BoxShadow(color: Colors.black.withOpacity(0.10), blurRadius: 16),
-            ],
-          ),
-          child: Column(
-            children: [
-              const SizedBox(height: 10),
-              Container(
-                width: 36,
-                height: 4,
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final maxHeight = constraints.maxHeight;
+        final collapsedFloor = _collapsedFloor(maxHeight);
+        return ValueListenableBuilder<double>(
+          valueListenable: widget.extentNotifier,
+          builder: (context, extent, _) {
+            final sheetHeight = maxHeight * extent;
+            // 접힘 지점에 가까울 때는 리스트/버튼을 아예 안 그려서 좁은 공간에서
+            // 내용이 눌리거나 넘치지 않게 한다(픽셀 기준이라 화면 크기와 무관하게 안전).
+            final showBody = sheetHeight > _bodyMinPx;
+
+            // Stack의 non-positioned 자식은 기본적으로 위쪽 정렬이라, 바닥에 붙는
+            // 바텀시트처럼 보이려면 직접 Align(bottomCenter)로 감싸야 한다.
+            return Align(
+              alignment: Alignment.bottomCenter,
+              child: AnimatedContainer(
+                duration: _dragging ? Duration.zero : const Duration(milliseconds: 180),
+                curve: Curves.easeOut,
+                height: sheetHeight,
+                width: double.infinity,
                 decoration: BoxDecoration(
-                  color: Colors.grey.shade300,
-                  borderRadius: BorderRadius.circular(2),
+                  color: Colors.white,
+                  borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+                  boxShadow: [
+                    BoxShadow(color: Colors.black.withOpacity(0.10), blurRadius: 16),
+                  ],
                 ),
-              ),
-              Padding(
-                padding: const EdgeInsets.fromLTRB(20, 14, 20, 8),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                child: Column(
                   children: [
-                    const Text('주변 스팟', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
-                    Text('${spots.length}곳', style: TextStyle(fontSize: 13, color: Colors.grey.shade600)),
+                    // 핸들 영역 — 리사이즈 드래그는 여기서만 받아서 아래 리스트의 탭 제스처와
+                    // 서로 뺏어가지 않게 분리한다. 탭하면 기본↔거의 전체화면을 토글한다.
+                    GestureDetector(
+                      behavior: HitTestBehavior.opaque,
+                      onVerticalDragStart: (_) => setState(() => _dragging = true),
+                      onVerticalDragUpdate: (details) {
+                        widget.extentNotifier.value = (widget.extentNotifier.value - details.delta.dy / maxHeight)
+                            .clamp(collapsedFloor, kSheetExpandedExtent);
+                      },
+                      onVerticalDragEnd: (_) => _snapToNearest(widget.extentNotifier.value, maxHeight),
+                      onTap: () => widget.extentNotifier.value =
+                          extent >= kSheetExpandedExtent - 0.05 ? kSheetMidExtent : kSheetExpandedExtent,
+                      child: Padding(
+                        padding: const EdgeInsets.fromLTRB(20, 10, 20, 8),
+                        child: Column(
+                          children: [
+                            Container(
+                              width: 36,
+                              height: 4,
+                              decoration: BoxDecoration(
+                                color: Colors.grey.shade300,
+                                borderRadius: BorderRadius.circular(2),
+                              ),
+                            ),
+                            const SizedBox(height: 10),
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                const Text('주변 스팟', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
+                                Text('${widget.spots.length}곳', style: TextStyle(fontSize: 13, color: Colors.grey.shade600)),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    if (showBody) ...[
+                      Expanded(
+                        child: ListView.separated(
+                          padding: const EdgeInsets.symmetric(horizontal: 20),
+                          itemCount: widget.spots.length,
+                          separatorBuilder: (_, __) => const Divider(height: 24),
+                          itemBuilder: (context, i) => _SpotListTile(
+                            spot: widget.spots[i],
+                            saved: widget.savedSpotIds.contains(widget.spots[i].id),
+                            onToggleSaved: () => widget.onToggleSaved(widget.spots[i].id),
+                            onTap: () => widget.onSpotTap(widget.spots[i]),
+                          ),
+                        ),
+                      ),
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(20, 8, 20, 20),
+                        child: FilledButton(
+                          style: FilledButton.styleFrom(
+                            backgroundColor: CocoTheme.primary,
+                            minimumSize: const Size.fromHeight(48),
+                          ),
+                          onPressed: widget.onSaveCourse,
+                          child: const Text('코스 저장하기'),
+                        ),
+                      ),
+                    ],
                   ],
                 ),
               ),
-              Expanded(
-                child: ListView.separated(
-                  controller: scrollController,
-                  padding: const EdgeInsets.symmetric(horizontal: 20),
-                  itemCount: spots.length,
-                  separatorBuilder: (_, __) => const Divider(height: 24),
-                  itemBuilder: (context, i) => _SpotListTile(
-                    spot: spots[i],
-                    saved: savedSpotIds.contains(spots[i].id),
-                    onToggleSaved: () => onToggleSaved(spots[i].id),
-                    onTap: () => onSpotTap(spots[i]),
-                  ),
-                ),
-              ),
-              Padding(
-                padding: const EdgeInsets.fromLTRB(20, 8, 20, 20),
-                child: FilledButton(
-                  style: FilledButton.styleFrom(
-                    backgroundColor: CocoTheme.primary,
-                    minimumSize: const Size.fromHeight(48),
-                  ),
-                  onPressed: onSaveCourse,
-                  child: const Text('코스 저장하기'),
-                ),
-              ),
-            ],
-          ),
+            );
+          },
         );
       },
     );

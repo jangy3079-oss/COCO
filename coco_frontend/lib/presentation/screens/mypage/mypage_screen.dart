@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../widgets/map/kakao_map_view.dart';
 import '../map/map_mock_data.dart';
-import '../map/map_screen.dart' show MockMapBackground;
 import 'mypage_mock_data.dart';
 
-/// 마이(MY) 메인 화면. 프로필 헤더 + "나의 지도" 미리보기 위젯 + 메뉴 리스트.
+/// 마이(MY) 메인 화면. 프로필 헤더 + "내가 만든 코스" 미리보기 위젯 + 메뉴 리스트.
 /// 메뉴 항목들은 전부 하단 탭 없는 전체화면(ShellRoute 바깥 최상위 라우트)으로 이동한다.
 class MypageScreen extends StatefulWidget {
   const MypageScreen({super.key});
@@ -56,12 +56,12 @@ class _MypageScreenState extends State<MypageScreen> {
             Divider(height: 1, color: Colors.black.withOpacity(0.07)),
             Padding(
               padding: const EdgeInsets.fromLTRB(20, 20, 20, 18),
-              child: _MyMapCard(spots: savedSpots, onTap: () => _open('/mypage/map')),
+              child: _MyMapCard(spots: savedSpots, onTap: () => _open('/mypage/routes')),
             ),
             Divider(height: 1, color: Colors.black.withOpacity(0.07)),
             _MenuRow(icon: Icons.article_outlined, label: '내가 쓴 글', onTap: () => _open('/mypage/posts')),
             _MenuRow(icon: Icons.favorite_border_rounded, label: '저장 · 좋아요', onTap: () => _open('/mypage/saved')),
-            _MenuRow(icon: Icons.map_outlined, label: '내가 만든 골목지도', onTap: () => _open('/mypage/routes')),
+            _MenuRow(icon: Icons.map_outlined, label: '내가 만든 코스', onTap: () => _open('/mypage/routes')),
             _MenuRow(icon: Icons.forum_outlined, label: '내 질문 · 답변 활동', onTap: () => _open('/mypage/posts', extra: 'qna')),
             _MenuRow(icon: Icons.person_outline_rounded, label: '프로필 수정', onTap: () => _open('/mypage/profile/edit')),
             _MenuRow(icon: Icons.notifications_outlined, label: '알림 설정', onTap: () => _open('/mypage/settings')),
@@ -107,7 +107,17 @@ class _MyMapCard extends StatelessWidget {
                     )
                   // 미리보기는 탭만 카드 전체에서 받으면 되므로 지도 자체의 핀 탭은 막아둔다.
                   : IgnorePointer(
-                      child: MockMapBackground(spots: spots, onSpotTap: (_) {}),
+                      child: Builder(builder: (context) {
+                        final center = spotsCenter(spots);
+                        return KakaoMapView(
+                          centerLat: center.$1,
+                          centerLng: center.$2,
+                          level: 6,
+                          markers: [
+                            for (final s in spots) KakaoMapMarker(id: s.id, lat: s.lat, lng: s.lng, name: s.name),
+                          ],
+                        );
+                      }),
                     ),
             ),
           ),
@@ -115,7 +125,7 @@ class _MyMapCard extends StatelessWidget {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Text('나의 지도', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: CocoTheme.secondary)),
+              const Text('내가 만든 코스', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: CocoTheme.secondary)),
               Text('찜한 스팟 ${spots.length}곳 · 전체보기 ›', style: TextStyle(fontSize: 13, color: Colors.grey.shade600)),
             ],
           ),

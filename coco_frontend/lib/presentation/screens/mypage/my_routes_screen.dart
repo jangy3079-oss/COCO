@@ -1,12 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../widgets/map/kakao_map_view.dart';
 import '../map/map_mock_data.dart';
-import '../map/map_screen.dart' show MockMapBackground;
 
-/// "내가 만든 골목지도" 화면 — MY탭 메뉴에서 진입.
-/// mockMyRoutes(내가 만든 코스)를 리스트로 보여주고, 카드를 펼치면
-/// 스팟 순서(미리보기) 또는 미니맵(지도에서 보기)을 바로 확인할 수 있다.
+/// "내가 만든 코스" 화면 — MY탭 메뉴 및 상단 지도 모듈에서 진입.
+/// (구 "나의 지도" 화면과 "내가 만든 골목지도" 화면을 하나로 통합함)
+/// 리스트 탭에서는 mockMyRoutes(내가 만든 코스)를 보여주고, 카드를 펼치면
+/// 스팟 순서 또는 미니맵(지도에서 보기)을 바로 확인할 수 있다. 지도 탭에서는
+/// 내가 찜한 스팟 전체를 지도 위에서 한눈에 볼 수 있다(구 "나의 지도" 기능).
 /// "저장 · 좋아요"의 "저장한 코스" 탭(다른 사람이 만든 코스를 저장한 목록)과는
 /// 별개로, 여기는 내가 직접 만든 코스만 다룬다.
 class MyRoutesScreen extends StatefulWidget {
@@ -39,7 +41,7 @@ class _MyRoutesScreenState extends State<MyRoutesScreen> {
   @override
   Widget build(BuildContext context) {
     final routes = mockMyRoutes;
-    final totalSpots = routes.fold<int>(0, (sum, r) => sum + r.stops.length);
+    final likedSpots = mockSpots.where((s) => savedSpotIds.contains(s.id)).toList();
 
     return Scaffold(
       backgroundColor: Colors.white,
@@ -53,7 +55,7 @@ class _MyRoutesScreenState extends State<MyRoutesScreen> {
                   IconButton(onPressed: () => context.pop(), icon: const Icon(Icons.arrow_back_rounded)),
                   const SizedBox(width: 6),
                   const Expanded(
-                    child: Text('내가 만든 골목지도', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: CocoTheme.secondary)),
+                    child: Text('내가 만든 코스', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: CocoTheme.secondary)),
                   ),
                 ],
               ),
@@ -66,7 +68,10 @@ class _MyRoutesScreenState extends State<MyRoutesScreen> {
                   const SizedBox(width: 8),
                   _TabChip(label: '지도', selected: _tab == 'map', onTap: () => setState(() => _tab = 'map')),
                   const Spacer(),
-                  Text('${routes.length}개 · 스팟 ${totalSpots}곳', style: TextStyle(fontSize: 12, color: Colors.grey.shade500)),
+                  Text(
+                    _tab == 'map' ? '찜한 스팟 ${likedSpots.length}곳' : '코스 ${routes.length}개',
+                    style: TextStyle(fontSize: 12, color: Colors.grey.shade500),
+                  ),
                 ],
               ),
             ),
@@ -76,15 +81,25 @@ class _MyRoutesScreenState extends State<MyRoutesScreen> {
                       padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
                       child: ClipRRect(
                         borderRadius: BorderRadius.circular(16),
-                        child: MockMapBackground(
-                          spots: [for (final r in routes) ...r.stops],
-                          onSpotTap: (_) {},
-                        ),
+                        child: likedSpots.isEmpty
+                            ? _EmptyLikedMap(onGoToMap: () => context.go('/map'))
+                            : Builder(builder: (context) {
+                                final center = spotsCenter(likedSpots);
+                                return KakaoMapView(
+                                  centerLat: center.$1,
+                                  centerLng: center.$2,
+                                  level: 6,
+                                  markers: [
+                                    for (final s in likedSpots) KakaoMapMarker(id: s.id, lat: s.lat, lng: s.lng, name: s.name),
+                                  ],
+                                  onMarkerTap: (spotId) => context.push('/map/spot/$spotId'),
+                                );
+                              }),
                       ),
                     )
                   : routes.isEmpty
                       ? Center(
-                          child: Text('아직 만든 골목지도가 없어요\n지도 탭에서 스팟을 담아 코스를 만들어보세요',
+                          child: Text('아직 만든 코스가 없어요\n지도 탭에서 스팟을 담아 코스를 만들어보세요',
                               textAlign: TextAlign.center, style: TextStyle(fontSize: 14, height: 1.7, color: Colors.grey.shade500)),
                         )
                       : ListView(
@@ -100,7 +115,12 @@ class _MyRoutesScreenState extends State<MyRoutesScreen> {
                                 }),
                                 onViewModeChanged: (m) => setState(() => _viewModes[r.id] = m),
                                 onEdit: () => _editRoute(r),
-                                onViewOnMap: () => context.push('/map/route/preview', extra: {'name': r.name, 'stops': r.stops}),
+                                onViewOnMap: () => context.push('/map/route/preview', extra: {
+                                  'name': r.name,
+                                  'stops': r.stops,
+                                  'routeId': r.id,
+                                  'isOwner': true,
+                                }),
                               ),
                               const SizedBox(height: 12),
                             ],
@@ -224,7 +244,19 @@ class _RouteCard extends StatelessWidget {
                       borderRadius: BorderRadius.circular(12),
                       child: SizedBox(
                         height: 140,
-                        child: IgnorePointer(child: MockMapBackground(spots: route.stops, onSpotTap: (_) {})),
+                        child: IgnorePointer(
+                          child: Builder(builder: (context) {
+                            final center = spotsCenter(route.stops);
+                            return KakaoMapView(
+                              centerLat: center.$1,
+                              centerLng: center.$2,
+                              level: 6,
+                              markers: [
+                                for (final s in route.stops) KakaoMapMarker(id: s.id, lat: s.lat, lng: s.lng, name: s.name),
+                              ],
+                            );
+                          }),
+                        ),
                       ),
                     )
                   : Column(
@@ -258,15 +290,17 @@ class _RouteCard extends StatelessWidget {
                     child: _SegmentButton(
                       label: '지도에서 보기',
                       selected: viewMode == _RouteViewMode.map,
-                      onTap: () => onViewModeChanged(_RouteViewMode.map),
+                      onTap: () => onViewModeChanged(
+                        viewMode == _RouteViewMode.map ? _RouteViewMode.list : _RouteViewMode.map,
+                      ),
                     ),
                   ),
                   const SizedBox(width: 8),
                   Expanded(
                     child: _SegmentButton(
-                      label: '미리보기',
-                      selected: viewMode == _RouteViewMode.list,
-                      onTap: () => onViewModeChanged(_RouteViewMode.list),
+                      label: '코스 상세',
+                      selected: false,
+                      onTap: onViewOnMap,
                     ),
                   ),
                 ],
@@ -344,6 +378,37 @@ class _SegmentButton extends StatelessWidget {
   }
 }
 
+/// 지도 탭에서 찜한 스팟이 하나도 없을 때 보여주는 빈 상태 (구 my_map_screen.dart의 _EmptyMap).
+class _EmptyLikedMap extends StatelessWidget {
+  final VoidCallback onGoToMap;
+  const _EmptyLikedMap({required this.onGoToMap});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      color: const Color(0xFFEAE8E2),
+      alignment: Alignment.center,
+      child: Padding(
+        padding: const EdgeInsets.all(32),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text('아직 찜한 스팟이 없어요', style: TextStyle(fontSize: 14, color: Colors.grey.shade600)),
+            const SizedBox(height: 6),
+            Text('지도 탭에서 스팟을 찜해보세요', style: TextStyle(fontSize: 13, color: Colors.grey.shade500)),
+            const SizedBox(height: 18),
+            FilledButton(
+              style: FilledButton.styleFrom(backgroundColor: CocoTheme.primary),
+              onPressed: onGoToMap,
+              child: const Text('지도로 가기'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class _NewRouteButton extends StatelessWidget {
   final VoidCallback onTap;
   const _NewRouteButton({required this.onTap});
@@ -360,7 +425,7 @@ class _NewRouteButton extends StatelessWidget {
           borderRadius: BorderRadius.circular(16),
           border: Border.all(color: Colors.grey.shade300, style: BorderStyle.solid),
         ),
-        child: Text('+ 새 골목지도 만들기', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Colors.grey.shade600)),
+        child: Text('+ 새 코스 만들기', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Colors.grey.shade600)),
       ),
     );
   }

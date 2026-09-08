@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../map/map_mock_data.dart' show MockSpot, mockSpotById;
 
 // TODO: 백엔드(feed_posts/feed_comments/feed_post_likes 테이블) 연동 전까지의
 // 목업 데이터. FeedItem은 좋아요/저장/댓글이 화면 조작에 따라 바뀌는 값이라
@@ -61,7 +62,12 @@ class FeedItem {
   final int ts; // 정렬용 타임스탬프(클수록 최신)
   final String timeLabel; // 카드에 표시할 상대 시간 텍스트 (예: 방금, 2시간 전)
   final FeedPostType type;
-  final int? stopCount; // type == route 일 때만 사용 (골목지도 스팟 개수)
+  final int? stopCount; // type == route 일 때만 사용 (코스에 담긴 스팟 개수)
+  // type == route 게시물의 "골목지도 보기" → 코스 상세로 이동할 때 쓸 실제 스팟 목록.
+  // routeId가 있으면(=내가 mockMyRoutes에 만든 코스를 공유한 경우) 코스 상세에서
+  // 편집도 가능하고, 없으면(다른 사람이 올린 코스라는 뜻) 보기 전용이다.
+  final List<MockSpot>? routeStops;
+  final String? routeId;
 
   bool liked;
   bool saved;
@@ -88,6 +94,8 @@ class FeedItem {
     this.timeLabel = '방금',
     this.type = FeedPostType.spot,
     this.stopCount,
+    this.routeStops,
+    this.routeId,
     this.liked = false,
     this.saved = false,
     this.shares = 0,
@@ -152,6 +160,7 @@ final List<FeedItem> mockFeedItems = [
     timeLabel: '2시간 전',
     type: FeedPostType.route,
     stopCount: 4,
+    routeStops: [mockSpotById('spot-1'), mockSpotById('spot-2'), mockSpotById('spot-3'), mockSpotById('spot-4')],
   ),
   FeedItem(
     id: 'f1',
@@ -345,6 +354,7 @@ final List<FeedItem> mockFeedItems = [
     timeLabel: '4일 전',
     type: FeedPostType.route,
     stopCount: 3,
+    routeStops: [mockSpotById('spot-4'), mockSpotById('spot-1'), mockSpotById('spot-2')],
   ),
   FeedItem(
     id: 'r3',
@@ -365,6 +375,7 @@ final List<FeedItem> mockFeedItems = [
     timeLabel: '5일 전',
     type: FeedPostType.route,
     stopCount: 3,
+    routeStops: [mockSpotById('spot-1'), mockSpotById('spot-3'), mockSpotById('spot-5')],
   ),
   FeedItem(
     id: 'r4',
@@ -385,5 +396,12 @@ final List<FeedItem> mockFeedItems = [
     timeLabel: '6일 전',
     type: FeedPostType.route,
     stopCount: 5,
+    routeStops: [
+      mockSpotById('spot-1'),
+      mockSpotById('spot-2'),
+      mockSpotById('spot-3'),
+      mockSpotById('spot-4'),
+      mockSpotById('spot-5'),
+    ],
   ),
 ];

@@ -109,9 +109,11 @@ class _FeedScreenState extends State<FeedScreen> {
     if (mounted) setState(() {});
   }
 
-  void _share(FeedItem item) {
-    setState(() => item.shares += 1);
-    showShareSheet(context);
+  Future<void> _share(FeedItem item) async {
+    // 공유 시트에서 카카오톡/인스타/메시지 중 하나를 실제로 골랐을 때만 카운트를
+    // 올린다 — 시트만 열었다가 아무것도 안 누르고 닫으면 안 올라가야 한다.
+    final shared = await showShareSheet(context);
+    if (shared && mounted) setState(() => item.shares += 1);
   }
 
   @override
@@ -194,9 +196,12 @@ class _FeedScreenState extends State<FeedScreen> {
 }
 
 /// 인스타그램 등 외부 SNS 공유를 흉내낸 목업 시트.
+/// 카카오톡/인스타그램/메시지 중 하나를 실제로 고르면 true, 아무것도 안 고르고
+/// 시트를 닫으면(바깥 탭/뒤로가기) false 또는 null을 반환한다 — 호출부가 이 값을
+/// 보고 공유수를 올릴지 말지 정한다.
 /// TODO: 실제 OS 공유 시트 연동 시 share_plus 등으로 교체.
-void showShareSheet(BuildContext context) {
-  showModalBottomSheet(
+Future<bool> showShareSheet(BuildContext context) async {
+  final shared = await showModalBottomSheet<bool>(
     context: context,
     backgroundColor: Colors.white,
     shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
@@ -211,11 +216,11 @@ void showShareSheet(BuildContext context) {
             const SizedBox(height: 18),
             Row(
               children: [
-                _ShareTile(icon: Icons.chat_bubble_rounded, color: const Color(0xFFFEE500), label: '카카오톡', onTap: () => Navigator.of(context).pop()),
+                _ShareTile(icon: Icons.chat_bubble_rounded, color: const Color(0xFFFEE500), label: '카카오톡', onTap: () => Navigator.of(context).pop(true)),
                 const SizedBox(width: 16),
-                _ShareTile(icon: Icons.camera_alt_rounded, color: const Color(0xFFE1306C), label: '인스타그램', onTap: () => Navigator.of(context).pop()),
+                _ShareTile(icon: Icons.camera_alt_rounded, color: const Color(0xFFE1306C), label: '인스타그램', onTap: () => Navigator.of(context).pop(true)),
                 const SizedBox(width: 16),
-                _ShareTile(icon: Icons.sms_rounded, color: Colors.grey.shade600, label: '메시지', onTap: () => Navigator.of(context).pop()),
+                _ShareTile(icon: Icons.sms_rounded, color: Colors.grey.shade600, label: '메시지', onTap: () => Navigator.of(context).pop(true)),
               ],
             ),
           ],
@@ -223,6 +228,7 @@ void showShareSheet(BuildContext context) {
       ),
     ),
   );
+  return shared ?? false;
 }
 
 class _ShareTile extends StatelessWidget {
@@ -332,7 +338,7 @@ class _FilterRow extends StatelessWidget {
                 const SizedBox(width: 8),
                 _TypeChip(label: '일상', selected: typeFilter == FeedPostType.spot, onTap: () => onTypeSelected(FeedPostType.spot)),
                 const SizedBox(width: 8),
-                _TypeChip(label: '골목지도', selected: typeFilter == FeedPostType.route, onTap: () => onTypeSelected(FeedPostType.route)),
+                _TypeChip(label: '코스', selected: typeFilter == FeedPostType.route, onTap: () => onTypeSelected(FeedPostType.route)),
               ],
             ),
           ),
@@ -726,7 +732,7 @@ class _FeedCardPhoto extends StatelessWidget {
                     padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                     decoration: BoxDecoration(color: Colors.white.withOpacity(0.92), borderRadius: BorderRadius.circular(12)),
                     child: Text(
-                      '골목지도 · 스팟 ${item.stopCount ?? 0}곳',
+                      '코스 · 스팟 ${item.stopCount ?? 0}곳',
                       style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: CocoTheme.primary),
                     ),
                   ),
@@ -847,7 +853,7 @@ class _RouteRankingList extends StatelessWidget {
         Padding(
           padding: const EdgeInsets.fromLTRB(20, 14, 20, 24),
           child: Text(
-            '저장한 골목지도는 지도 탭 › 나의 지도에서 다시 볼 수 있어요',
+            '저장한 코스는 MY 탭 › 저장 · 좋아요에서 다시 볼 수 있어요',
             style: TextStyle(fontSize: 11, height: 1.5, color: Colors.black.withOpacity(0.35)),
           ),
         ),

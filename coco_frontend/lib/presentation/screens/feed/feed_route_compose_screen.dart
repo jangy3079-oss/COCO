@@ -11,7 +11,8 @@ import 'feed_mock_data.dart';
 class FeedRouteComposeScreen extends StatefulWidget {
   final String routeName;
   final List<MockSpot> stops;
-  const FeedRouteComposeScreen({super.key, required this.routeName, required this.stops});
+  final String? routeId; // mockMyRoutes 안의 id — 코스 상세에서 "골목지도 보기"로 다시 찾아올 때 사용
+  const FeedRouteComposeScreen({super.key, required this.routeName, required this.stops, this.routeId});
 
   @override
   State<FeedRouteComposeScreen> createState() => _FeedRouteComposeScreenState();
@@ -63,6 +64,8 @@ class _FeedRouteComposeScreenState extends State<FeedRouteComposeScreen> {
           timeLabel: '방금',
           type: FeedPostType.route,
           stopCount: widget.stops.length,
+          routeStops: widget.stops,
+          routeId: widget.routeId,
         ),
       );
     }
@@ -125,7 +128,7 @@ class _FeedRouteComposeScreenState extends State<FeedRouteComposeScreen> {
                                 Container(
                                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                                   decoration: BoxDecoration(color: CocoTheme.primary.withOpacity(0.12), borderRadius: BorderRadius.circular(10)),
-                                  child: const Text('골목지도 첨부', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: CocoTheme.primary)),
+                                  child: const Text('코스 첨부', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: CocoTheme.primary)),
                                 ),
                                 const SizedBox(height: 6),
                                 Text(widget.routeName, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: CocoTheme.secondary)),
@@ -156,7 +159,7 @@ class _FeedRouteComposeScreenState extends State<FeedRouteComposeScreen> {
                       maxLines: 5,
                       onChanged: (_) => setState(() {}),
                       decoration: InputDecoration(
-                        hintText: '이 골목지도를 왜 만들었는지, 어떤 날 걷기 좋은지 적어보세요',
+                        hintText: '이 코스를 왜 만들었는지, 어떤 날 걷기 좋은지 적어보세요',
                         counterText: '',
                         filled: true,
                         contentPadding: const EdgeInsets.all(13),

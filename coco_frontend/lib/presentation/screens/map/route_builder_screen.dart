@@ -32,6 +32,10 @@ class _RouteBuilderScreenState extends State<RouteBuilderScreen> {
   String _searchQuery = '';
   String? _toastMessage;
   Timer? _toastTimer;
+  // 이번 검색 세션에서 새로 담은 스팟 id들 — "취소"를 누르면 이번 세션에서
+  // 추가한 것만 되돌리고(원래 있던 스팟은 그대로 두고), "완료"를 누르면 그대로
+  // 확정한다. 예전엔 닫기 버튼이 하나뿐이라 그게 사실상 "완료"처럼 동작했었다.
+  final Set<String> _addedDuringSearch = {};
 
   @override
   void dispose() {
@@ -40,9 +44,22 @@ class _RouteBuilderScreenState extends State<RouteBuilderScreen> {
     super.dispose();
   }
 
-  void _openSearch() => setState(() => _searchOpen = true);
+  void _openSearch() => setState(() {
+        _searchOpen = true;
+        _addedDuringSearch.clear();
+      });
 
-  void _closeSearch() => setState(() {
+  // 취소 — 이번 검색 세션에서 새로 담은 스팟만 되돌리고 닫는다.
+  void _cancelSearch() => setState(() {
+        _stops.removeWhere((s) => _addedDuringSearch.contains(s.id));
+        _addedDuringSearch.clear();
+        _searchOpen = false;
+        _searchQuery = '';
+      });
+
+  // 완료 — 담은 내용을 그대로 확정하고 닫는다.
+  void _confirmSearch() => setState(() {
+        _addedDuringSearch.clear();
         _searchOpen = false;
         _searchQuery = '';
       });
@@ -52,6 +69,7 @@ class _RouteBuilderScreenState extends State<RouteBuilderScreen> {
     _toastTimer?.cancel();
     setState(() {
       _stops.add(spot);
+      _addedDuringSearch.add(spot.id);
       _toastMessage = '${spot.name} 스팟이 추가되었습니다';
     });
     _toastTimer = Timer(const Duration(milliseconds: 1600), () {
@@ -93,10 +111,12 @@ class _RouteBuilderScreenState extends State<RouteBuilderScreen> {
       return;
     }
     final name = _nameController.text.trim();
-    // MY탭 "내가 만든 골목지도"/"저장한 코스"에서 보여줄 수 있도록 공유 리스트에 반영.
+    // MY탭 "내가 만든 코스"에서 보여줄 수 있도록 공유 리스트에 반영.
     // 편집 모드면 기존 코스를 같은 자리에서 갱신하고, 아니면 새 코스로 맨 앞에 추가한다.
     final editingId = widget.editingRouteId;
+    String routeId;
     if (editingId != null) {
+      routeId = editingId;
       final i = mockMyRoutes.indexWhere((r) => r.id == editingId);
       if (i != -1) {
         final old = mockMyRoutes[i];
@@ -111,11 +131,14 @@ class _RouteBuilderScreenState extends State<RouteBuilderScreen> {
         );
       }
     } else {
-      mockMyRoutes.insert(0, MockRoute(id: 'route-${DateTime.now().millisecondsSinceEpoch}', name: name, stops: List.of(_stops)));
+      routeId = 'route-${DateTime.now().millisecondsSinceEpoch}';
+      mockMyRoutes.insert(0, MockRoute(id: routeId, name: name, stops: List.of(_stops)));
     }
     context.push('/map/route/preview', extra: {
       'name': name,
       'stops': _stops,
+      'routeId': routeId,
+      'isOwner': true,
     });
   }
 
@@ -138,7 +161,7 @@ class _RouteBuilderScreenState extends State<RouteBuilderScreen> {
                   ),
                   Expanded(
                     child: Text(
-                      widget.editingRouteId != null ? '${widget.initialName} 편집' : '골목지도 만들기',
+                      widget.editingRouteId != null ? '${widget.initialName} 편집' : '코스 만들기',
                       textAlign: TextAlign.center,
                       style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: CocoTheme.secondary),
                     ),
@@ -239,7 +262,8 @@ class _RouteBuilderScreenState extends State<RouteBuilderScreen> {
               stops: _stops,
               toastMessage: _toastMessage,
               onQueryChanged: (v) => setState(() => _searchQuery = v),
-              onClose: _closeSearch,
+              onCancel: _cancelSearch,
+              onConfirm: _confirmSearch,
               onAdd: _addStopFromSearch,
             ),
         ],
@@ -256,7 +280,8 @@ class _StopSearchOverlay extends StatelessWidget {
   final List<MockSpot> stops;
   final String? toastMessage;
   final ValueChanged<String> onQueryChanged;
-  final VoidCallback onClose;
+  final VoidCallback onCancel;
+  final VoidCallback onConfirm;
   final ValueChanged<MockSpot> onAdd;
 
   const _StopSearchOverlay({
@@ -264,14 +289,20 @@ class _StopSearchOverlay extends StatelessWidget {
     required this.stops,
     required this.toastMessage,
     required this.onQueryChanged,
-    required this.onClose,
+    required this.onCancel,
+    required this.onConfirm,
     required this.onAdd,
   });
 
+  // "남포 카페"처럼 여러 단어를 띄어써도 찾을 수 있게 — 공백으로 쪼갠 키워드가
+  // 이름/동네/부제/주소 중 어디든 전부 포함돼 있으면 후보로 인정한다(순서 무관).
   List<MockSpot> get _candidates {
-    final q = query.trim();
-    if (q.isEmpty) return mockSpots;
-    return mockSpots.where((s) => s.name.contains(q) || s.subtitle.contains(q) || s.address.contains(q)).toList();
+    final keywords = query.trim().split(RegExp(r'\s+')).where((k) => k.isNotEmpty).toList();
+    if (keywords.isEmpty) return mockSpots;
+    return mockSpots.where((s) {
+      final haystack = '${s.name} ${s.dong} ${s.subtitle} ${s.address}'.toLowerCase();
+      return keywords.every((k) => haystack.contains(k.toLowerCase()));
+    }).toList();
   }
 
   @override
@@ -312,10 +343,15 @@ class _StopSearchOverlay extends StatelessWidget {
                         ),
                       ),
                     ),
-                    const SizedBox(width: 10),
+                    const SizedBox(width: 12),
                     GestureDetector(
-                      onTap: onClose,
+                      onTap: onCancel,
                       child: Text('취소', style: TextStyle(fontSize: 14, color: Colors.black.withOpacity(0.5))),
+                    ),
+                    const SizedBox(width: 14),
+                    GestureDetector(
+                      onTap: onConfirm,
+                      child: const Text('완료', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: CocoTheme.primary)),
                     ),
                   ],
                 ),

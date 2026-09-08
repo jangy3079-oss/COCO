@@ -46,9 +46,9 @@ class _FeedPostDetailScreenState extends State<FeedPostDetailScreen> {
   void _prevSlide() => setState(() => _slide = (_slide - 1 + _totalSlides) % _totalSlides);
   void _nextSlide() => setState(() => _slide = (_slide + 1) % _totalSlides);
 
-  void _share() {
-    setState(() => widget.item.shares += 1);
-    showShareSheet(context);
+  Future<void> _share() async {
+    final shared = await showShareSheet(context);
+    if (shared && mounted) setState(() => widget.item.shares += 1);
   }
 
   @override
@@ -446,7 +446,7 @@ class _RouteSummaryCardState extends State<_RouteSummaryCard> {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                 decoration: BoxDecoration(color: CocoTheme.primary.withOpacity(0.12), borderRadius: BorderRadius.circular(10)),
-                child: const Text('골목지도', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: CocoTheme.primary)),
+                child: const Text('코스', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: CocoTheme.primary)),
               ),
               const SizedBox(width: 6),
               Text('by ${item.author} · 부산 로컬', style: TextStyle(fontSize: 11, color: Colors.black.withOpacity(0.35))),
@@ -469,8 +469,17 @@ class _RouteSummaryCardState extends State<_RouteSummaryCard> {
                     side: BorderSide(color: Colors.grey.shade300),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                   ),
-                  onPressed: () => context.go('/map'),
-                  child: const Text('골목지도 보기', style: TextStyle(color: CocoTheme.secondary, fontWeight: FontWeight.w600)),
+                  // 코스 상세(route_preview_screen)로 이동 — 내가 올린 코스면(routeId 있음)
+                  // 편집도 가능하고, 다른 로컬이 올린 코스면 보기 전용으로 뜬다.
+                  onPressed: item.routeStops == null || item.routeStops!.isEmpty
+                      ? null
+                      : () => context.push('/map/route/preview', extra: {
+                            'name': item.displayTitle,
+                            'stops': item.routeStops,
+                            'routeId': item.routeId,
+                            'isOwner': item.source == FeedSource.user,
+                          }),
+                  child: const Text('코스 보기', style: TextStyle(color: CocoTheme.secondary, fontWeight: FontWeight.w600)),
                 ),
               ),
               const SizedBox(width: 8),
@@ -493,7 +502,7 @@ class _RouteSummaryCardState extends State<_RouteSummaryCard> {
             Padding(
               padding: const EdgeInsets.only(top: 9),
               child: Text(
-                'MY 탭 › 저장한 코스에 담겼어요 (내가 만든 골목지도와 따로 보여요)',
+                'MY 탭 › 저장한 코스에 담겼어요 (내가 만든 코스와 따로 보여요)',
                 style: TextStyle(fontSize: 11, color: Colors.black.withOpacity(0.4)),
               ),
             ),

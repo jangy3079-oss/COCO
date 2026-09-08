@@ -184,3 +184,11 @@ const mockSpots = [
 /// 지도 초기 중심 좌표 — 목업 스팟들이 몰려 있는 부산 중구 남포동 일대.
 const double mapDefaultCenterLat = 35.0995;
 const double mapDefaultCenterLng = 129.0305;
+
+/// 스팟 목록의 평균 좌표를 지도 중심으로 계산한다. 목록이 비어있으면 기본 중심을 반환.
+(double, double) spotsCenter(List<MockSpot> spots) {
+  if (spots.isEmpty) return (mapDefaultCenterLat, mapDefaultCenterLng);
+  final lat = spots.map((s) => s.lat).reduce((a, b) => a + b) / spots.length;
+  final lng = spots.map((s) => s.lng).reduce((a, b) => a + b) / spots.length;
+  return (lat, lng);
+}

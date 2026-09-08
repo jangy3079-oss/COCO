@@ -21,7 +21,6 @@ import '../screens/qna/qna_mock_data.dart';
 import '../screens/qna/qna_post_detail_screen.dart';
 import '../screens/qna/qna_composer_screen.dart';
 import '../screens/mypage/mypage_screen.dart';
-import '../screens/mypage/my_map_screen.dart';
 import '../screens/mypage/my_posts_screen.dart';
 import '../screens/mypage/my_saved_screen.dart';
 import '../screens/mypage/my_routes_screen.dart';
@@ -65,6 +64,8 @@ final appRouter = GoRouter(
         return RoutePreviewScreen(
           routeName: data['name'] as String,
           stops: data['stops'] as List<MockSpot>,
+          routeId: data['routeId'] as String?,
+          isOwner: data['isOwner'] as bool? ?? true,
         );
       },
     ),
@@ -108,6 +109,7 @@ final appRouter = GoRouter(
         return FeedRouteComposeScreen(
           routeName: data['name'] as String,
           stops: data['stops'] as List<MockSpot>,
+          routeId: data['routeId'] as String?,
         );
       },
     ),
@@ -123,10 +125,8 @@ final appRouter = GoRouter(
     ),
     // 마이(MY) 탭 하위 화면들도 하단 탭 없는 전체 화면 흐름이라
     // ShellRoute 바깥의 최상위 라우트로 둔다.
-    GoRoute(
-      path: '/mypage/map',
-      builder: (c, s) => const MyMapScreen(),
-    ),
+    // (구 /mypage/map "나의 지도"는 /mypage/routes "내가 만든 코스" 화면에
+    // 지도 탭으로 통합되었다. my_map_screen.dart 파일 자체는 남겨두되 라우트는 제거.)
     GoRoute(
       path: '/mypage/posts',
       builder: (c, s) => MyPostsScreen(initialFilter: (s.extra as String?) ?? 'all'),

@@ -61,7 +61,14 @@ class _MySavedScreenState extends State<MySavedScreen> {
               icon: Icons.map_outlined,
               actionLabel: '삭제',
               onAction: () => setState(() => mockMyRoutes.remove(r)),
-              onTap: () => context.push('/map/route/preview', extra: {'name': r.name, 'stops': r.stops}),
+              // 저장한 코스는 내가 만든 게 아니라 저장만 해둔 것이라, 코스 상세에서
+              // 편집·공유는 못 하고 보기만 가능하다(isOwner: false).
+              onTap: () => context.push('/map/route/preview', extra: {
+                'name': r.name,
+                'stops': r.stops,
+                'routeId': r.id,
+                'isOwner': false,
+              }),
             )).toList();
       case 'spots':
       default:
@@ -87,7 +94,7 @@ class _MySavedScreenState extends State<MySavedScreen> {
       case 'savedFeed':
         return (text: '저장한 피드가 없어요', cta: '피드로 가기', onCta: () => context.go('/feed'));
       case 'routes':
-        return (text: '만든 코스가 없어요\n지도 탭에서 골목지도를 만들어보세요', cta: '지도로 가기', onCta: () => context.go('/map'));
+        return (text: '만든 코스가 없어요\n지도 탭에서 코스를 만들어보세요', cta: '지도로 가기', onCta: () => context.go('/map'));
       case 'spots':
       default:
         return (text: '찜한 스팟이 없어요\n지도 탭에서 스팟을 찜해보세요', cta: '지도로 가기', onCta: () => context.go('/map'));
