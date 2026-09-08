@@ -43,6 +43,12 @@ dependencies:
   go_router: ^13.2.0
   flutter_svg: ^2.0.10
 
+  # 환경변수 (.env) — 순수 Dart 패키지라 jni 충돌 없음
+  flutter_dotenv: ^6.0.1
+
+  # 카카오맵 JS interop (Flutter Web 전용) — package:web 타입 바인딩
+  web: ^1.0.0
+
 dev_dependencies:
   flutter_test:
     sdk: flutter
@@ -54,3 +60,17 @@ flutter:
   assets:
     - assets/images/
     - assets/icons/
+    - .env
+  # Noto Sans KR (가변 폰트) — 구글 폰트 서버에서 런타임에 받아오는 방식(google_fonts)이
+  # 웹에서 안정적으로 안 붙는 문제가 있어서, 폰트 파일을 직접 번들링하는 방식으로 변경.
+  fonts:
+    - family: NotoSansKR
+      fonts:
+        - asset: assets/fonts/NotoSansKR-Variable.ttf
+          weight: 400
+        - asset: assets/fonts/NotoSansKR-Variable.ttf
+          weight: 500
+        - asset: assets/fonts/NotoSansKR-Variable.ttf
+          weight: 700
+        - asset: assets/fonts/NotoSansKR-Variable.ttf
+          weight: 800

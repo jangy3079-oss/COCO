@@ -3,14 +3,25 @@ import 'package:go_router/go_router.dart';
 import '../../../core/theme/app_theme.dart';
 import 'map_mock_data.dart';
 
-/// 방금 만든 골목지도(코스)를 저장하기 전 미리 보는 화면.
+/// 코스 상세 화면. "내가 만든 코스"·피드의 "코스 보기"·"저장한 코스"
+/// 등 여러 진입점에서 공통으로 쓴다.
+/// isOwner가 true일 때만(=내가 만든 코스일 때만) 편집·공유가 가능하다 —
+/// 다른 사람이 만든 코스를 저장만 해둔 경우(저장한 코스)는 볼 수만 있다.
 /// "지도에서 보기"를 누르면 지도 탭으로 돌아간다.
 /// TODO: 백엔드 연동 시 실제로는 이 시점에 코스가 서버에 저장되고,
 /// 피드 탭에서도 좋아요/저장 랭킹으로 노출된다 (기획 문서 참고).
 class RoutePreviewScreen extends StatefulWidget {
   final String routeName;
   final List<MockSpot> stops;
-  const RoutePreviewScreen({super.key, required this.routeName, required this.stops});
+  final String? routeId; // mockMyRoutes 안의 id — 편집 화면 진입 시 필요
+  final bool isOwner; // 내가 만든 코스인지 — 편집/공유 노출 여부를 가른다
+  const RoutePreviewScreen({
+    super.key,
+    required this.routeName,
+    required this.stops,
+    this.routeId,
+    this.isOwner = true,
+  });
 
   @override
   State<RoutePreviewScreen> createState() => _RoutePreviewScreenState();
@@ -32,7 +43,16 @@ class _RoutePreviewScreenState extends State<RoutePreviewScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            _CoverHeader(onBack: () => context.pop()),
+            _CoverHeader(
+              onBack: () => context.pop(),
+              onEdit: widget.isOwner && widget.routeId != null
+                  ? () => context.push('/map/route/new', extra: {
+                        'editingRouteId': widget.routeId,
+                        'initialName': widget.routeName,
+                        'initialStops': widget.stops,
+                      })
+                  : null,
+            ),
             Padding(
               padding: const EdgeInsets.all(20),
               child: Column(
@@ -81,16 +101,22 @@ class _RoutePreviewScreenState extends State<RoutePreviewScreen> {
                           onTap: () => setState(() => _saved = !_saved),
                         ),
                       ),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: _CountPillButton(
-                          label: '공유',
-                          count: null,
-                          active: false,
-                          activeColor: CocoTheme.secondary,
-                          onTap: () {},
+                      if (widget.isOwner) ...[
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: _CountPillButton(
+                            label: '공유',
+                            count: null,
+                            active: false,
+                            activeColor: CocoTheme.secondary,
+                            onTap: () => context.push('/feed/compose-route', extra: {
+                              'name': widget.routeName,
+                              'stops': widget.stops,
+                              'routeId': widget.routeId,
+                            }),
+                          ),
                         ),
-                      ),
+                      ],
                     ],
                   ),
                   const SizedBox(height: 28),
@@ -126,7 +152,8 @@ class _RoutePreviewScreenState extends State<RoutePreviewScreen> {
 
 class _CoverHeader extends StatelessWidget {
   final VoidCallback onBack;
-  const _CoverHeader({required this.onBack});
+  final VoidCallback? onEdit; // null이면(=작성자가 아니면) 편집 버튼 자체를 숨긴다
+  const _CoverHeader({required this.onBack, this.onEdit});
 
   @override
   Widget build(BuildContext context) {
@@ -159,6 +186,24 @@ class _CoverHeader extends StatelessWidget {
               ),
             ),
           ),
+          if (onEdit != null)
+            Positioned(
+              right: 16,
+              top: 44,
+              child: Material(
+                color: Colors.white.withOpacity(0.9),
+                shape: const CircleBorder(),
+                child: InkWell(
+                  onTap: onEdit,
+                  customBorder: const CircleBorder(),
+                  child: const SizedBox(
+                    width: 36,
+                    height: 36,
+                    child: Icon(Icons.edit_outlined, size: 18, color: CocoTheme.secondary),
+                  ),
+                ),
+              ),
+            ),
         ],
       ),
     );

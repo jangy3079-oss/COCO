@@ -19,6 +19,7 @@ public class SecurityConfig {
         return new BCryptPasswordEncoder();
     }
 
+    // TODO: /api/spot/import 같은 관리자 전용 엔드포인트는 별도 인가 규칙으로 좁혀야 함.
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         http

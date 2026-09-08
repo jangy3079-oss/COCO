@@ -1,6 +1,6 @@
 spring:
   datasource:
-    url: jdbc:postgresql://localhost:5432/coco_db
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/coco_db}
     username: ${DB_USERNAME:coco}
     password: ${DB_PASSWORD:coco1234}
     driver-class-name: org.postgresql.Driver
@@ -24,3 +24,6 @@ jwt:
 tour-api:
   base-url: https://apis.data.go.kr/B551011
   key: ${TOUR_API_KEY:}
+  # TourAPI 버전이 바뀌어도 여기 값만 바꾸면 되도록 분리해둠 (현재 활성 버전 미확인 상태라 기본값은 추정치)
+  kor-service-path: ${TOUR_API_KOR_SERVICE_PATH:KorService2}
+  tar-rlte-tar-path: ${TOUR_API_TAR_RLTE_TAR_PATH:TarRlteTarService1}

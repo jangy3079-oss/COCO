@@ -1,7 +1,18 @@
+import 'dart:ui';
+
 import 'package:flutter/material.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../widgets/map/kakao_map_view.dart';
 import 'map_mock_data.dart';
+
+// 하단 "주변 스팟" 시트의 스냅 지점(화면 높이 대비 비율) — 시트 자신과, 그 위에 떠
+// 있는 플로팅 버튼(스팟등록/현재위치) 둘 다 이 값을 기준으로 위치를 맞춰야 하므로
+// 파일 상단에 공유 상수로 뺐다.
+const double kSheetCollapsedExtent = 0.09; // 아예 내리기 — 핸들+제목만 살짝 보임
+const double kSheetMidExtent = 0.32; // 기본 상태
+const double kSheetExpandedExtent = 0.92; // 아예 올리기 — 거의 전체화면
 
 class MapScreen extends StatefulWidget {
   const MapScreen({super.key});
@@ -15,19 +26,94 @@ class _MapScreenState extends State<MapScreen> {
   static const _categories = ['전체', '노포', '골목', '공원', '카페'];
   String _selectedCategory = '전체';
 
-  // 골목지도(코스)에 담을 스팟 — "주변 스팟" 목록에서 북마크로 선택
-  final Set<String> _savedSpotIds = {};
+  // 지도 중심 좌표 — 진입 시 현재 위치로 재설정을 시도하고, 권한 거부/실패 시
+  // mapDefaultCenterLat/Lng(부산 남포동)를 그대로 쓴다.
+  double _centerLat = mapDefaultCenterLat;
+  double _centerLng = mapDefaultCenterLng;
+  // GPS로 실제 위치를 구했을 때만 true — 지도 위 "내 위치" 파란 점은 이 값이
+  // true일 때만 표시한다(기본 좌표로 조용히 폴백한 경우에는 점을 띄우지 않음).
+  bool _locationAvailable = false;
 
-  List<MockSpot> get _filteredSpots => _selectedCategory == '전체'
-      ? mockSpots
-      : mockSpots.where((s) => s.category == _selectedCategory).toList();
+  // 지도 화면(뷰포트) 범위 — 드래그/줌이 끝날 때마다 갱신되며, 이 범위 안에 있는
+  // 스팟만 지도/하단 시트에 표시한다(핀 밀집 방지). null이면 아직 한 번도 idle
+  // 이벤트가 안 온 것이므로 전체를 보여준다. 실제 서버 연동 시에는 이 콜백에서
+  // `/api/spot?swLat=...&neLat=...` 뷰포트 쿼리를 호출하도록 교체하면 된다.
+  double? _swLat, _swLng, _neLat, _neLng;
 
+  void _onBoundsChanged(double swLat, double swLng, double neLat, double neLng) {
+    setState(() {
+      _swLat = swLat;
+      _swLng = swLng;
+      _neLat = neLat;
+      _neLng = neLng;
+    });
+  }
+
+  // 하단 시트가 지금 화면의 몇 %를 차지하고 있는지 — 시트 위에 뜬 플로팅 버튼이
+  // 시트를 따라 같이 움직이게 하려고 ValueNotifier로 공유한다(Stack 전체를
+  // setState로 다시 그리지 않고 버튼 위치만 가볍게 갱신하기 위함).
+  final ValueNotifier<double> _sheetExtent = ValueNotifier(kSheetMidExtent);
+
+  @override
+  void initState() {
+    super.initState();
+    _loadCurrentLocation();
+  }
+
+  @override
+  void dispose() {
+    _sheetExtent.dispose();
+    super.dispose();
+  }
+
+  Future<void> _loadCurrentLocation() async {
+    try {
+      final serviceEnabled = await Geolocator.isLocationServiceEnabled();
+      if (!serviceEnabled) return;
+
+      var permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+      }
+      if (permission == LocationPermission.denied || permission == LocationPermission.deniedForever) {
+        return;
+      }
+
+      final position = await Geolocator.getCurrentPosition(
+        desiredAccuracy: LocationAccuracy.medium,
+      );
+      if (!mounted) return;
+      setState(() {
+        _centerLat = position.latitude;
+        _centerLng = position.longitude;
+        _locationAvailable = true;
+      });
+    } catch (_) {
+      // 위치 조회 실패 시 기본 좌표(부산 남포동) 유지 — 지도 자체는 정상 동작해야 하므로 조용히 무시.
+    }
+  }
+
+  List<MockSpot> get _filteredSpots {
+    final byCategory = _selectedCategory == '전체'
+        ? mockSpots
+        : mockSpots.where((s) => s.category == _selectedCategory).toList();
+    final swLat = _swLat, swLng = _swLng, neLat = _neLat, neLng = _neLng;
+    if (swLat == null || swLng == null || neLat == null || neLng == null) {
+      return byCategory;
+    }
+    return byCategory
+        .where((s) => s.lat >= swLat && s.lat <= neLat && s.lng >= swLng && s.lng <= neLng)
+        .toList();
+  }
+
+  // 찜(저장) 상태는 map_mock_data.dart의 공유 savedSpotIds를 그대로 사용한다
+  // (스팟 상세 화면·MY탭과 동일한 상태를 공유해야 하므로 화면 로컬 State가 아님).
   void _toggleSaved(String spotId) {
     setState(() {
-      if (_savedSpotIds.contains(spotId)) {
-        _savedSpotIds.remove(spotId);
+      if (savedSpotIds.contains(spotId)) {
+        savedSpotIds.remove(spotId);
       } else {
-        _savedSpotIds.add(spotId);
+        savedSpotIds.add(spotId);
       }
     });
   }
@@ -37,14 +123,14 @@ class _MapScreenState extends State<MapScreen> {
   }
 
   void _handleSaveCourse() {
-    if (_savedSpotIds.isEmpty) {
+    if (savedSpotIds.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('담고 싶은 스팟을 먼저 북마크해주세요')),
       );
       return;
     }
     final selectedStops =
-        mockSpots.where((s) => _savedSpotIds.contains(s.id)).toList();
+        mockSpots.where((s) => savedSpotIds.contains(s.id)).toList();
     context.push('/map/route/new', extra: selectedStops);
   }
 
@@ -55,92 +141,159 @@ class _MapScreenState extends State<MapScreen> {
       // 검색창 포커스로 키보드가 뜰 때 지도 레이아웃 전체가 눌려서 바텀시트가
       // 찌그러지는 걸 방지 (지도 화면은 키보드가 위에 떠 있는 형태가 자연스러움)
       resizeToAvoidBottomInset: false,
-      body: Column(
-        children: [
-          SafeArea(
-            bottom: false,
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(20, 12, 20, 12),
-              child: const _MapHeaderBar(),
-            ),
-          ),
-          Expanded(
-            child: LayoutBuilder(
-              builder: (context, constraints) {
-                final sheetCollapsedHeight = constraints.maxHeight * 0.32;
-                return Stack(
-                  children: [
-                    // 지도 영역 — 좌우/여백 없이 화면 전체를 채움
-                    Positioned.fill(
-                      child: _MockMapBackground(
-                        spots: _filteredSpots,
-                        onSpotTap: _openSpotDetail,
-                      ),
-                    ),
-                    // 검색창 + 카테고리 필터 (지도 위에 떠 있는 형태)
-                    Positioned(
-                      left: 20,
-                      right: 20,
-                      top: 16,
-                      child: Column(
-                        children: [
-                          const _MapSearchBar(),
-                          const SizedBox(height: 12),
-                          _CategoryChipsRow(
-                            categories: _categories,
-                            selected: _selectedCategory,
-                            onSelected: (c) => setState(() => _selectedCategory = c),
-                          ),
-                        ],
-                      ),
-                    ),
-                    // 현재 위치로 재중심 버튼
-                    Positioned(
-                      right: 16,
-                      bottom: sheetCollapsedHeight + 16,
-                      child: const _RecenterButton(),
-                    ),
-                    // 하단 "주변 스팟" 바텀시트 (드래그로 확장 가능)
-                    _NearbySpotsSheet(
-                      spots: _filteredSpots,
-                      savedSpotIds: _savedSpotIds,
-                      onToggleSaved: _toggleSaved,
-                      onSpotTap: _openSpotDetail,
-                      onSaveCourse: _handleSaveCourse,
-                    ),
+      body: LayoutBuilder(
+        builder: (context, constraints) {
+          return Stack(
+            children: [
+              // 지도 영역 — 좌우/여백 없이 화면 전체를 채움
+              Positioned.fill(
+                child: KakaoMapView(
+                  centerLat: _centerLat,
+                  centerLng: _centerLng,
+                  markers: [
+                    for (final spot in _filteredSpots)
+                      KakaoMapMarker(id: spot.id, lat: spot.lat, lng: spot.lng, name: spot.name),
                   ],
-                );
-              },
-            ),
-          ),
-        ],
+                  onMarkerTap: (spotId) => _openSpotDetail(mockSpotById(spotId)),
+                  myLocationLat: _locationAvailable ? _centerLat : null,
+                  myLocationLng: _locationAvailable ? _centerLng : null,
+                  onBoundsChanged: _onBoundsChanged,
+                ),
+              ),
+              // 타이틀 + 검색창 + 카테고리 필터 (지도 위에 블러 그라데이션과 함께 떠 있는 형태.
+              // 피드/커뮤니티 탭과 동일한 타이틀 스타일 적용)
+              // ShaderMask(dstIn)로 블러 레이어 자체의 알파를 아래쪽으로 갈수록 서서히 줄여서,
+              // 블러가 있다가 갑자기 뚝 끊기지 않고 점점 옅어지며 사라지도록 처리.
+              Positioned(
+                left: 0,
+                right: 0,
+                top: 0,
+                child: ShaderMask(
+                  shaderCallback: (rect) => const LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [Colors.white, Colors.white, Colors.transparent],
+                    stops: [0.0, 0.68, 1.0],
+                  ).createShader(rect),
+                  blendMode: BlendMode.dstIn,
+                  child: ClipRect(
+                    child: BackdropFilter(
+                      filter: ImageFilter.blur(sigmaX: 14, sigmaY: 14),
+                      child: Container(
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            begin: Alignment.topCenter,
+                            end: Alignment.bottomCenter,
+                            stops: const [0.0, 0.6, 1.0],
+                            colors: [
+                              Colors.white.withOpacity(0.96),
+                              Colors.white.withOpacity(0.78),
+                              Colors.white.withOpacity(0.0),
+                            ],
+                          ),
+                        ),
+                        child: SafeArea(
+                          bottom: false,
+                          child: Padding(
+                            padding: const EdgeInsets.fromLTRB(20, 14, 20, 16),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Text(
+                                  '지도',
+                                  style: TextStyle(fontSize: 24, fontWeight: FontWeight.w800, color: CocoTheme.secondary),
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  '내 주변 골목과 노포를 찾아보세요',
+                                  style: TextStyle(fontSize: 13, color: Colors.grey.shade600),
+                                ),
+                                const SizedBox(height: 12),
+                                Row(
+                                  children: [
+                                    const Expanded(child: _MapSearchBar()),
+                                    const SizedBox(width: 10),
+                                    _MyRoutesButton(onTap: () => context.push('/mypage/routes')),
+                                  ],
+                                ),
+                                const SizedBox(height: 10),
+                                _CategoryChipsRow(
+                                  categories: _categories,
+                                  selected: _selectedCategory,
+                                  onSelected: (c) => setState(() => _selectedCategory = c),
+                                ),
+                                // 블러가 서서히 사라질 여백(페이드 테일) — 이 구간에서
+                                // ShaderMask 알파가 1→0으로 떨어지며 블러도 함께 옅어진다.
+                                const SizedBox(height: 44),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+              // 우측 하단 버튼 묶음 — 스팟 등록 + 현재 위치로 재중심을 같은 줄에 나란히 배치.
+              // 시트를 드래그하면 _sheetExtent가 바뀌고, 이 버튼들도 바로 따라 움직인다
+              // (ValueListenableBuilder라 이 버튼 부분만 다시 그려지고 지도는 그대로 유지됨).
+              ValueListenableBuilder<double>(
+                valueListenable: _sheetExtent,
+                builder: (context, extent, child) => Positioned(
+                  left: 16,
+                  right: 16,
+                  bottom: constraints.maxHeight * extent + 16,
+                  child: child!,
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    _RegisterSpotButton(onTap: () => context.push('/map/register/search')),
+                    const SizedBox(width: 10),
+                    _RecenterButton(onTap: _loadCurrentLocation),
+                  ],
+                ),
+              ),
+              // 하단 "주변 스팟" 바텀시트 (드래그로 확장 가능)
+              _NearbySpotsSheet(
+                extentNotifier: _sheetExtent,
+                spots: _filteredSpots,
+                savedSpotIds: savedSpotIds,
+                onToggleSaved: _toggleSaved,
+                onSpotTap: _openSpotDetail,
+                onSaveCourse: _handleSaveCourse,
+              ),
+            ],
+          );
+        },
       ),
     );
   }
 }
 
-class _MapHeaderBar extends StatelessWidget {
-  const _MapHeaderBar();
+/// 검색창 우측의 원형 버튼 — 탭하면 "내가 만든 코스" 화면(MY탭)으로 이동한다.
+class _MyRoutesButton extends StatelessWidget {
+  final VoidCallback onTap;
+  const _MyRoutesButton({required this.onTap});
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-      children: [
-        const Text(
-          'COCO',
-          style: TextStyle(
-            color: CocoTheme.primary,
-            fontSize: 22,
-            fontWeight: FontWeight.w900,
-            letterSpacing: 0.5,
+    return Tooltip(
+      message: '내 코스',
+      child: Material(
+        color: Colors.white,
+        shape: const CircleBorder(side: BorderSide(color: Color(0x0F000000))),
+        elevation: 2,
+        child: InkWell(
+          onTap: onTap,
+          customBorder: const CircleBorder(),
+          child: const SizedBox(
+            width: 44,
+            height: 44,
+            child: Icon(Icons.route_outlined, color: CocoTheme.primary, size: 20),
           ),
         ),
-        const CircleAvatar(
-          radius: 16,
-          backgroundColor: Color(0xFFEFEAE4),
-        ),
-      ],
+      ),
     );
   }
 }
@@ -254,10 +407,12 @@ class _CategoryChip extends StatelessWidget {
   }
 }
 
-class _MockMapBackground extends StatelessWidget {
+/// 목업 지도 배경(건물/도로 블록 + 스팟 핀). 지도 탭 본문뿐 아니라
+/// MY탭의 "내가 만든 코스" 화면(my_routes_screen.dart)의 지도 탭에서도 재사용한다.
+class MockMapBackground extends StatelessWidget {
   final List<MockSpot> spots;
   final ValueChanged<MockSpot> onSpotTap;
-  const _MockMapBackground({required this.spots, required this.onSpotTap});
+  const MockMapBackground({super.key, required this.spots, required this.onSpotTap});
 
   @override
   Widget build(BuildContext context) {
@@ -387,31 +542,67 @@ class _SpotPin extends StatelessWidget {
 }
 
 class _RecenterButton extends StatelessWidget {
-  const _RecenterButton();
+  final VoidCallback onTap;
+  const _RecenterButton({required this.onTap});
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      width: 44,
-      height: 44,
-      alignment: Alignment.center,
-      decoration: BoxDecoration(
-        color: Colors.white,
-        shape: BoxShape.circle,
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.15),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
-          ),
-        ],
+    return Material(
+      color: Colors.white,
+      shape: const CircleBorder(),
+      elevation: 3,
+      child: InkWell(
+        onTap: onTap,
+        customBorder: const CircleBorder(),
+        child: const SizedBox(
+          width: 44,
+          height: 44,
+          child: Icon(Icons.my_location_rounded, color: CocoTheme.primary, size: 20),
+        ),
       ),
-      child: Icon(Icons.my_location_rounded, color: CocoTheme.primary, size: 20),
     );
   }
 }
 
-class _NearbySpotsSheet extends StatelessWidget {
+/// 지도 위 "스팟 등록" 플로팅 버튼 — 탭하면 장소 검색(스팟 등록 ①)으로 이동.
+class _RegisterSpotButton extends StatelessWidget {
+  final VoidCallback onTap;
+  const _RegisterSpotButton({required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: CocoTheme.primary,
+      borderRadius: BorderRadius.circular(22),
+      elevation: 4,
+      shadowColor: CocoTheme.primary.withOpacity(0.4),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(22),
+        child: const Padding(
+          padding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.add_rounded, size: 16, color: Colors.white),
+              SizedBox(width: 6),
+              Text('스팟 등록', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: Colors.white)),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// DraggableScrollableSheet는 리스트 항목 수가 적어서 스크롤할 내용이 시트 안에
+// 다 들어차지 않으면(=오버스크롤 여유가 없으면), 살짝 흔들리는 탭 제스처까지도
+// "리사이즈 드래그"로 가로채 버려서 탭이 잘 안 먹는 문제가 있다(Flutter의 알려진 동작).
+// 그래서 리사이즈 제스처는 핸들 영역에서만 받고, 리스트는 별도 스크롤뷰로 분리해서
+// 탭이 항상 정상 동작하도록 직접 구현한다. 핸들을 드래그하면 완전히 접힘/기본/거의
+// 전체화면 세 지점 중 가까운 곳으로 스냅된다.
+class _NearbySpotsSheet extends StatefulWidget {
+  final ValueNotifier<double> extentNotifier;
   final List<MockSpot> spots;
   final Set<String> savedSpotIds;
   final ValueChanged<String> onToggleSaved;
@@ -419,6 +610,7 @@ class _NearbySpotsSheet extends StatelessWidget {
   final VoidCallback onSaveCourse;
 
   const _NearbySpotsSheet({
+    required this.extentNotifier,
     required this.spots,
     required this.savedSpotIds,
     required this.onToggleSaved,
@@ -427,68 +619,141 @@ class _NearbySpotsSheet extends StatelessWidget {
   });
 
   @override
+  State<_NearbySpotsSheet> createState() => _NearbySpotsSheetState();
+}
+
+class _NearbySpotsSheetState extends State<_NearbySpotsSheet> {
+  // 핸들+제목 줄만 있을 때 필요한 최소 높이(px) — 완전히 접힌 상태에서도 이 정도는
+  // 있어야 오버플로우가 안 난다.
+  static const double _headerMinPx = 74;
+  // 리스트/버튼까지 같이 보이려면 필요한 최소 높이(px). 이보다 낮아지면 리스트/버튼을
+  // 안 그려서, 줄어드는 도중에 고정 크기 위젯들이 공간을 못 찾아 오버플로우
+  // 나는 걸 막는다. extent(비율) 기준이 아니라 실제 픽셀 기준으로 판단해야
+  // 화면 크기가 달라도 항상 안전하다.
+  static const double _bodyMinPx = 190;
+
+  bool _dragging = false;
+
+  void _snapToNearest(double current, double maxHeight) {
+    final points = [_collapsedFloor(maxHeight), kSheetMidExtent, kSheetExpandedExtent];
+    var nearest = points.first;
+    var best = (points.first - current).abs();
+    for (final p in points) {
+      final d = (p - current).abs();
+      if (d < best) {
+        best = d;
+        nearest = p;
+      }
+    }
+    widget.extentNotifier.value = nearest;
+    setState(() => _dragging = false);
+  }
+
+  // 화면이 아주 낮을 때(가로모드 등)는 0.09 비율만으로는 핸들 영역조차 다 못
+  // 그릴 수 있어서, "핀 영역에 필요한 최소 픽셀"을 비율로 환산해 둘 중 더 큰
+  // 쪽을 완전히 접힌 상태의 실제 하한으로 쓴다.
+  double _collapsedFloor(double maxHeight) =>
+      kSheetCollapsedExtent > _headerMinPx / maxHeight ? kSheetCollapsedExtent : _headerMinPx / maxHeight;
+
+  @override
   Widget build(BuildContext context) {
-    return DraggableScrollableSheet(
-      initialChildSize: 0.32,
-      minChildSize: 0.18,
-      maxChildSize: 0.75,
-      builder: (context, scrollController) {
-        return Container(
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
-            boxShadow: [
-              BoxShadow(color: Colors.black.withOpacity(0.10), blurRadius: 16),
-            ],
-          ),
-          child: Column(
-            children: [
-              const SizedBox(height: 10),
-              Container(
-                width: 36,
-                height: 4,
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final maxHeight = constraints.maxHeight;
+        final collapsedFloor = _collapsedFloor(maxHeight);
+        return ValueListenableBuilder<double>(
+          valueListenable: widget.extentNotifier,
+          builder: (context, extent, _) {
+            final sheetHeight = maxHeight * extent;
+            // 접힘 지점에 가까울 때는 리스트/버튼을 아예 안 그려서 좁은 공간에서
+            // 내용이 눌리거나 넘치지 않게 한다(픽셀 기준이라 화면 크기와 무관하게 안전).
+            final showBody = sheetHeight > _bodyMinPx;
+
+            // Stack의 non-positioned 자식은 기본적으로 위쪽 정렬이라, 바닥에 붙는
+            // 바텀시트처럼 보이려면 직접 Align(bottomCenter)로 감싸야 한다.
+            return Align(
+              alignment: Alignment.bottomCenter,
+              child: AnimatedContainer(
+                duration: _dragging ? Duration.zero : const Duration(milliseconds: 180),
+                curve: Curves.easeOut,
+                height: sheetHeight,
+                width: double.infinity,
                 decoration: BoxDecoration(
-                  color: Colors.grey.shade300,
-                  borderRadius: BorderRadius.circular(2),
+                  color: Colors.white,
+                  borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+                  boxShadow: [
+                    BoxShadow(color: Colors.black.withOpacity(0.10), blurRadius: 16),
+                  ],
                 ),
-              ),
-              Padding(
-                padding: const EdgeInsets.fromLTRB(20, 14, 20, 8),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                child: Column(
                   children: [
-                    const Text('주변 스팟', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
-                    Text('${spots.length}곳', style: TextStyle(fontSize: 13, color: Colors.grey.shade600)),
+                    // 핸들 영역 — 리사이즈 드래그는 여기서만 받아서 아래 리스트의 탭 제스처와
+                    // 서로 뺏어가지 않게 분리한다. 탭하면 기본↔거의 전체화면을 토글한다.
+                    GestureDetector(
+                      behavior: HitTestBehavior.opaque,
+                      onVerticalDragStart: (_) => setState(() => _dragging = true),
+                      onVerticalDragUpdate: (details) {
+                        widget.extentNotifier.value = (widget.extentNotifier.value - details.delta.dy / maxHeight)
+                            .clamp(collapsedFloor, kSheetExpandedExtent);
+                      },
+                      onVerticalDragEnd: (_) => _snapToNearest(widget.extentNotifier.value, maxHeight),
+                      onTap: () => widget.extentNotifier.value =
+                          extent >= kSheetExpandedExtent - 0.05 ? kSheetMidExtent : kSheetExpandedExtent,
+                      child: Padding(
+                        padding: const EdgeInsets.fromLTRB(20, 10, 20, 8),
+                        child: Column(
+                          children: [
+                            Container(
+                              width: 36,
+                              height: 4,
+                              decoration: BoxDecoration(
+                                color: Colors.grey.shade300,
+                                borderRadius: BorderRadius.circular(2),
+                              ),
+                            ),
+                            const SizedBox(height: 10),
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                const Text('주변 스팟', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
+                                Text('${widget.spots.length}곳', style: TextStyle(fontSize: 13, color: Colors.grey.shade600)),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    if (showBody) ...[
+                      Expanded(
+                        child: ListView.separated(
+                          padding: const EdgeInsets.symmetric(horizontal: 20),
+                          itemCount: widget.spots.length,
+                          separatorBuilder: (_, __) => const Divider(height: 24),
+                          itemBuilder: (context, i) => _SpotListTile(
+                            spot: widget.spots[i],
+                            saved: widget.savedSpotIds.contains(widget.spots[i].id),
+                            onToggleSaved: () => widget.onToggleSaved(widget.spots[i].id),
+                            onTap: () => widget.onSpotTap(widget.spots[i]),
+                          ),
+                        ),
+                      ),
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(20, 8, 20, 20),
+                        child: FilledButton(
+                          style: FilledButton.styleFrom(
+                            backgroundColor: CocoTheme.primary,
+                            minimumSize: const Size.fromHeight(48),
+                          ),
+                          onPressed: widget.onSaveCourse,
+                          child: const Text('코스 저장하기'),
+                        ),
+                      ),
+                    ],
                   ],
                 ),
               ),
-              Expanded(
-                child: ListView.separated(
-                  controller: scrollController,
-                  padding: const EdgeInsets.symmetric(horizontal: 20),
-                  itemCount: spots.length,
-                  separatorBuilder: (_, __) => const Divider(height: 24),
-                  itemBuilder: (context, i) => _SpotListTile(
-                    spot: spots[i],
-                    saved: savedSpotIds.contains(spots[i].id),
-                    onToggleSaved: () => onToggleSaved(spots[i].id),
-                    onTap: () => onSpotTap(spots[i]),
-                  ),
-                ),
-              ),
-              Padding(
-                padding: const EdgeInsets.fromLTRB(20, 8, 20, 20),
-                child: FilledButton(
-                  style: FilledButton.styleFrom(
-                    backgroundColor: CocoTheme.primary,
-                    minimumSize: const Size.fromHeight(48),
-                  ),
-                  onPressed: onSaveCourse,
-                  child: const Text('코스 저장하기'),
-                ),
-              ),
-            ],
-          ),
+            );
+          },
         );
       },
     );
