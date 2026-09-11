@@ -31,7 +31,7 @@ public class User {
     private String nickname;
 
     @Column(nullable = false, length = 10)
-    private String language;
+    private String locale;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 10)
@@ -45,11 +45,11 @@ public class User {
     private LocalDateTime createdAt;
 
     @Builder
-    public User(String email, String password, String nickname, String language, Role role, String nationality, LocalDateTime createdAt) {
+    public User(String email, String password, String nickname, String locale, Role role, String nationality, LocalDateTime createdAt) {
         this.email = email;
         this.password = password;
         this.nickname = nickname;
-        this.language = language;
+        this.locale = locale;
         this.role = role;
         this.nationality = nationality;
     }

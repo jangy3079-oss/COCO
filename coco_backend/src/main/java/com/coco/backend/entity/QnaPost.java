@@ -30,17 +30,17 @@ public class QnaPost {
 
     @Column(length = 5)
 
-    private String language;
+    private String locale;
 
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
 
     @Builder
-    public QnaPost(User user, String question, String language) {
+    public QnaPost(User user, String question, String locale) {
         this.user = user;
         this.question = question;
-        this.language = language;
+        this.locale = locale;
     }
 }
 

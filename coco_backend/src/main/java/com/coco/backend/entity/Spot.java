@@ -22,8 +22,14 @@ public class Spot {
     @Column(name = "tour_apiid", length = 20)
     private String tourApiid;
 
-    @Column(length = 100)
-    private String title;
+    @Column(name = "title_ko", length = 100)
+    private String titleKo;
+
+    @Column(name = "title_en", length = 100)
+    private String titleEn;
+
+    @Column(name = "title_ja", length = 100)
+    private String titleJa;
 
 
     @Column(nullable = false)
@@ -48,9 +54,11 @@ public class Spot {
     private LocalDateTime createdAt;
 
     @Builder
-    public Spot(String tourApiid, String title, Double lat, Double lng, String address, String category, String imageUrl) {
+    public Spot(String tourApiid, String titleKo, String titleEn, String titleJa, Double lat, Double lng, String address, String category, String imageUrl) {
         this.tourApiid = tourApiid;
-        this.title = title;
+        this.titleKo = titleKo;
+        this.titleEn = titleEn;
+        this.titleJa = titleJa;
         this.lat = lat;
         this.lng = lng;
         this.address = address;
