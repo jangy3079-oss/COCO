@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../data/repositories/spot_repository.dart';
 import 'map_mock_data.dart';
 
 class SpotDetailScreen extends StatefulWidget {
@@ -13,6 +14,82 @@ class SpotDetailScreen extends StatefulWidget {
 
 class _SpotDetailScreenState extends State<SpotDetailScreen> {
   bool _liked = true;
+
+  // "db-"로 시작하면 목업이 아니라 실제 DB(TourAPI/카카오 로컬 수집) 스팟이다.
+  bool get _isDbSpot => widget.spotId.startsWith('db-');
+
+  final _spotRepository = SpotRepository();
+  bool _loading = false;
+  bool _loadFailed = false;
+  // "이런 스팟은 어때요"용 — 현재 DB 스팟 주변의 다른 실제 스팟들.
+  List<MockSpot> _relatedDbSpots = [];
+
+  // 연관 스팟을 찾을 반경(도 단위) — 위경도 1도 ≈ 111km라 0.01이면 대략 1km 남짓.
+  // 별도 "연관 관광지" API 없이, 주변 스팟을 그냥 작은 뷰포트로 다시 조회해서 대체한다.
+  static const double _relatedRadiusDeg = 0.01;
+
+  @override
+  void initState() {
+    super.initState();
+    if (_isDbSpot) {
+      if (dbSpotCache.containsKey(widget.spotId)) {
+        _loadRelatedDbSpots();
+      } else {
+        _loadDbSpot();
+      }
+    }
+  }
+
+  Future<void> _loadDbSpot() async {
+    setState(() => _loading = true);
+    try {
+      final id = int.parse(widget.spotId.substring(3));
+      final spot = await _spotRepository.fetchById(id);
+      if (!mounted) return;
+      if (spot == null) {
+        setState(() {
+          _loading = false;
+          _loadFailed = true;
+        });
+        return;
+      }
+      dbSpotCache[widget.spotId] = mockSpotFromDb(spot);
+      setState(() => _loading = false);
+      _loadRelatedDbSpots();
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _loading = false;
+        _loadFailed = true;
+      });
+    }
+  }
+
+  Future<void> _loadRelatedDbSpots() async {
+    final spot = dbSpotCache[widget.spotId];
+    if (spot == null) return;
+    try {
+      final nearby = await _spotRepository.fetchSpotsInViewport(
+        swLat: spot.lat - _relatedRadiusDeg,
+        neLat: spot.lat + _relatedRadiusDeg,
+        swLng: spot.lng - _relatedRadiusDeg,
+        neLng: spot.lng + _relatedRadiusDeg,
+      );
+      if (!mounted) return;
+      final related = nearby
+          .where((s) => 'db-${s.id}' != widget.spotId)
+          .take(3)
+          .map(mockSpotFromDb)
+          .toList();
+      // 스팟 상세로 다시 들어갈 때 재조회 없이 바로 찾을 수 있게 캐싱.
+      for (final s in related) {
+        dbSpotCache[s.id] = s;
+      }
+      setState(() => _relatedDbSpots = related);
+    } catch (e) {
+      debugPrint('[SpotDetailScreen] 연관 스팟 조회 실패: $e');
+    }
+  }
 
   // 찜(저장) 상태는 map_mock_data.dart의 공유 savedSpotIds를 그대로 사용한다
   // (지도 탭 북마크·MY탭 "찜한 스팟"과 같은 상태를 봐야 하므로 화면 로컬 State가 아님).
@@ -28,6 +105,7 @@ class _SpotDetailScreenState extends State<SpotDetailScreen> {
   }
 
   MockSpot? get _spot {
+    if (_isDbSpot) return dbSpotCache[widget.spotId];
     for (final spot in mockSpots) {
       if (spot.id == widget.spotId) return spot;
     }
@@ -36,6 +114,16 @@ class _SpotDetailScreenState extends State<SpotDetailScreen> {
 
   @override
   Widget build(BuildContext context) {
+    if (_isDbSpot && _loading) {
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    }
+    if (_isDbSpot && _loadFailed) {
+      return Scaffold(
+        appBar: AppBar(leading: const BackButton()),
+        body: const Center(child: Text('스팟 정보를 불러오지 못했어요')),
+      );
+    }
+
     final spot = _spot;
     if (spot == null) {
       return Scaffold(
@@ -44,7 +132,10 @@ class _SpotDetailScreenState extends State<SpotDetailScreen> {
       );
     }
 
-    final related = mockSpots.where((s) => s.id != spot.id).take(3).toList();
+    // DB 스팟은 주변 실제 스팟을(뷰포트 재조회로), 목업 스팟은 그대로 목업 중에서 고른다.
+    final related = _isDbSpot
+        ? _relatedDbSpots
+        : mockSpots.where((s) => s.id != spot.id).take(3).toList();
 
     return Scaffold(
       backgroundColor: Colors.white,

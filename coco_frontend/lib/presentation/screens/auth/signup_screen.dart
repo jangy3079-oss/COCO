@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import '../../../core/network/auth_token_store.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../data/models/user_type.dart';
+import '../../../data/repositories/auth_repository.dart';
 
 class SignupScreen extends StatefulWidget {
   const SignupScreen({super.key});
@@ -11,6 +13,7 @@ class SignupScreen extends StatefulWidget {
 }
 
 class _SignupScreenState extends State<SignupScreen> {
+  final _authRepository = AuthRepository();
   int _step = 1; // 1: 유형 선택, 2: 정보 입력 + 약관
   UserType _role = UserType.local;
 
@@ -68,15 +71,25 @@ class _SignupScreenState extends State<SignupScreen> {
   Future<void> _handleSignup() async {
     if (!_canSignup) return;
     setState(() => _isLoading = true);
-    // TODO(backend): POST /api/auth/signup 연동
-    // body: { nickname, email, password, role: _role.apiValue }
-    await Future.delayed(const Duration(milliseconds: 400));
-    if (!mounted) return;
-    setState(() => _isLoading = false);
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('가입이 완료됐어요')),
-    );
-    context.go('/feed');
+    try {
+      final result = await _authRepository.signup(
+        email: _emailController.text.trim(),
+        password: _passwordController.text,
+        nickname: _nicknameController.text.trim(),
+        role: _role.apiValue,
+      );
+      AuthTokenStore.setToken(result.accessToken);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('가입이 완료됐어요')),
+      );
+      context.go('/feed');
+    } on AuthException catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.message)));
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
   }
 
   @override

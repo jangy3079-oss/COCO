@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/network/dio_client.dart';
+import '../../../data/repositories/feed_repository.dart';
 import 'feed_mock_data.dart';
 import 'feed_screen.dart' show showShareSheet;
 
@@ -22,11 +24,35 @@ class FeedPostDetailScreen extends StatefulWidget {
 
 class _FeedPostDetailScreenState extends State<FeedPostDetailScreen> {
   final _commentController = TextEditingController();
+  final _feedRepository = FeedRepository();
   int _slide = 0;
+  bool _submittingComment = false;
 
   bool get _isRoute => widget.item.type == FeedPostType.route;
   int get _totalSlides => (_isRoute ? widget.item.imgCount + 1 : widget.item.imgCount).clamp(1, 99);
   bool get _onMapSlide => _isRoute && _slide == _totalSlides - 1;
+
+  @override
+  void initState() {
+    super.initState();
+    // 실제 게시물이면 댓글은 목록 조회 응답에 안 담겨있어서 상세 화면 진입 시 따로 가져온다.
+    final postId = widget.item.realPostId;
+    if (postId != null) _loadComments(postId);
+  }
+
+  Future<void> _loadComments(int postId) async {
+    try {
+      final comments = await _feedRepository.fetchComments(postId);
+      if (!mounted) return;
+      setState(() {
+        widget.item.comments
+          ..clear()
+          ..addAll(comments.map(feedCommentFromDto));
+      });
+    } catch (e) {
+      debugPrint('[FeedPostDetailScreen] 댓글 조회 실패: $e');
+    }
+  }
 
   @override
   void dispose() {
@@ -34,13 +60,52 @@ class _FeedPostDetailScreenState extends State<FeedPostDetailScreen> {
     super.dispose();
   }
 
-  void _submitComment() {
+  Future<void> _toggleLike() async {
+    final postId = widget.item.realPostId;
+    if (postId == null) {
+      setState(() => widget.item.liked = !widget.item.liked);
+      return;
+    }
+    setState(() => widget.item.liked = !widget.item.liked);
+    try {
+      await _feedRepository.toggleLike(postId);
+    } catch (e) {
+      debugPrint('[FeedPostDetailScreen] 좋아요 실패: $e');
+      if (mounted) setState(() => widget.item.liked = !widget.item.liked);
+    }
+  }
+
+  Future<void> _submitComment() async {
     final text = _commentController.text.trim();
-    if (text.isEmpty) return;
-    setState(() {
-      widget.item.comments.add(FeedComment(id: 'c${DateTime.now().millisecondsSinceEpoch}', author: '나', text: text));
-    });
-    _commentController.clear();
+    if (text.isEmpty || _submittingComment) return;
+
+    final postId = widget.item.realPostId;
+    if (postId == null) {
+      // 목업 시드 게시물은 예전처럼 로컬에만 추가.
+      setState(() {
+        widget.item.comments.add(FeedComment(id: 'c${DateTime.now().millisecondsSinceEpoch}', author: '나', text: text));
+      });
+      _commentController.clear();
+      return;
+    }
+
+    setState(() => _submittingComment = true);
+    try {
+      final saved = await _feedRepository.createComment(postId, text);
+      if (!mounted) return;
+      setState(() {
+        widget.item.comments.add(feedCommentFromDto(saved));
+        _submittingComment = false;
+      });
+      _commentController.clear();
+    } catch (e) {
+      debugPrint('[FeedPostDetailScreen] 댓글 작성 실패: $e');
+      if (!mounted) return;
+      setState(() => _submittingComment = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('댓글을 올리지 못했어요. 로그인 상태를 확인해주세요.')),
+      );
+    }
   }
 
   void _prevSlide() => setState(() => _slide = (_slide - 1 + _totalSlides) % _totalSlides);
@@ -104,11 +169,13 @@ class _FeedPostDetailScreenState extends State<FeedPostDetailScreen> {
                               Positioned.fill(
                                 child: _onMapSlide
                                     ? const _RouteMapSlide()
-                                    : Container(
-                                        color: color.withOpacity(0.12),
-                                        alignment: Alignment.center,
-                                        child: Icon(categoryIcon(item.category), size: 40, color: color.withOpacity(0.4)),
-                                      ),
+                                    : item.imageUrl != null
+                                        ? Image.network('${DioClient.baseUrl}${item.imageUrl}', fit: BoxFit.cover)
+                                        : Container(
+                                            color: color.withOpacity(0.12),
+                                            alignment: Alignment.center,
+                                            child: Icon(categoryIcon(item.category), size: 40, color: color.withOpacity(0.4)),
+                                          ),
                               ),
                               if (_totalSlides > 1) ...[
                                 Positioned(
@@ -196,7 +263,7 @@ class _FeedPostDetailScreenState extends State<FeedPostDetailScreen> {
                                 icon: item.liked ? Icons.favorite_rounded : Icons.favorite_border_rounded,
                                 iconColor: item.liked ? CocoTheme.primary : Colors.grey.shade600,
                                 label: '${item.likeCount}',
-                                onTap: () => setState(() => item.liked = !item.liked),
+                                onTap: _toggleLike,
                               ),
                               const SizedBox(width: 18),
                               _ActionIcon(

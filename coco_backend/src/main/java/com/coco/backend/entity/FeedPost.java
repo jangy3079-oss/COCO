@@ -52,4 +52,15 @@ public class FeedPost {
         // 게시글이 처음 생성될 때 좋아요 수는 무조건 0이어야 하므로
         this.likeCount = likeCount != null ? likeCount : 0;
     }
+
+    // 좋아요 토글(FeedService.toggleLike) 전용 — like_count 컬럼을 여기서만 증감시킨다.
+    public void increaseLike() {
+        this.likeCount++;
+    }
+
+    public void decreaseLike() {
+        if (this.likeCount > 0) {
+            this.likeCount--;
+        }
+    }
 }

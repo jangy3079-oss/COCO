@@ -48,6 +48,11 @@ dependencies:
 
   # 카카오맵 JS interop (Flutter Web 전용) — package:web 타입 바인딩
   web: ^1.0.0
+  # Flutter Web에서 지도(HtmlElementView) 위에 겹쳐진 위젯(하단 시트 드래그 핸들 등)의
+  # 포인터 이벤트가 아래 지도로 새어나가는 걸 막는 공식 flutter.dev 패키지.
+  # (지도 위 위젯은 캔버스로만 그려져서, 실제 브라우저 DOM 히트테스트는 밑에 깔린
+  # 지도 플랫폼뷰가 그대로 가로채 버림 — CSS pointer-events나 IgnorePointer로는 못 막음)
+  pointer_interceptor: ^0.10.1+2
 
 dev_dependencies:
   flutter_test:

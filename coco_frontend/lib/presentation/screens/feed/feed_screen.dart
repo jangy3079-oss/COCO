@@ -3,6 +3,8 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/network/dio_client.dart';
+import '../../../data/repositories/feed_repository.dart';
 import 'feed_mock_data.dart';
 
 class FeedScreen extends StatefulWidget {
@@ -20,11 +22,15 @@ class _FeedScreenState extends State<FeedScreen> {
   bool _loadingMore = false;
 
   final _scrollController = ScrollController();
+  final _feedRepository = FeedRepository();
+  // GET /api/feed로 받아온 실제 게시물 — mockFeedItems와 합쳐서 보여준다.
+  List<FeedItem> _realItems = [];
 
   @override
   void initState() {
     super.initState();
     _scrollController.addListener(_onScroll);
+    _loadRealPosts();
   }
 
   @override
@@ -34,12 +40,31 @@ class _FeedScreenState extends State<FeedScreen> {
     super.dispose();
   }
 
+  Future<void> _loadRealPosts() async {
+    try {
+      final posts = await _feedRepository.fetchFeed();
+      if (!mounted) return;
+      setState(() => _realItems = posts.map(feedItemFromPost).toList());
+    } catch (e) {
+      debugPrint('[FeedScreen] 피드 목록 조회 실패: $e');
+    }
+  }
+
   bool get _isRankingView => _typeFilter == FeedPostType.route;
 
   List<FeedItem> get _filteredSorted {
-    var list = mockFeedItems
+    // 실제 DB 게시물(_realItems)은 동네 정보가 아직 백엔드에서 안 내려와서
+    // dongId가 'all'로 세팅돼 있다 — 동네 필터와 무관하게 항상 포함시킨다.
+    // 타입 필터는 실제 게시물도 적용 (코스 필터 시엔 실제 게시물이 spot 타입이므로 제외됨).
+    final realFiltered = _realItems
+        .where((it) => _typeFilter == null || it.type == _typeFilter)
+        .toList();
+    final mockFiltered = mockFeedItems
         .where((it) => (_dongId == 'all' || it.dongId == _dongId) && (_typeFilter == null || it.type == _typeFilter))
         .toList();
+
+    // 중복 방지: 실제 게시물 id는 'real-{n}' 형태라 목업과 겹치지 않는다.
+    var list = [...realFiltered, ...mockFiltered];
 
     switch (_sortBy) {
       case 'likes':
@@ -106,7 +131,24 @@ class _FeedScreenState extends State<FeedScreen> {
 
   Future<void> _openComposer() async {
     await context.push('/feed/compose');
-    if (mounted) setState(() {});
+    if (mounted) await _loadRealPosts();
+  }
+
+  // 실제 게시물(item.realPostId != null)은 서버에 좋아요를 반영하고, 목업 시드 데이터는
+  // 예전처럼 로컬에서만 토글한다. 낙관적으로 먼저 뒤집고, 실패하면 원래대로 되돌린다.
+  Future<void> _toggleLike(FeedItem item) async {
+    final postId = item.realPostId;
+    if (postId == null) {
+      setState(() => item.liked = !item.liked);
+      return;
+    }
+    setState(() => item.liked = !item.liked);
+    try {
+      await _feedRepository.toggleLike(postId);
+    } catch (e) {
+      debugPrint('[FeedScreen] 좋아요 실패: $e');
+      if (mounted) setState(() => item.liked = !item.liked);
+    }
   }
 
   Future<void> _share(FeedItem item) async {
@@ -177,7 +219,7 @@ class _FeedScreenState extends State<FeedScreen> {
                             final item = visibleItems[i];
                             return _FeedCard(
                               item: item,
-                              onToggleLike: () => setState(() => item.liked = !item.liked),
+                              onToggleLike: () => _toggleLike(item),
                               onToggleSave: () => setState(() => item.saved = !item.saved),
                               onShare: () => _share(item),
                               onPrevImg: () =>
@@ -622,6 +664,10 @@ class _FeedCard extends StatelessWidget {
               Text(item.author ?? '', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: CocoTheme.secondary)),
               const SizedBox(width: 6),
               const _LocalBadge(),
+              if (item.trending) ...[
+                const SizedBox(width: 6),
+                const _TrendingBadge(),
+              ],
               const Spacer(),
               Text(item.timeLabel, style: TextStyle(fontSize: 12, color: Colors.grey.shade500)),
             ],
@@ -691,6 +737,21 @@ class _LocalBadge extends StatelessWidget {
   }
 }
 
+// 게시물이 태그한 스팟이 인기(trending) 상태일 때 표시 — 지도 탭의 로컬픽/인기 핀
+// 강조색(#FF7A33)과 맞춰서 "인기 스팟" 개념을 시각적으로 통일했다.
+class _TrendingBadge extends StatelessWidget {
+  const _TrendingBadge();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+      decoration: BoxDecoration(color: const Color(0xFFFF7A33).withOpacity(0.14), borderRadius: BorderRadius.circular(10)),
+      child: const Text('인기', style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w700, color: Color(0xFFFF7A33))),
+    );
+  }
+}
+
 class _FeedCardPhoto extends StatelessWidget {
   final FeedItem item;
   final VoidCallback onTap;
@@ -712,17 +773,20 @@ class _FeedCardPhoto extends StatelessWidget {
           onTap: onTap,
           child: Stack(
             children: [
-              // TODO: feed_posts.image_url 연동 전까지의 사진 플레이스홀더
+              // 실제 업로드된 사진이 있으면 그걸 보여주고, 없으면(목업/코스/사진 미첨부)
+              // 카테고리 색상 플레이스홀더를 그대로 쓴다.
               Positioned.fill(
-                child: Container(
-                  color: color.withOpacity(0.12),
-                  alignment: Alignment.center,
-                  child: Icon(
-                    isRoute ? Icons.signpost_rounded : categoryIcon(item.category),
-                    size: 36,
-                    color: color.withOpacity(0.4),
-                  ),
-                ),
+                child: item.imageUrl != null
+                    ? Image.network('${DioClient.baseUrl}${item.imageUrl}', fit: BoxFit.cover)
+                    : Container(
+                        color: color.withOpacity(0.12),
+                        alignment: Alignment.center,
+                        child: Icon(
+                          isRoute ? Icons.signpost_rounded : categoryIcon(item.category),
+                          size: 36,
+                          color: color.withOpacity(0.4),
+                        ),
+                      ),
               ),
               if (isRoute)
                 Positioned(

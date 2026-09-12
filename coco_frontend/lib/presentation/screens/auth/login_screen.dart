@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import '../../../core/network/auth_token_store.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../data/repositories/auth_repository.dart';
 import '../../widgets/common/coco_mark.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -11,6 +13,7 @@ class LoginScreen extends StatefulWidget {
 }
 
 class _LoginScreenState extends State<LoginScreen> {
+  final _authRepository = AuthRepository();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   bool _showPassword = false;
@@ -30,11 +33,20 @@ class _LoginScreenState extends State<LoginScreen> {
   Future<void> _handleLogin() async {
     if (!_canLogin) return;
     setState(() => _isLoading = true);
-    // TODO(backend): POST /api/auth/login 연동 후 토큰 저장 로직으로 교체
-    await Future.delayed(const Duration(milliseconds: 400));
-    if (!mounted) return;
-    setState(() => _isLoading = false);
-    context.go('/feed');
+    try {
+      final result = await _authRepository.login(
+        email: _emailController.text.trim(),
+        password: _passwordController.text,
+      );
+      AuthTokenStore.setToken(result.accessToken);
+      if (!mounted) return;
+      context.go('/feed');
+    } on AuthException catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.message)));
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
   }
 
   @override

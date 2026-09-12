@@ -1,9 +1,13 @@
+import 'dart:async';
 import 'dart:ui';
 
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:go_router/go_router.dart';
+import 'package:pointer_interceptor/pointer_interceptor.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../data/models/spot.dart' as db;
+import '../../../data/repositories/spot_repository.dart';
 import '../../widgets/map/kakao_map_view.dart';
 import 'map_mock_data.dart';
 
@@ -40,6 +44,12 @@ class _MapScreenState extends State<MapScreen> {
   // `/api/spot?swLat=...&neLat=...` 뷰포트 쿼리를 호출하도록 교체하면 된다.
   double? _swLat, _swLng, _neLat, _neLng;
 
+  // 실제 DB(TourAPI/카카오 로컬로 수집된) 스팟 — 뷰포트가 바뀔 때마다 새로 조회한다.
+  // 탭하면 spot_detail_screen이 db- 접두어를 보고 실제 데이터를 불러온다(mockSpotFromDb 어댑터).
+  // 지도 마커뿐 아니라 하단 "주변 스팟" 시트(_nearbySheetSpots)도 이 값을 함께 참조한다.
+  final _spotRepository = SpotRepository();
+  List<db.Spot> _dbSpots = [];
+
   void _onBoundsChanged(double swLat, double swLng, double neLat, double neLng) {
     setState(() {
       _swLat = swLat;
@@ -47,12 +57,43 @@ class _MapScreenState extends State<MapScreen> {
       _neLat = neLat;
       _neLng = neLng;
     });
+    _fetchDbSpots();
   }
 
-  // 하단 시트가 지금 화면의 몇 %를 차지하고 있는지 — 시트 위에 뜬 플로팅 버튼이
-  // 시트를 따라 같이 움직이게 하려고 ValueNotifier로 공유한다(Stack 전체를
-  // setState로 다시 그리지 않고 버튼 위치만 가볍게 갱신하기 위함).
+  Future<void> _fetchDbSpots() async {
+    final swLat = _swLat, swLng = _swLng, neLat = _neLat, neLng = _neLng;
+    if (swLat == null || swLng == null || neLat == null || neLng == null) return;
+    try {
+      final spots = await _spotRepository.fetchSpotsInViewport(
+        swLat: swLat,
+        neLat: neLat,
+        swLng: swLng,
+        neLng: neLng,
+        category: _selectedCategory == '전체' ? null : _selectedCategory,
+      );
+      if (!mounted) return;
+      setState(() => _dbSpots = spots);
+      // 코스 저장 등 다른 화면에서도 id만으로 이 스팟들을 다시 찾을 수 있게 캐싱.
+      for (final spot in spots) {
+        dbSpotCache['db-${spot.id}'] = mockSpotFromDb(spot);
+      }
+    } catch (e) {
+      debugPrint('[MapScreen] 실제 스팟 조회 실패: $e');
+    }
+  }
+
+  // 하단 시트가 지금 화면의 몇 %를 차지하고 있는지 — Stack 전체를 setState로
+  // 다시 그리지 않고 시트/버튼 위치만 가볍게 갱신하기 위해 ValueNotifier로 공유한다.
   final ValueNotifier<double> _sheetExtent = ValueNotifier(kSheetMidExtent);
+
+  // 검색창 상태 — 목업 스팟은 즉시(클라이언트 필터), DB 스팟은 route_builder_screen의
+  // "+ 스팟 추가"와 동일하게 300ms 디바운스 후 백엔드 검색(SpotRepository.search)으로 조회한다.
+  // 뷰포트에 안 걸려도 결과가 나와야 해서(예: 지금 안 보이는 동네의 스팟 이름 검색)
+  // 클라이언트 필터가 아니라 전체 DB 대상 검색 API를 그대로 재사용했다.
+  final TextEditingController _searchController = TextEditingController();
+  Timer? _searchDebounce;
+  String _searchQuery = '';
+  List<db.Spot> _searchDbResults = [];
 
   @override
   void initState() {
@@ -63,8 +104,70 @@ class _MapScreenState extends State<MapScreen> {
   @override
   void dispose() {
     _sheetExtent.dispose();
+    _searchController.dispose();
+    _searchDebounce?.cancel();
     super.dispose();
   }
+
+  void _onSearchChanged(String query) {
+    setState(() => _searchQuery = query);
+    _searchDebounce?.cancel();
+    final trimmed = query.trim();
+    if (trimmed.isEmpty) {
+      setState(() => _searchDbResults = []);
+      return;
+    }
+    _searchDebounce = Timer(const Duration(milliseconds: 300), () async {
+      try {
+        final results = await _spotRepository.search(trimmed);
+        if (!mounted) return;
+        // 상세 화면으로 바로 진입할 수 있게 다른 화면들과 동일하게 미리 캐싱.
+        for (final spot in results) {
+          dbSpotCache['db-${spot.id}'] = mockSpotFromDb(spot);
+        }
+        setState(() => _searchDbResults = results);
+      } catch (e) {
+        debugPrint('[MapScreen] 스팟 검색 실패: $e');
+      }
+    });
+  }
+
+  // 목업 스팟은 API 호출 없이 이름/카테고리/주소로 즉시 필터링.
+  List<MockSpot> get _searchMockResults {
+    final q = _searchQuery.trim();
+    if (q.isEmpty) return const [];
+    return mockSpots
+        .where((s) =>
+            s.name.contains(q) || s.category.contains(q) || s.address.contains(q))
+        .toList();
+  }
+
+  void _clearSearch() {
+    _searchController.clear();
+    _searchDebounce?.cancel();
+    setState(() {
+      _searchQuery = '';
+      _searchDbResults = [];
+    });
+    FocusScope.of(context).unfocus();
+  }
+
+  // 예전엔 검색 결과를 탭하면 바로 상세 화면으로 이동했는데, 지금은 그 스팟의
+  // 핀 위치로 지도만 이동시킨다 — 상세를 보려면 그 자리에서 핀을 눌러 말풍선의
+  // "자세히 보기"까지 눌러야 한다(핀 탭 흐름과 진입 경로를 통일).
+  void _openSearchResult(MockSpot spot) {
+    _clearSearch();
+    setState(() {
+      _centerLat = spot.lat;
+      _centerLng = spot.lng;
+    });
+  }
+
+  // 검색창 드롭다운에 보여줄 결과 — 목업(즉시) + DB(디바운스) 결과를 합친다.
+  List<MockSpot> get _searchResults => [
+        ..._searchMockResults,
+        ..._searchDbResults.map(mockSpotFromDb),
+      ];
 
   Future<void> _loadCurrentLocation() async {
     try {
@@ -106,6 +209,14 @@ class _MapScreenState extends State<MapScreen> {
         .toList();
   }
 
+  // 하단 "주변 스팟" 시트용 — 지도 마커와 동일하게 목업 + 실제 DB 스팟을 합쳐서 보여준다.
+  // (마커는 이미 _filteredSpots + _dbSpots를 합쳐서 그리고 있었는데, 시트만 목업만 보고 있던
+  // 게 버그였음 — 데이터 소스는 같으니 마커 쪽과 동일하게 합친다.)
+  List<MockSpot> get _nearbySheetSpots => [
+        ..._filteredSpots,
+        ..._dbSpots.map(mockSpotFromDb),
+      ];
+
   // 찜(저장) 상태는 map_mock_data.dart의 공유 savedSpotIds를 그대로 사용한다
   // (스팟 상세 화면·MY탭과 동일한 상태를 공유해야 하므로 화면 로컬 State가 아님).
   void _toggleSaved(String spotId) {
@@ -129,8 +240,23 @@ class _MapScreenState extends State<MapScreen> {
       );
       return;
     }
-    final selectedStops =
-        mockSpots.where((s) => savedSpotIds.contains(s.id)).toList();
+    // 찜한 id 순서대로 목업/DB 스팟을 각자의 출처에서 찾아 합친다.
+    // (DB 스팟은 dbSpotCache에서 — 지금 지도 화면에 안 보이는 곳이어도
+    // 예전에 한 번이라도 불러온 적 있으면 여기서 찾을 수 있다.)
+    final selectedStops = <MockSpot>[];
+    for (final id in savedSpotIds) {
+      if (id.startsWith('db-')) {
+        final dbSpot = dbSpotCache[id];
+        if (dbSpot != null) selectedStops.add(dbSpot);
+      } else {
+        for (final s in mockSpots) {
+          if (s.id == id) {
+            selectedStops.add(s);
+            break;
+          }
+        }
+      }
+    }
     context.push('/map/route/new', extra: selectedStops);
   }
 
@@ -152,9 +278,29 @@ class _MapScreenState extends State<MapScreen> {
                   centerLng: _centerLng,
                   markers: [
                     for (final spot in _filteredSpots)
-                      KakaoMapMarker(id: spot.id, lat: spot.lat, lng: spot.lng, name: spot.name),
+                      KakaoMapMarker(
+                        id: spot.id,
+                        lat: spot.lat,
+                        lng: spot.lng,
+                        name: spot.name,
+                        subtitle: spot.category,
+                      ),
+                    // 실제 DB 스팟은 "db-" 접두어로 구분해서, 탭했을 때 목업 상세 화면이 아니라
+                    // 별도 미리보기 시트로 보내준다 (mockSpotById가 실제 id를 못 찾아 터지는 것 방지).
+                    for (final spot in _dbSpots)
+                      KakaoMapMarker(
+                        id: 'db-${spot.id}',
+                        lat: spot.lat,
+                        lng: spot.lng,
+                        name: spot.title,
+                        subtitle: spot.category,
+                        isLocalPick: spot.isLocalPick,
+                        trending: spot.trending,
+                      ),
                   ],
-                  onMarkerTap: (spotId) => _openSpotDetail(mockSpotById(spotId)),
+                  onMarkerTap: (spotId) => spotId.startsWith('db-')
+                      ? context.push('/map/spot/$spotId')
+                      : _openSpotDetail(mockSpotById(spotId)),
                   myLocationLat: _locationAvailable ? _centerLat : null,
                   myLocationLng: _locationAvailable ? _centerLng : null,
                   onBoundsChanged: _onBoundsChanged,
@@ -211,16 +357,33 @@ class _MapScreenState extends State<MapScreen> {
                                 const SizedBox(height: 12),
                                 Row(
                                   children: [
-                                    const Expanded(child: _MapSearchBar()),
+                                    Expanded(
+                                      child: _MapSearchBar(
+                                        controller: _searchController,
+                                        onChanged: _onSearchChanged,
+                                        onClear: _clearSearch,
+                                      ),
+                                    ),
                                     const SizedBox(width: 10),
                                     _MyRoutesButton(onTap: () => context.push('/mypage/routes')),
                                   ],
                                 ),
+                                // 검색어가 있을 때만 결과 드롭다운을 보여준다 — 목업은 즉시,
+                                // DB는 300ms 디바운스 후 반영되므로 검색 도중 결과가 순간적으로
+                                // 늘어나는 건 자연스러운 동작.
+                                if (_searchQuery.trim().isNotEmpty)
+                                  _SearchResultsDropdown(
+                                    results: _searchResults,
+                                    onTap: _openSearchResult,
+                                  ),
                                 const SizedBox(height: 10),
                                 _CategoryChipsRow(
                                   categories: _categories,
                                   selected: _selectedCategory,
-                                  onSelected: (c) => setState(() => _selectedCategory = c),
+                                  onSelected: (c) {
+                                    setState(() => _selectedCategory = c);
+                                    _fetchDbSpots(); // 카테고리는 뷰포트 변경이 아니라서 따로 다시 조회
+                                  },
                                 ),
                                 // 블러가 서서히 사라질 여백(페이드 테일) — 이 구간에서
                                 // ShaderMask 알파가 1→0으로 떨어지며 블러도 함께 옅어진다.
@@ -235,14 +398,16 @@ class _MapScreenState extends State<MapScreen> {
                 ),
               ),
               // 우측 하단 버튼 묶음 — 스팟 등록 + 현재 위치로 재중심을 같은 줄에 나란히 배치.
-              // 시트를 드래그하면 _sheetExtent가 바뀌고, 이 버튼들도 바로 따라 움직인다
-              // (ValueListenableBuilder라 이 버튼 부분만 다시 그려지고 지도는 그대로 유지됨).
+              // 시트를 내릴 때(_sheetExtent < kSheetMidExtent)는 같이 내려가지만,
+              // 올릴 때는 기본 위치(kSheetMidExtent)에 고정되어 따라가지 않는다.
+              // 상태 없이 매번 min()으로 계산하니 이전처럼 "멈춘 채 안 올라오는" 버그가
+              // 생길 여지가 없다.
               ValueListenableBuilder<double>(
                 valueListenable: _sheetExtent,
                 builder: (context, extent, child) => Positioned(
                   left: 16,
                   right: 16,
-                  bottom: constraints.maxHeight * extent + 16,
+                  bottom: constraints.maxHeight * (extent < kSheetMidExtent ? extent : kSheetMidExtent) + 16,
                   child: child!,
                 ),
                 child: Row(
@@ -257,11 +422,13 @@ class _MapScreenState extends State<MapScreen> {
               // 하단 "주변 스팟" 바텀시트 (드래그로 확장 가능)
               _NearbySpotsSheet(
                 extentNotifier: _sheetExtent,
-                spots: _filteredSpots,
+                spots: _nearbySheetSpots,
                 savedSpotIds: savedSpotIds,
                 onToggleSaved: _toggleSaved,
                 onSpotTap: _openSpotDetail,
                 onSaveCourse: _handleSaveCourse,
+                viewSwLat: _swLat,
+                viewNeLat: _neLat,
               ),
             ],
           );
@@ -299,7 +466,15 @@ class _MyRoutesButton extends StatelessWidget {
 }
 
 class _MapSearchBar extends StatelessWidget {
-  const _MapSearchBar();
+  final TextEditingController controller;
+  final ValueChanged<String> onChanged;
+  final VoidCallback onClear;
+
+  const _MapSearchBar({
+    required this.controller,
+    required this.onChanged,
+    required this.onClear,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -316,15 +491,73 @@ class _MapSearchBar extends StatelessWidget {
           ),
         ],
       ),
-      child: const TextField(
+      child: TextField(
+        controller: controller,
+        onChanged: onChanged,
         decoration: InputDecoration(
           border: InputBorder.none,
-          prefixIcon: Icon(Icons.search, color: Colors.grey),
+          prefixIcon: const Icon(Icons.search, color: Colors.grey),
+          suffixIcon: controller.text.isEmpty
+              ? null
+              : IconButton(
+                  icon: const Icon(Icons.close_rounded, color: Colors.grey, size: 20),
+                  onPressed: onClear,
+                ),
           hintText: '골목, 노포, 공원 검색...',
-          hintStyle: TextStyle(fontSize: 14, color: Colors.grey),
-          contentPadding: EdgeInsets.symmetric(vertical: 14),
+          hintStyle: const TextStyle(fontSize: 14, color: Colors.grey),
+          contentPadding: const EdgeInsets.symmetric(vertical: 14),
         ),
       ),
+    );
+  }
+}
+
+/// 검색창 바로 아래 뜨는 결과 드롭다운 — 목업/DB 스팟을 가리지 않고 한 목록으로 보여준다.
+class _SearchResultsDropdown extends StatelessWidget {
+  final List<MockSpot> results;
+  final ValueChanged<MockSpot> onTap;
+
+  const _SearchResultsDropdown({required this.results, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.only(top: 8),
+      constraints: const BoxConstraints(maxHeight: 240),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.08),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: results.isEmpty
+          ? const Padding(
+              padding: EdgeInsets.symmetric(vertical: 20),
+              child: Center(
+                child: Text('검색 결과가 없어요', style: TextStyle(fontSize: 13, color: Colors.grey)),
+              ),
+            )
+          : ListView.separated(
+              shrinkWrap: true,
+              padding: const EdgeInsets.symmetric(vertical: 4),
+              itemCount: results.length,
+              separatorBuilder: (_, __) => Divider(height: 1, color: Colors.black.withOpacity(0.06)),
+              itemBuilder: (context, i) {
+                final spot = results[i];
+                return ListTile(
+                  dense: true,
+                  leading: Icon(spot.icon, color: spot.pinColor, size: 20),
+                  title: Text(spot.name, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
+                  subtitle: Text(spot.address, style: TextStyle(fontSize: 12, color: Colors.grey.shade600)),
+                  onTap: () => onTap(spot),
+                );
+              },
+            ),
     );
   }
 }
@@ -608,6 +841,10 @@ class _NearbySpotsSheet extends StatefulWidget {
   final ValueChanged<String> onToggleSaved;
   final ValueChanged<MockSpot> onSpotTap;
   final VoidCallback onSaveCourse;
+  // 시트를 올릴수록 지도가 가려지는 면적만큼 목록도 줄어들게 하려고 받는 현재
+  // 뷰포트의 남/북 위도. null이면(아직 뷰포트를 한 번도 못 받은 초기 상태) 잘라내지 않는다.
+  final double? viewSwLat;
+  final double? viewNeLat;
 
   const _NearbySpotsSheet({
     required this.extentNotifier,
@@ -616,6 +853,8 @@ class _NearbySpotsSheet extends StatefulWidget {
     required this.onToggleSaved,
     required this.onSpotTap,
     required this.onSaveCourse,
+    this.viewSwLat,
+    this.viewNeLat,
   });
 
   @override
@@ -655,6 +894,17 @@ class _NearbySpotsSheetState extends State<_NearbySpotsSheet> {
   double _collapsedFloor(double maxHeight) =>
       kSheetCollapsedExtent > _headerMinPx / maxHeight ? kSheetCollapsedExtent : _headerMinPx / maxHeight;
 
+  // 시트가 화면의 `extent` 비율을 덮으면, 지도는 위쪽 (1-extent) 비율만 보인다.
+  // 북쪽(neLat, 화면 맨 위)부터 그 경계선까지만 "지금 보이는" 영역으로 보고,
+  // 그 아래(시트에 가려진 남쪽)에 있는 스팟은 목록에서 뺀다.
+  // (지도가 회전/기울어지지 않은 정북 방향이라는 전제 — 지도 뷰가 그 상태로 고정돼 있음)
+  List<MockSpot> _visibleSpots(double extent) {
+    final swLat = widget.viewSwLat, neLat = widget.viewNeLat;
+    if (swLat == null || neLat == null) return widget.spots;
+    final visibleSwLat = swLat + extent * (neLat - swLat);
+    return widget.spots.where((s) => s.lat >= visibleSwLat).toList();
+  }
+
   @override
   Widget build(BuildContext context) {
     return LayoutBuilder(
@@ -668,12 +918,20 @@ class _NearbySpotsSheetState extends State<_NearbySpotsSheet> {
             // 접힘 지점에 가까울 때는 리스트/버튼을 아예 안 그려서 좁은 공간에서
             // 내용이 눌리거나 넘치지 않게 한다(픽셀 기준이라 화면 크기와 무관하게 안전).
             final showBody = sheetHeight > _bodyMinPx;
+            // 시트가 덮은 만큼 화면에서 가려진 스팟은 목록에서도 뺀다 — extent가 바뀔
+            // 때마다(드래그 중에도) 이 ValueListenableBuilder가 다시 그려지니 매 프레임 반영됨.
+            final visibleSpots = _visibleSpots(extent);
 
             // Stack의 non-positioned 자식은 기본적으로 위쪽 정렬이라, 바닥에 붙는
             // 바텀시트처럼 보이려면 직접 Align(bottomCenter)로 감싸야 한다.
             return Align(
               alignment: Alignment.bottomCenter,
-              child: AnimatedContainer(
+              // 시트 전체(핸들+리스트+버튼)를 PointerInterceptor로 감싸서, 드래그/탭
+              // 제스처가 바로 아래 깔린 카카오맵(HtmlElementView)으로 새어나가 지도가
+              // 같이 팬 되는 걸 막는다 — Flutter Web 플랫폼뷰 위에 겹친 위젯의 공식
+              // 우회 방법(pointer_interceptor 패키지).
+              child: PointerInterceptor(
+                child: AnimatedContainer(
                 duration: _dragging ? Duration.zero : const Duration(milliseconds: 180),
                 curve: Curves.easeOut,
                 height: sheetHeight,
@@ -716,7 +974,8 @@ class _NearbySpotsSheetState extends State<_NearbySpotsSheet> {
                               mainAxisAlignment: MainAxisAlignment.spaceBetween,
                               children: [
                                 const Text('주변 스팟', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
-                                Text('${widget.spots.length}곳', style: TextStyle(fontSize: 13, color: Colors.grey.shade600)),
+                                Text('${visibleSpots.length}곳',
+                                    style: TextStyle(fontSize: 13, color: Colors.grey.shade600)),
                               ],
                             ),
                           ],
@@ -727,13 +986,13 @@ class _NearbySpotsSheetState extends State<_NearbySpotsSheet> {
                       Expanded(
                         child: ListView.separated(
                           padding: const EdgeInsets.symmetric(horizontal: 20),
-                          itemCount: widget.spots.length,
+                          itemCount: visibleSpots.length,
                           separatorBuilder: (_, __) => const Divider(height: 24),
                           itemBuilder: (context, i) => _SpotListTile(
-                            spot: widget.spots[i],
-                            saved: widget.savedSpotIds.contains(widget.spots[i].id),
-                            onToggleSaved: () => widget.onToggleSaved(widget.spots[i].id),
-                            onTap: () => widget.onSpotTap(widget.spots[i]),
+                            spot: visibleSpots[i],
+                            saved: widget.savedSpotIds.contains(visibleSpots[i].id),
+                            onToggleSaved: () => widget.onToggleSaved(visibleSpots[i].id),
+                            onTap: () => widget.onSpotTap(visibleSpots[i]),
                           ),
                         ),
                       ),
@@ -751,6 +1010,7 @@ class _NearbySpotsSheetState extends State<_NearbySpotsSheet> {
                     ],
                   ],
                 ),
+              ),
               ),
             );
           },

@@ -1,12 +1,13 @@
 import 'package:flutter/material.dart';
 import '../map/map_mock_data.dart' show MockSpot, mockSpotById;
+import '../../../data/models/feed_post.dart';
 
-// TODO: 백엔드(feed_posts/feed_comments/feed_post_likes 테이블) 연동 전까지의
-// 목업 데이터. FeedItem은 좋아요/저장/댓글이 화면 조작에 따라 바뀌는 값이라
-// (map_mock_data.dart의 MockSpot과 달리) 의도적으로 불변(immutable)이 아닌
-// 일반 클래스로 만들었다. mockFeedItems는 피드 목록·상세·작성 화면이 함께
-// 참조/수정하는 하나의 공유 리스트 — 실제 서버 연동 시 API 클라이언트가 이
-// 자리를 대체한다.
+// TODO: 백엔드(feed_comments/feed_post_likes 테이블) 연동 전까지의 목업 데이터.
+// FeedItem은 좋아요/저장/댓글이 화면 조작에 따라 바뀌는 값이라 (map_mock_data.dart의
+// MockSpot과 달리) 의도적으로 불변(immutable)이 아닌 일반 클래스로 만들었다.
+// mockFeedItems는 피드 목록·상세·작성 화면이 함께 참조/수정하는 하나의 공유
+// 리스트 — feed_posts 테이블은 이제 실제 연동됐고(FeedRepository), feed_screen이
+// 그 결과를 feedItemFromPost로 변환해 이 목업 리스트와 합쳐서 보여준다.
 enum FeedSource { coco, user }
 
 /// 피드 카드 종류 — 스팟(단일 장소) 게시물인지 골목지도(코스) 게시물인지.
@@ -68,6 +69,13 @@ class FeedItem {
   // 편집도 가능하고, 없으면(다른 사람이 올린 코스라는 뜻) 보기 전용이다.
   final List<MockSpot>? routeStops;
   final String? routeId;
+  // 이 게시물이 태그한 스팟이 지금 인기(trending) 상태인지 — 피드 카드에 "인기" 배지를
+  // 그리는 데 쓴다. 기존 목업 게시물은 전부 false, 실제 게시물만 feedItemFromPost에서
+  // FeedPost.trending 값을 그대로 받아온다.
+  final bool trending;
+  // 실제 업로드된 사진의 상대경로(/uploads/...) — 목업 게시물은 항상 null이라 기존
+  // 카테고리 색상 placeholder를 그대로 쓰고, 실제 게시물만 이 값이 있으면 진짜 사진을 그린다.
+  final String? imageUrl;
 
   bool liked;
   bool saved;
@@ -96,6 +104,8 @@ class FeedItem {
     this.stopCount,
     this.routeStops,
     this.routeId,
+    this.trending = false,
+    this.imageUrl,
     this.liked = false,
     this.saved = false,
     this.shares = 0,
@@ -111,6 +121,54 @@ class FeedItem {
   String get displayTitle => title.isNotEmpty ? title : place;
   double get distanceKm => (stopCount ?? 0) * 0.3;
   int get durationMin => (stopCount ?? 0) * 10;
+
+  // id가 'real-{n}' 형태면 실제 백엔드 게시물이라는 뜻 — 좋아요/댓글을 실제 API로
+  // 쏴야 할지(실제 게시물) 로컬에서만 토글할지(목업 시드 데이터) 이 값으로 구분한다.
+  int? get realPostId => id.startsWith('real-') ? int.tryParse(id.substring(5)) : null;
+}
+
+/// 실제 백엔드 게시물(FeedPost)을 목업 기반 FeedItem 리스트에 합쳐서 보여주기 위한 변환.
+/// 스팟의 동/구·카테고리 등 FeedPostResponse가 안 내려주는 값들은 아직 매칭할 방법이
+/// 없어 임시값(dongId 'all', category '골목')으로 채운다 — 동네 필터에 안 걸리게 하려면
+/// "전체 동네"를 선택해야 보인다는 뜻. ts는 실제 생성 시각(ms)을 그대로 써서 정렬 시
+/// 항상 목업 시드 데이터보다 위(최신)로 올라오게 한다.
+///
+/// FeedItem.likeCount는 "likes(내가 안 눌렀을 때의 기준값) + (liked?1:0)"로 계산되는데,
+/// 백엔드 likeCount는 이미 내 좋아요까지 포함된 총합이라 그대로 넣으면 liked=true일 때
+/// 1 중복 계산된다. 그래서 이미 눌렀던 상태면 likes를 1 빼서 넣어 getter 계산이 맞게 한다.
+FeedItem feedItemFromPost(FeedPost p) {
+  return FeedItem(
+    id: 'real-${p.id}',
+    source: FeedSource.user,
+    author: p.userNickname,
+    category: '골목',
+    place: p.spotName,
+    desc: p.description ?? '',
+    neighborhood: '',
+    dongId: 'all',
+    distanceMin: 0,
+    likes: p.likeCount - (p.liked ? 1 : 0),
+    saves: 0,
+    imgCount: 1,
+    ts: p.createdAt.millisecondsSinceEpoch,
+    timeLabel: _relativeTimeLabel(p.createdAt),
+    trending: p.trending,
+    imageUrl: p.imageUrl,
+    liked: p.liked,
+  );
+}
+
+/// 실제 댓글(FeedCommentDto)을 상세 화면이 이미 쓰고 있는 로컬 FeedComment 모양으로 변환.
+FeedComment feedCommentFromDto(FeedCommentDto c) =>
+    FeedComment(id: 'real-${c.id}', author: c.userNickname, text: c.content);
+
+String _relativeTimeLabel(DateTime dt) {
+  final diff = DateTime.now().difference(dt);
+  if (diff.inMinutes < 1) return '방금';
+  if (diff.inMinutes < 60) return '${diff.inMinutes}분 전';
+  if (diff.inHours < 24) return '${diff.inHours}시간 전';
+  if (diff.inDays < 2) return '어제';
+  return '${diff.inDays}일 전';
 }
 
 Color categoryColor(String category) => switch (category) {
@@ -127,18 +185,6 @@ IconData categoryIcon(String category) => switch (category) {
       '카페' => Icons.local_cafe_rounded,
       _ => Icons.place_rounded,
     };
-
-/// 게시물 작성 화면의 "장소 태그" 검색에서 후보로 보여줄 장소명 목록.
-const composerLocationCandidates = [
-  '깡통시장',
-  '젼골목',
-  '영도다리공원',
-  '흰여울문화마을',
-  '보수동책방골목',
-  '완월동 벽화골목',
-  '할매순대국',
-  '옥상카페',
-];
 
 final List<FeedItem> mockFeedItems = [
   FeedItem(

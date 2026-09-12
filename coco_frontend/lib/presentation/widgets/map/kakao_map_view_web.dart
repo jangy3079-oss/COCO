@@ -21,7 +21,18 @@ class KakaoMapMarker {
   final double lat;
   final double lng;
   final String? name; // 마커 위에 띄울 이름 태그 (null이면 태그 없이 핀만)
-  const KakaoMapMarker({required this.id, required this.lat, required this.lng, this.name});
+  final String? subtitle; // 핀 탭 시 뜨는 말풍선의 보조 정보(카테고리 등)
+  final bool isLocalPick; // true면 핀 색을 강조색(주황)으로
+  final bool trending; // true면 핀을 더 크게
+  const KakaoMapMarker({
+    required this.id,
+    required this.lat,
+    required this.lng,
+    this.name,
+    this.subtitle,
+    this.isLocalPick = false,
+    this.trending = false,
+  });
 }
 
 // web/index.html에 정의해둔 JS 브릿지 함수들. top-level external 선언은
@@ -169,7 +180,17 @@ class _KakaoMapViewState extends State<KakaoMapView> {
   void _updateMarkers() {
     if (!_mapReady) return;
     final markersJson = jsonEncode(
-      widget.markers.map((m) => {'id': m.id, 'lat': m.lat, 'lng': m.lng, 'name': m.name}).toList(),
+      widget.markers
+          .map((m) => {
+                'id': m.id,
+                'lat': m.lat,
+                'lng': m.lng,
+                'name': m.name,
+                'subtitle': m.subtitle,
+                'isLocalPick': m.isLocalPick,
+                'trending': m.trending,
+              })
+          .toList(),
     );
     void onMarkerClick(JSString id) => widget.onMarkerTap?.call(id.toDart);
     _cocoSetKakaoMarkers(_divId.toJS, markersJson.toJS, onMarkerClick.toJS);

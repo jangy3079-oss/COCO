@@ -8,7 +8,18 @@ class KakaoMapMarker {
   final double lat;
   final double lng;
   final String? name;
-  const KakaoMapMarker({required this.id, required this.lat, required this.lng, this.name});
+  final String? subtitle; // 핀 탭 시 뜨는 말풍선의 보조 정보(카테고리 등)
+  final bool isLocalPick;
+  final bool trending;
+  const KakaoMapMarker({
+    required this.id,
+    required this.lat,
+    required this.lng,
+    this.name,
+    this.subtitle,
+    this.isLocalPick = false,
+    this.trending = false,
+  });
 }
 
 class KakaoMapView extends StatelessWidget {

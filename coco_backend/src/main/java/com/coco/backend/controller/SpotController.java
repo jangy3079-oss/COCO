@@ -29,10 +29,31 @@ public class SpotController {
         return ResponseEntity.ok(spotService.findInViewport(swLat, neLat, swLng, neLng, category, locale));
     }
 
+    /** 스팟 상세 화면용 단건 조회. */
+    @GetMapping("/{id}")
+    public ResponseEntity<SpotResponse> getSpotById(@PathVariable Long id) {
+        return spotService.getById(id)
+                .map(ResponseEntity::ok)
+                .orElseGet(() -> ResponseEntity.notFound().build());
+    }
+
+    /** 제목/주소 키워드 검색 — 코스 만들기 "+ 스팟 추가" 등에서 사용. */
+    @GetMapping("/search")
+    public ResponseEntity<List<SpotResponse>> searchSpots(@RequestParam String q) {
+        return ResponseEntity.ok(spotService.search(q));
+    }
+
     /** TourAPI에서 필터링된 후보를 가져와 DB에 채워 넣는 수동 배치 트리거. */
     @PostMapping("/import")
     public ResponseEntity<Map<String, Integer>> importFromTourApi() {
         int inserted = spotService.importFromTourApi();
+        return ResponseEntity.ok(Map.of("inserted", inserted));
+    }
+
+    /** 카카오 로컬 API에서 관광 관련 카테고리로 좁힌 후보를 가져와 DB에 채워 넣는 수동 배치 트리거. */
+    @PostMapping("/import/kakao")
+    public ResponseEntity<Map<String, Integer>> importFromKakaoLocal() {
+        int inserted = spotService.importFromKakaoLocal();
         return ResponseEntity.ok(Map.of("inserted", inserted));
     }
 }

@@ -72,18 +72,37 @@ class _MySavedScreenState extends State<MySavedScreen> {
             )).toList();
       case 'spots':
       default:
-        return mockSpots.where((s) => savedSpotIds.contains(s.id)).map((s) => _SavedEntry(
-              name: s.name,
-              meta: s.subtitle,
-              color: s.pinColor,
-              icon: s.icon,
-              actionLabel: '찜 해제',
-              onAction: () => setState(() => savedSpotIds.remove(s.id)),
-              onTap: () async {
-                await context.push('/map/spot/${s.id}');
-                if (mounted) setState(() {});
-              },
-            )).toList();
+        // 찜한 id 순서대로 목업/DB 스팟을 각자의 출처에서 찾는다 — DB 스팟은
+        // map_mock_data.dart의 공유 캐시(dbSpotCache)에서(지도/상세 화면에서 한 번이라도
+        // 불러온 적 있어야 여기서도 보인다 — 앱을 새로 켠 직후라 캐시가 비어있으면 아직 안 보일 수 있음).
+        final result = <_SavedEntry>[];
+        for (final id in savedSpotIds) {
+          MockSpot? s;
+          if (id.startsWith('db-')) {
+            s = dbSpotCache[id];
+          } else {
+            for (final m in mockSpots) {
+              if (m.id == id) {
+                s = m;
+                break;
+              }
+            }
+          }
+          if (s == null) continue;
+          result.add(_SavedEntry(
+            name: s.name,
+            meta: s.subtitle,
+            color: s.pinColor,
+            icon: s.icon,
+            actionLabel: '찜 해제',
+            onAction: () => setState(() => savedSpotIds.remove(id)),
+            onTap: () async {
+              await context.push('/map/spot/$id');
+              if (mounted) setState(() {});
+            },
+          ));
+        }
+        return result;
     }
   }
 

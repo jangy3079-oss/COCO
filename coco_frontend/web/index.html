@@ -51,6 +51,83 @@
     window.__cocoMarkerClickHandlers = {}; // divId -> onMarkerClick 콜백
     window.__cocoBoundsChangedHandlers = {}; // divId -> onBoundsChanged 콜백 (뷰포트 쿼리용)
     window.__cocoKakaoLoadPromise = null;
+    window.__cocoKakaoCallout = {}; // divId -> 현재 열려있는 핀 정보 말풍선(CustomOverlay), 없으면 null
+
+    // 핀을 탭하면 바로 상세로 이동하지 않고 이 말풍선을 먼저 띄운다 — 이름/카테고리를
+    // 보여주고, "자세히 보기"를 한 번 더 눌러야 실제 onMarkerClick(상세 이동)이 호출된다.
+    function cocoHideCallout(divId) {
+      var existing = window.__cocoKakaoCallout[divId];
+      if (existing) {
+        existing.setMap(null);
+        window.__cocoKakaoCallout[divId] = null;
+      }
+    }
+
+    function cocoShowCallout(divId, map, m, onMarkerClick) {
+      cocoHideCallout(divId);
+
+      var wrap = document.createElement('div');
+      wrap.style.cssText = 'position:relative;transform:translateY(-14px);';
+
+      var card = document.createElement('div');
+      card.style.cssText =
+        'background:#fff;border-radius:12px;padding:10px 14px;min-width:130px;max-width:220px;' +
+        'box-shadow:0 4px 14px rgba(0,0,0,0.22);font-family:NotoSansKR,sans-serif;';
+
+      var title = document.createElement('div');
+      title.textContent = m.name || '이름 없음';
+      title.style.cssText =
+        'font-size:13px;font-weight:700;color:#1A1A1A;margin-bottom:2px;' +
+        'white-space:nowrap;overflow:hidden;text-overflow:ellipsis;';
+      card.appendChild(title);
+
+      if (m.subtitle) {
+        var subtitle = document.createElement('div');
+        subtitle.textContent = m.subtitle;
+        subtitle.style.cssText = 'font-size:11px;color:#888;margin-bottom:8px;';
+        card.appendChild(subtitle);
+      }
+
+      var detailBtn = document.createElement('div');
+      detailBtn.textContent = '자세히 보기 ›';
+      detailBtn.style.cssText = 'font-size:12px;font-weight:700;color:#2F8FE0;cursor:pointer;';
+      detailBtn.addEventListener('click', function (e) {
+        e.stopPropagation();
+        cocoHideCallout(divId);
+        if (onMarkerClick) onMarkerClick(m.id);
+      });
+      card.appendChild(detailBtn);
+
+      wrap.appendChild(card);
+
+      var caret = document.createElement('div');
+      caret.style.cssText =
+        'position:absolute;left:50%;bottom:-6px;transform:translateX(-50%);width:0;height:0;' +
+        'border-left:6px solid transparent;border-right:6px solid transparent;border-top:6px solid #fff;';
+      wrap.appendChild(caret);
+
+      var closeBtn = document.createElement('div');
+      closeBtn.textContent = '×';
+      closeBtn.style.cssText =
+        'position:absolute;top:-8px;right:-8px;width:18px;height:18px;border-radius:50%;' +
+        'background:rgba(0,0,0,0.4);color:#fff;font-size:12px;line-height:18px;text-align:center;cursor:pointer;';
+      closeBtn.addEventListener('click', function (e) {
+        e.stopPropagation();
+        cocoHideCallout(divId);
+      });
+      wrap.appendChild(closeBtn);
+
+      var overlay = new kakao.maps.CustomOverlay({
+        position: new kakao.maps.LatLng(m.lat, m.lng),
+        content: wrap,
+        xAnchor: 0.5,
+        yAnchor: 1,
+        zIndex: 20,
+        clickable: true,
+      });
+      overlay.setMap(map);
+      window.__cocoKakaoCallout[divId] = overlay;
+    }
 
     // 핀이 몰릴 때(핀 천국) 화면 픽셀 기준으로 가까운 마커끼리 묶어서 하나의
     // 클러스터 버블로 보여준다. 카카오 공식 MarkerClusterer는 kakao.maps.Marker만
@@ -63,6 +140,9 @@
       var map = window.__cocoKakaoMaps[divId];
       var raw = window.__cocoKakaoMarkersRaw[divId] || [];
       if (!map) return;
+
+      // 마커를 다시 그리는 시점엔 예전 핀을 가리키던 말풍선이 위치를 잃을 수 있어 같이 닫는다.
+      cocoHideCallout(divId);
 
       (window.__cocoKakaoMarkers[divId] || []).forEach(function (m) { m.setMap(null); });
       (window.__cocoKakaoOverlays[divId] || []).forEach(function (o) { o.setMap(null); });
@@ -95,25 +175,41 @@
 
       function renderSinglePin(m) {
         var position = new kakao.maps.LatLng(m.lat, m.lng);
+        // 로컬 픽이거나 인기(trending)이면 큰 점, 둘 다 아니면 작은 점.
+        // 색은 로컬 픽일 때만 강조색(주황) — 로컬 픽은 항상 "큰 강조된 점"이 되고,
+        // trending만 있는 건 "큰 점"(색은 기본), 둘 다 없으면 "작은 점".
+        var isBig = m.trending || m.isLocalPick;
+        var size = isBig ? 30 : 14; // 평범한 스팟은 눈에 덜 띄게 확실히 작게
+        var color = m.isLocalPick ? '#FF7A33' : '#2F8FE0';
         var pin = document.createElement('div');
         pin.style.cssText =
-          'width:22px;height:22px;border-radius:50%;background:#2F8FE0;' +
+          'width:' + size + 'px;height:' + size + 'px;border-radius:50%;background:' + color + ';' +
           'border:3px solid #fff;box-shadow:0 2px 6px rgba(0,0,0,0.35);cursor:pointer;';
-        pin.addEventListener('click', function () { if (onMarkerClick) onMarkerClick(m.id); });
+        // 바로 이동하지 않고 이름/카테고리 말풍선을 먼저 띄운다 — "자세히 보기"를
+        // 한 번 더 눌러야 실제 onMarkerClick(상세 화면 이동)이 호출된다.
+        pin.addEventListener('click', function (e) {
+          e.stopPropagation();
+          cocoShowCallout(divId, map, m, onMarkerClick);
+        });
         var pinOverlay = new kakao.maps.CustomOverlay({
           position: position, content: pin, xAnchor: 0.5, yAnchor: 0.5, clickable: true,
         });
         pinOverlay.setMap(map);
         newMarkers.push(pinOverlay);
 
-        if (m.name) {
+        // 이름 태그는 로컬 픽/인기 핀처럼 눈에 띄어야 하는 것만 보여준다 — 평범한 스팟까지
+        // 다 이름표를 달면 지도가 너무 복잡해 보여서, 작은 점은 이름 없이 점만 찍는다.
+        if (m.name && isBig) {
           var tag = document.createElement('div');
           tag.textContent = m.name;
           tag.style.cssText =
             'background:#fff;border-radius:12px;padding:3px 10px;' +
             'font-family:NotoSansKR,sans-serif;font-size:12px;font-weight:700;color:#1A1A1A;' +
             'box-shadow:0 1px 4px rgba(0,0,0,0.25);white-space:nowrap;cursor:pointer;';
-          tag.addEventListener('click', function () { if (onMarkerClick) onMarkerClick(m.id); });
+          tag.addEventListener('click', function (e) {
+            e.stopPropagation();
+            cocoShowCallout(divId, map, m, onMarkerClick);
+          });
           var overlay = new kakao.maps.CustomOverlay({
             position: position, content: tag, yAnchor: 1.9, clickable: true,
           });
@@ -177,6 +273,11 @@
       window.__cocoKakaoMarkers[divId] = [];
       window.__cocoKakaoOverlays[divId] = [];
       window.__cocoKakaoMarkersRaw[divId] = [];
+
+      // 지도 빈 곳을 탭하면 열려있던 핀 정보 말풍선을 닫는다.
+      kakao.maps.event.addListener(map, 'click', function () {
+        cocoHideCallout(divId);
+      });
 
       // 지도가 멈출 때(드래그/줌 종료)마다: ① 클러스터를 화면 픽셀 기준으로 다시 계산하고,
       // ② 뷰포트 쿼리용 bounds 콜백이 등록돼 있으면 현재 화면 범위를 알려준다.

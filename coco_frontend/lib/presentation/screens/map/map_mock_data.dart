@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../../data/models/spot.dart' as db;
 
 // TODO: 실제 지도 SDK(flutter_naver_map) + TourAPI 연동 전까지의 목업 데이터.
 // 현재 flutter_naver_map은 jni/Gradle 툴체인 충돌로 pubspec에서 비활성화된 상태
@@ -107,6 +108,45 @@ final List<MockRoute> mockMyRoutes = [
 ];
 
 MockSpot mockSpotById(String id) => mockSpots.firstWhere((s) => s.id == id);
+
+// Busan 원도심(중구/동구) 대략적인 좌표 범위 — 실제 스팟들이 몰려있는 구간을 0~1로
+// 정규화해서 _RouteMiniMap 같은 목업 캔버스 위에 위치를 잡아줄 때 쓴다(장식용이라
+// 정밀할 필요는 없음).
+const double _dbLatMin = 35.090, _dbLatMax = 35.110;
+const double _dbLngMin = 129.020, _dbLngMax = 129.045;
+
+double _clamp01(double v) => v < 0.05 ? 0.05 : (v > 0.95 ? 0.95 : v);
+
+/// 실제 DB 스팟(db.Spot)을 화면들이 공유하는 MockSpot 모양으로 바꿔준다.
+/// 스팟 상세/코스 만들기/코스 미리보기가 전부 MockSpot 하나의 모양을 기준으로 짜여
+/// 있어서, 이 화면들을 전부 새로 쓰는 대신 실제 데이터를 이 모양에 맞춰 넣는 쪽을
+/// 택했다. id 앞에 "db-"를 붙여서 목업 id("spot-1" 등)와 절대 겹치지 않게 한다.
+/// (설명/부제/동네 이름처럼 백엔드가 아직 안 주는 필드는 최소한의 문구로 채운다.)
+MockSpot mockSpotFromDb(db.Spot spot) {
+  return MockSpot(
+    id: 'db-${spot.id}',
+    name: spot.title,
+    category: spot.category,
+    subtitle: spot.category,
+    address: spot.address,
+    // TourAPI 소스는 실제 소개글(overview)이 있지만, 카카오 로컬 소스는 API 자체에
+    // 소개글 필드가 없어 null로 온다 — 그 경우만 안내 문구로 대체한다.
+    description: spot.description?.trim().isNotEmpty == true
+        ? spot.description!
+        : '아직 등록된 소개글이 없어요.',
+    dong: '',
+    left: _clamp01((spot.lng - _dbLngMin) / (_dbLngMax - _dbLngMin)),
+    top: _clamp01((_dbLatMax - spot.lat) / (_dbLatMax - _dbLatMin)), // 위도가 높을수록(북쪽) top은 작아짐
+    lat: spot.lat,
+    lng: spot.lng,
+  );
+}
+
+/// 한 번 변환한 DB 스팟을 캐싱해두는 공유 저장소. 코스 저장하기처럼 "지금 화면에
+/// 없는 DB 스팟"도 id만으로 다시 찾아야 하는 경우가 있어서, 지도 탭/스팟 상세
+/// 화면이 DB 스팟을 불러올 때마다 여기 채워 넣는다(진짜 재조회 없이 가벼운 메모리
+/// 캐시로 충분 — 앱 재시작 전까지만 유지돼도 됨).
+final Map<String, MockSpot> dbSpotCache = {};
 
 const mockSpots = [
   MockSpot(

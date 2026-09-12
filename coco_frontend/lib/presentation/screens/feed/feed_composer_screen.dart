@@ -1,25 +1,20 @@
+import 'dart:async';
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:image_picker/image_picker.dart';
 import '../../../core/theme/app_theme.dart';
-import 'feed_mock_data.dart';
+import '../../../data/models/spot.dart';
+import '../../../data/repositories/feed_repository.dart';
+import '../../../data/repositories/spot_repository.dart';
 
-class _ComposerPhoto {
-  final String id;
-  final Color color;
-  const _ComposerPhoto({required this.id, required this.color});
-}
-
-const _photoPalette = [
-  Color(0xFFF6D9C9),
-  Color(0xFFE7E4DE),
-  Color(0xFFD9E8D3),
-  Color(0xFFE8DCCB),
-  Color(0xFFDCE6EF),
-];
-
-/// 게시물 작성 4단계 위저드: 사진 → 장소 태그 → 카테고리 → 한줄 설명.
-/// 제출하면 공유 목업 리스트(mockFeedItems) 맨 앞에 새 게시물을 추가하고
-/// 피드 화면으로 돌아간다.
+/// 게시물 작성 3단계 위저드: 사진(선택) → 스팟 태그(실제 검색) → 한줄 설명.
+/// 제출하면 coco_backend POST /api/feed로 실제 게시물을 만든다. 사진을 고르면
+/// 그 자리에서 바로 POST /api/feed/images로 업로드해 imageUrl을 미리 받아두고,
+/// 최종 게시 시 그 값을 함께 보낸다 — 사진은 선택이라 안 골라도 게시할 수 있다.
+/// (예전엔 카테고리를 따로 고르는 4번째 단계가 있었지만, 실제 스팟을 태그하면
+///  카테고리는 그 스팟이 이미 갖고 있어서 없앴다.)
 class FeedComposerScreen extends StatefulWidget {
   const FeedComposerScreen({super.key});
 
@@ -28,26 +23,35 @@ class FeedComposerScreen extends StatefulWidget {
 }
 
 class _FeedComposerScreenState extends State<FeedComposerScreen> {
-  static const _categories = ['노포', '골목', '공원', '카페'];
+  static const _totalSteps = 3;
 
   int _step = 1;
-  final List<_ComposerPhoto> _photos = [];
-  String? _selectedLocation;
+  Uint8List? _pickedImageBytes;
+  bool _uploadingImage = false;
+  String? _uploadedImageUrl;
+
+  Spot? _selectedSpot;
   String _locationQuery = '';
-  String? _selectedCategory;
+  List<Spot> _searchResults = [];
+  bool _searching = false;
+  Timer? _searchDebounce;
+
   final _descController = TextEditingController();
   bool _submitting = false;
+
+  final _spotRepository = SpotRepository();
+  final _feedRepository = FeedRepository();
 
   @override
   void dispose() {
     _descController.dispose();
+    _searchDebounce?.cancel();
     super.dispose();
   }
 
   bool get _nextEnabled => switch (_step) {
-        1 => _photos.isNotEmpty,
-        2 => _selectedLocation != null,
-        3 => _selectedCategory != null,
+        1 => true, // 사진은 선택이라 안 골라도 다음으로 넘어갈 수 있음
+        2 => _selectedSpot != null,
         _ => true,
       };
 
@@ -64,44 +68,86 @@ class _FeedComposerScreenState extends State<FeedComposerScreen> {
     setState(() => _step += 1);
   }
 
-  void _addPhoto() {
+  // 사진은 한 장만 지원(백엔드 feed_posts.image_url이 단일 컬럼) — 고르는 즉시 업로드해서
+  // imageUrl을 미리 받아두면, 최종 "게시하기" 시점엔 이미 준비된 URL만 붙이면 된다.
+  Future<void> _pickImage() async {
+    final picked = await ImagePicker().pickImage(source: ImageSource.gallery, imageQuality: 85);
+    if (picked == null) return;
+    final bytes = await picked.readAsBytes();
+    if (!mounted) return;
     setState(() {
-      _photos.add(_ComposerPhoto(
-        id: 'p${DateTime.now().microsecondsSinceEpoch}',
-        color: _photoPalette[_photos.length % _photoPalette.length],
-      ));
+      _pickedImageBytes = bytes;
+      _uploadedImageUrl = null;
+      _uploadingImage = true;
+    });
+    try {
+      final url = await _feedRepository.uploadImage(bytes, picked.name);
+      if (!mounted) return;
+      setState(() {
+        _uploadedImageUrl = url;
+        _uploadingImage = false;
+      });
+    } catch (e) {
+      debugPrint('[FeedComposerScreen] 이미지 업로드 실패: $e');
+      if (!mounted) return;
+      setState(() {
+        _pickedImageBytes = null;
+        _uploadingImage = false;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('사진 업로드에 실패했어요. 다시 시도해주세요.')),
+      );
+    }
+  }
+
+  void _removePhoto() => setState(() {
+        _pickedImageBytes = null;
+        _uploadedImageUrl = null;
+      });
+
+  // 스팟 검색은 DB 조회(네트워크 호출)라 타이핑마다 바로 쏘지 않고 300ms 디바운스한다.
+  // (route_builder_screen.dart의 "+ 스팟 추가" 검색과 동일한 패턴.)
+  void _onLocationQueryChanged(String query) {
+    setState(() => _locationQuery = query);
+    _searchDebounce?.cancel();
+    final q = query.trim();
+    if (q.isEmpty) {
+      setState(() => _searchResults = []);
+      return;
+    }
+    _searchDebounce = Timer(const Duration(milliseconds: 300), () async {
+      setState(() => _searching = true);
+      try {
+        final results = await _spotRepository.search(q);
+        if (!mounted) return;
+        setState(() {
+          _searchResults = results;
+          _searching = false;
+        });
+      } catch (e) {
+        debugPrint('[FeedComposerScreen] 스팟 검색 실패: $e');
+        if (mounted) setState(() => _searching = false);
+      }
     });
   }
 
-  void _removePhoto(String id) => setState(() => _photos.removeWhere((p) => p.id == id));
-
   Future<void> _submit() async {
     final desc = _descController.text.trim();
-    if (desc.isEmpty || _submitting) return;
+    final spot = _selectedSpot;
+    if (desc.isEmpty || spot == null || _submitting || _uploadingImage) return;
     setState(() => _submitting = true);
-    await Future.delayed(const Duration(milliseconds: 500));
-    if (!mounted) return;
-
-    final maxTs = mockFeedItems.isEmpty ? 0 : mockFeedItems.map((e) => e.ts).reduce((a, b) => a > b ? a : b);
-    mockFeedItems.insert(
-      0,
-      FeedItem(
-        id: 'u${DateTime.now().millisecondsSinceEpoch}',
-        source: FeedSource.user,
-        author: '나',
-        category: _selectedCategory!,
-        place: _selectedLocation!,
-        desc: desc,
-        neighborhood: '내 동네',
-        dongId: 'nampo',
-        distanceMin: 1,
-        likes: 0,
-        saves: 0,
-        imgCount: _photos.isEmpty ? 1 : _photos.length,
-        ts: maxTs + 1,
-      ),
-    );
-    context.pop();
+    try {
+      await _feedRepository.createPost(description: desc, spotId: spot.id, imageUrl: _uploadedImageUrl);
+      if (!mounted) return;
+      context.pop();
+    } catch (e) {
+      debugPrint('[FeedComposerScreen] 게시물 작성 실패: $e');
+      if (!mounted) return;
+      setState(() => _submitting = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('게시물을 올리지 못했어요. 로그인 상태를 확인해주세요.')),
+      );
+    }
   }
 
   @override
@@ -116,7 +162,7 @@ class _FeedComposerScreenState extends State<FeedComposerScreen> {
               child: Row(
                 children: [
                   IconButton(onPressed: _back, icon: const Icon(Icons.arrow_back_rounded)),
-                  Text('게시물 작성 ($_step/4)', style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: CocoTheme.secondary)),
+                  Text('게시물 작성 ($_step/$_totalSteps)', style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: CocoTheme.secondary)),
                 ],
               ),
             ),
@@ -124,7 +170,7 @@ class _FeedComposerScreenState extends State<FeedComposerScreen> {
               padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
               child: Row(
                 children: [
-                  for (int i = 1; i <= 4; i++) ...[
+                  for (int i = 1; i <= _totalSteps; i++) ...[
                     Expanded(
                       child: Container(
                         height: 4,
@@ -134,7 +180,7 @@ class _FeedComposerScreenState extends State<FeedComposerScreen> {
                         ),
                       ),
                     ),
-                    if (i != 4) const SizedBox(width: 6),
+                    if (i != _totalSteps) const SizedBox(width: 6),
                   ],
                 ],
               ),
@@ -143,18 +189,19 @@ class _FeedComposerScreenState extends State<FeedComposerScreen> {
               child: SingleChildScrollView(
                 padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
                 child: switch (_step) {
-                  1 => _PhotoStep(photos: _photos, onAdd: _addPhoto, onRemove: _removePhoto),
+                  1 => _PhotoStep(
+                      imageBytes: _pickedImageBytes,
+                      uploading: _uploadingImage,
+                      onAdd: _pickImage,
+                      onRemove: _removePhoto,
+                    ),
                   2 => _LocationStep(
                       query: _locationQuery,
-                      selected: _selectedLocation,
-                      onQueryChanged: (v) => setState(() => _locationQuery = v),
-                      onSelect: (v) => setState(() => _selectedLocation = v),
-                      onPinOnMap: () => setState(() => _selectedLocation = '지도에서 선택한 위치'),
-                    ),
-                  3 => _CategoryStep(
-                      categories: _categories,
-                      selected: _selectedCategory,
-                      onSelect: (v) => setState(() => _selectedCategory = v),
+                      selected: _selectedSpot,
+                      results: _searchResults,
+                      searching: _searching,
+                      onQueryChanged: _onLocationQueryChanged,
+                      onSelect: (v) => setState(() => _selectedSpot = v),
                     ),
                   _ => _DescriptionStep(controller: _descController, onChanged: (_) => setState(() {})),
                 },
@@ -162,14 +209,16 @@ class _FeedComposerScreenState extends State<FeedComposerScreen> {
             ),
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-              child: _step == 4
+              child: _step == _totalSteps
                   ? FilledButton(
                       style: FilledButton.styleFrom(
-                        backgroundColor: _descController.text.trim().isNotEmpty ? CocoTheme.primary : Colors.black.withOpacity(0.2),
+                        backgroundColor: _descController.text.trim().isNotEmpty && !_uploadingImage
+                            ? CocoTheme.primary
+                            : Colors.black.withOpacity(0.2),
                         minimumSize: const Size.fromHeight(52),
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                       ),
-                      onPressed: _submit,
+                      onPressed: _uploadingImage ? null : _submit,
                       child: Text(
                         _submitting ? '게시 중...' : '게시하기',
                         style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
@@ -192,63 +241,76 @@ class _FeedComposerScreenState extends State<FeedComposerScreen> {
   }
 }
 
+/// 사진은 한 장만 지원(백엔드가 단일 imageUrl 컬럼) — 없어도 다음 단계로 넘어갈 수 있다.
 class _PhotoStep extends StatelessWidget {
-  final List<_ComposerPhoto> photos;
+  final Uint8List? imageBytes;
+  final bool uploading;
   final VoidCallback onAdd;
-  final ValueChanged<String> onRemove;
-  const _PhotoStep({required this.photos, required this.onAdd, required this.onRemove});
+  final VoidCallback onRemove;
+  const _PhotoStep({required this.imageBytes, required this.uploading, required this.onAdd, required this.onRemove});
 
   @override
   Widget build(BuildContext context) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text('사진을 올려주세요', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: CocoTheme.secondary)),
+        const Text('사진을 올려주세요 (선택)', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: CocoTheme.secondary)),
         const SizedBox(height: 12),
-        GridView.count(
-          crossAxisCount: 3,
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          mainAxisSpacing: 8,
-          crossAxisSpacing: 8,
-          children: [
-            for (final p in photos)
-              Stack(
-                children: [
-                  Positioned.fill(
-                    child: Container(decoration: BoxDecoration(color: p.color, borderRadius: BorderRadius.circular(10))),
+        SizedBox(
+          width: 120,
+          height: 120,
+          child: imageBytes == null
+              ? InkWell(
+                  onTap: onAdd,
+                  borderRadius: BorderRadius.circular(10),
+                  child: Container(
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: Colors.black.withOpacity(0.2), width: 1.5),
+                    ),
+                    child: Icon(Icons.add, size: 24, color: Colors.grey.shade500),
                   ),
-                  Positioned(
-                    right: 4,
-                    top: 4,
-                    child: GestureDetector(
-                      onTap: () => onRemove(p.id),
-                      child: Container(
-                        width: 20,
-                        height: 20,
-                        alignment: Alignment.center,
-                        decoration: BoxDecoration(color: Colors.black.withOpacity(0.55), shape: BoxShape.circle),
-                        child: const Icon(Icons.close, size: 12, color: Colors.white),
+                )
+              : Stack(
+                  children: [
+                    Positioned.fill(
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(10),
+                        child: Image.memory(imageBytes!, fit: BoxFit.cover),
                       ),
                     ),
-                  ),
-                ],
-              ),
-            InkWell(
-              onTap: onAdd,
-              borderRadius: BorderRadius.circular(10),
-              child: Container(
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(10),
-                  border: Border.all(color: Colors.black.withOpacity(0.2), width: 1.5),
+                    if (uploading)
+                      Positioned.fill(
+                        child: Container(
+                          decoration: BoxDecoration(color: Colors.black.withOpacity(0.35), borderRadius: BorderRadius.circular(10)),
+                          alignment: Alignment.center,
+                          child: const SizedBox(
+                            width: 22,
+                            height: 22,
+                            child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                          ),
+                        ),
+                      ),
+                    if (!uploading)
+                      Positioned(
+                        right: 4,
+                        top: 4,
+                        child: GestureDetector(
+                          onTap: onRemove,
+                          child: Container(
+                            width: 20,
+                            height: 20,
+                            alignment: Alignment.center,
+                            decoration: BoxDecoration(color: Colors.black.withOpacity(0.55), shape: BoxShape.circle),
+                            child: const Icon(Icons.close, size: 12, color: Colors.white),
+                          ),
+                        ),
+                      ),
+                  ],
                 ),
-                child: Icon(Icons.add, size: 24, color: Colors.grey.shade500),
-              ),
-            ),
-          ],
         ),
         const SizedBox(height: 8),
-        Text('갤러리에서 선택하거나 촬영해서 추가하세요', style: TextStyle(fontSize: 12, color: Colors.grey.shade500)),
+        Text('갤러리에서 사진 한 장을 선택하세요 (선택 사항)', style: TextStyle(fontSize: 12, color: Colors.grey.shade500)),
       ],
     );
   }
@@ -256,23 +318,23 @@ class _PhotoStep extends StatelessWidget {
 
 class _LocationStep extends StatelessWidget {
   final String query;
-  final String? selected;
+  final Spot? selected;
+  final List<Spot> results;
+  final bool searching;
   final ValueChanged<String> onQueryChanged;
-  final ValueChanged<String> onSelect;
-  final VoidCallback onPinOnMap;
+  final ValueChanged<Spot> onSelect;
 
   const _LocationStep({
     required this.query,
     required this.selected,
+    required this.results,
+    required this.searching,
     required this.onQueryChanged,
     required this.onSelect,
-    required this.onPinOnMap,
   });
 
   @override
   Widget build(BuildContext context) {
-    final suggestions = composerLocationCandidates.where((l) => l.contains(query)).take(5).toList();
-
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -281,7 +343,7 @@ class _LocationStep extends StatelessWidget {
         TextField(
           onChanged: onQueryChanged,
           decoration: InputDecoration(
-            hintText: '장소명 검색',
+            hintText: '장소명 또는 주소 검색',
             filled: true,
             fillColor: const Color(0xFFF8F8F8),
             contentPadding: const EdgeInsets.symmetric(horizontal: 14),
@@ -289,76 +351,48 @@ class _LocationStep extends StatelessWidget {
             enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: Colors.grey.shade300)),
           ),
         ),
-        const SizedBox(height: 10),
-        Container(
-          height: 90,
-          decoration: BoxDecoration(color: const Color(0xFFEAE8E2), borderRadius: BorderRadius.circular(14)),
-          alignment: Alignment.center,
-          child: Icon(Icons.map_outlined, size: 28, color: Colors.black.withOpacity(0.25)),
-        ),
         const SizedBox(height: 8),
-        InkWell(
-          onTap: onPinOnMap,
-          child: const Center(
-            child: Text('지도에서 직접 핀 찍기', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: CocoTheme.primary)),
-          ),
-        ),
-        const SizedBox(height: 8),
-        for (final loc in suggestions)
-          InkWell(
-            onTap: () => onSelect(loc),
-            child: Container(
-              padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 4),
-              decoration: BoxDecoration(border: Border(bottom: BorderSide(color: Colors.black.withOpacity(0.06)))),
-              child: Text(
-                loc,
-                style: TextStyle(
-                  fontSize: 14,
-                  color: selected == loc ? CocoTheme.primary : CocoTheme.secondary,
-                  fontWeight: selected == loc ? FontWeight.w700 : FontWeight.w400,
-                ),
-              ),
-            ),
-          ),
-      ],
-    );
-  }
-}
-
-class _CategoryStep extends StatelessWidget {
-  final List<String> categories;
-  final String? selected;
-  final ValueChanged<String> onSelect;
-  const _CategoryStep({required this.categories, required this.selected, required this.onSelect});
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Text('카테고리를 선택해주세요', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: CocoTheme.secondary)),
-        const SizedBox(height: 12),
-        for (final c in categories)
+        if (searching)
+          const Padding(
+            padding: EdgeInsets.symmetric(vertical: 16),
+            child: Center(child: SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))),
+          )
+        else if (query.trim().isNotEmpty && results.isEmpty)
           Padding(
-            padding: const EdgeInsets.only(bottom: 10),
-            child: InkWell(
-              onTap: () => onSelect(c),
-              borderRadius: BorderRadius.circular(12),
+            padding: const EdgeInsets.symmetric(vertical: 16),
+            child: Text('검색 결과가 없어요', style: TextStyle(fontSize: 13, color: Colors.grey.shade500)),
+          )
+        else
+          for (final spot in results)
+            InkWell(
+              onTap: () => onSelect(spot),
               child: Container(
-                padding: const EdgeInsets.symmetric(vertical: 14),
-                alignment: Alignment.center,
-                decoration: BoxDecoration(
-                  color: selected == c ? CocoTheme.primary : Colors.white,
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: selected == c ? CocoTheme.primary : Colors.grey.shade300),
-                ),
-                child: Text(
-                  c,
-                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: selected == c ? Colors.white : CocoTheme.secondary),
+                padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 4),
+                decoration: BoxDecoration(border: Border(bottom: BorderSide(color: Colors.black.withOpacity(0.06)))),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            spot.title,
+                            style: TextStyle(
+                              fontSize: 14,
+                              color: selected?.id == spot.id ? CocoTheme.primary : CocoTheme.secondary,
+                              fontWeight: selected?.id == spot.id ? FontWeight.w700 : FontWeight.w400,
+                            ),
+                          ),
+                          const SizedBox(height: 3),
+                          Text(spot.address, style: TextStyle(fontSize: 12, color: Colors.black.withOpacity(0.45))),
+                        ],
+                      ),
+                    ),
+                    if (selected?.id == spot.id) const Icon(Icons.check_rounded, size: 18, color: CocoTheme.primary),
+                  ],
                 ),
               ),
             ),
-          ),
       ],
     );
   }

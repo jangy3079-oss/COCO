@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../data/repositories/spot_repository.dart';
 import 'map_mock_data.dart';
 
 /// 골목지도(코스) 만들기 화면.
@@ -37,10 +38,17 @@ class _RouteBuilderScreenState extends State<RouteBuilderScreen> {
   // 확정한다. 예전엔 닫기 버튼이 하나뿐이라 그게 사실상 "완료"처럼 동작했었다.
   final Set<String> _addedDuringSearch = {};
 
+  // 실제 DB 스팟 검색 — 목업(mockSpots)은 로컬이라 바로 필터링되지만, DB는
+  // 네트워크 호출이라 타이핑마다 바로 쏘지 않고 300ms 디바운스한다.
+  final _spotRepository = SpotRepository();
+  List<MockSpot> _dbSearchResults = [];
+  Timer? _dbSearchDebounce;
+
   @override
   void dispose() {
     _nameController.dispose();
     _toastTimer?.cancel();
+    _dbSearchDebounce?.cancel();
     super.dispose();
   }
 
@@ -55,6 +63,7 @@ class _RouteBuilderScreenState extends State<RouteBuilderScreen> {
         _addedDuringSearch.clear();
         _searchOpen = false;
         _searchQuery = '';
+        _dbSearchResults = [];
       });
 
   // 완료 — 담은 내용을 그대로 확정하고 닫는다.
@@ -62,7 +71,31 @@ class _RouteBuilderScreenState extends State<RouteBuilderScreen> {
         _addedDuringSearch.clear();
         _searchOpen = false;
         _searchQuery = '';
+        _dbSearchResults = [];
       });
+
+  void _onSearchQueryChanged(String query) {
+    setState(() => _searchQuery = query);
+    _dbSearchDebounce?.cancel();
+    if (query.trim().isEmpty) {
+      setState(() => _dbSearchResults = []);
+      return;
+    }
+    _dbSearchDebounce = Timer(const Duration(milliseconds: 300), () async {
+      try {
+        final results = await _spotRepository.search(query.trim());
+        if (!mounted) return;
+        final converted = results.map(mockSpotFromDb).toList();
+        // 다른 화면(스팟 상세 등)에서도 id로 다시 찾을 수 있게 공유 캐시에 채워 넣는다.
+        for (final s in converted) {
+          dbSpotCache[s.id] = s;
+        }
+        setState(() => _dbSearchResults = converted);
+      } catch (e) {
+        debugPrint('[RouteBuilderScreen] 스팟 검색 실패: $e');
+      }
+    });
+  }
 
   void _addStopFromSearch(MockSpot spot) {
     if (_stops.any((s) => s.id == spot.id)) return;
@@ -260,8 +293,9 @@ class _RouteBuilderScreenState extends State<RouteBuilderScreen> {
             _StopSearchOverlay(
               query: _searchQuery,
               stops: _stops,
+              dbResults: _dbSearchResults,
               toastMessage: _toastMessage,
-              onQueryChanged: (v) => setState(() => _searchQuery = v),
+              onQueryChanged: _onSearchQueryChanged,
               onCancel: _cancelSearch,
               onConfirm: _confirmSearch,
               onAdd: _addStopFromSearch,
@@ -278,6 +312,7 @@ class _RouteBuilderScreenState extends State<RouteBuilderScreen> {
 class _StopSearchOverlay extends StatelessWidget {
   final String query;
   final List<MockSpot> stops;
+  final List<MockSpot> dbResults; // 실제 DB 검색 결과 — 이미 서버에서 검색어로 걸러져 온 상태
   final String? toastMessage;
   final ValueChanged<String> onQueryChanged;
   final VoidCallback onCancel;
@@ -287,6 +322,7 @@ class _StopSearchOverlay extends StatelessWidget {
   const _StopSearchOverlay({
     required this.query,
     required this.stops,
+    required this.dbResults,
     required this.toastMessage,
     required this.onQueryChanged,
     required this.onCancel,
@@ -296,13 +332,16 @@ class _StopSearchOverlay extends StatelessWidget {
 
   // "남포 카페"처럼 여러 단어를 띄어써도 찾을 수 있게 — 공백으로 쪼갠 키워드가
   // 이름/동네/부제/주소 중 어디든 전부 포함돼 있으면 후보로 인정한다(순서 무관).
+  // 목업 후보 뒤에 실제 DB 검색 결과를 이어 붙인다(DB 쪽은 이미 서버에서 필터링됨).
   List<MockSpot> get _candidates {
     final keywords = query.trim().split(RegExp(r'\s+')).where((k) => k.isNotEmpty).toList();
-    if (keywords.isEmpty) return mockSpots;
-    return mockSpots.where((s) {
-      final haystack = '${s.name} ${s.dong} ${s.subtitle} ${s.address}'.toLowerCase();
-      return keywords.every((k) => haystack.contains(k.toLowerCase()));
-    }).toList();
+    final mockCandidates = keywords.isEmpty
+        ? mockSpots
+        : mockSpots.where((s) {
+            final haystack = '${s.name} ${s.dong} ${s.subtitle} ${s.address}'.toLowerCase();
+            return keywords.every((k) => haystack.contains(k.toLowerCase()));
+          }).toList();
+    return [...mockCandidates, ...dbResults];
   }
 
   @override

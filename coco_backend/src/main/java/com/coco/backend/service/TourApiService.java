@@ -34,10 +34,9 @@ import java.util.Set;
  *       보고 제외한다.</li>
  * </ol>
  *
- * TODO(운영 전 필수 확인): CAT3_WHITELIST와 KOR_SERVICE_PATH는 실제 인증키로 서비스분류코드조회
- * (categoryCode2)와 api.visitkorea.or.kr 문서를 직접 확인하며 검증한 값이 아니라, 이번 세션에서는
- * 실제 API 키가 없어 문서 조사만으로 추정해둔 값이다. 정확한 cat3 코드값과 현재 활성 버전
- * (KorService1 vs KorService2)을 확인한 뒤 교체해서 써야 한다.
+ * TODO(운영 전 재확인): KOR_SERVICE_PATH(KorService1 vs KorService2)는 아직 실제 인증키로
+ * 검증 전 추정값이다. CAT3_WHITELIST는 실제 서비스키로 3개 동 후보를 직접 조회한 뒤
+ * categoryCode2로 이름을 대조해 확정한 값 — 아래 CAT3_WHITELIST 주석 참고.
  */
 @Slf4j
 @Service
@@ -68,12 +67,22 @@ public class TourApiService {
     // 관광지(12), 음식점(39)만 — 골목 큐레이션 컨셉과 무관한 숙박/쇼핑/레포츠/문화시설/축제는 제외.
     private static final List<Integer> TARGET_CONTENT_TYPE_IDS = List.of(12, 39);
 
-    // TODO(검증 필요): 서비스분류코드조회(categoryCode2)로 실제 코드값을 확인한 뒤 교체할 것.
-    // 지금은 "전통시장/골목/노포" 느낌에 해당할 것으로 추정만 해둔 값이라 그대로 쓰면 안 됨.
+    // 3개 동에서 실제 조회되는 cat3는 12종뿐이라, 그 전수를 categoryCode2로 이름 대조해서
+    // "관광이랑 연관 있는지"로 포함/제외를 확정했다 (2026-09-10 실제 API 키로 검증).
+    // 제외한 4종과 이유:
+    //   A02020800 유람선/잠수함관광 — 골목 큐레이션과 무관한 대형 투어 상품
+    //   A02010900 종교성지            — 관광지라기보다 순수 신앙시설
+    //   A05020200 서양식              — 프랜차이즈 성격이 강해 "노포/로컬" 컨셉과 거리
+    //   A05020400 중식                — 위와 동일
     private static final Set<String> CAT3_WHITELIST = Set.of(
-            "A04010100", // 쇼핑 > 5일장 (추정)
-            "A04010200", // 쇼핑 > 상설시장 (추정)
-            "A05020100"  // 음식 > 한식 (추정 — 카페/노포 소분류는 별도 확인 필요)
+            "A02030600", // 이색거리
+            "A02020200", // 관광단지
+            "A02020700", // 공원
+            "A02010800", // 사찰
+            "A02010700", // 유적지/사적지
+            "A02050600", // 유명건물
+            "A05020100", // 한식
+            "A05020900"  // 카페/전통찻집
     );
 
     // 이미 다 아는 대형 랜드마크는 오히려 제외 — 제목에 이 키워드가 포함되면 후보에서 뺀다.
@@ -82,12 +91,14 @@ public class TourApiService {
     );
 
     // COCO가 다루는 법정동 → 그 동이 속한 부산 시군구 코드.
-    // (지역코드/시군구코드는 지역코드조회(areaCode2) 기준. 부산 areaCode=6, 중구=1, 동구=3)
+    // (지역코드조회(areaCode2, areaCode=6) 실제 응답으로 검증한 값: 중구=15, 동구=5.
+    //  이전엔 중구=1/동구=3으로 잘못 들어가 있었는데, 실제 1번은 강서구라 완전히 다른 동네
+    //  데이터를 가져온 뒤 동 이름 필터에서 전부 걸러지고 있었음 — import 0건의 원인.)
     private static final int BUSAN_AREA_CODE = 6;
     private static final Map<String, Integer> TARGET_DONG_TO_SIGUNGU = Map.of(
-            "남포동", 1,
-            "영주동", 1,
-            "초량동", 3
+            "남포동", 15,
+            "영주동", 15,
+            "초량동", 5
     );
 
     // 관광지별 연관 관광지(TarRlteTarService) 연결성 상위 몇 위까지를 "이미 유명함"으로 보고 뺄지.
@@ -132,6 +143,31 @@ public class TourApiService {
                 + "&contentTypeId=" + contentTypeId);
         String body = restClient.get().uri(uri).retrieve().body(String.class);
         return extractItems(body);
+    }
+
+    /**
+     * 스팟 상세 화면 소개글용 — detailCommon2의 overview 필드.
+     * (실제 키로 확인해보니 이 API는 contentTypeId/defaultYN 등 부가 파라미터를 같이 보내면
+     * INVALID_REQUEST_PARAMETER_ERROR가 나고, contentId 하나만 보내야 정상 응답한다 — 문서와
+     * 다르게 동작해서 실제 호출로 확인한 그대로 맞춰뒀다.)
+     * 실패하거나 overview가 없으면 null — 신규 스팟 저장 자체를 막을 정도로 중요하지 않아서
+     * 호출부에서 계속 진행 가능하게 null만 반환한다.
+     */
+    public String fetchOverview(String contentId) {
+        try {
+            URI uri = URI.create(baseUrl + "/" + korServicePath + "/detailCommon2"
+                    + "?serviceKey=" + serviceKey
+                    + "&MobileOS=ETC&MobileApp=" + MOBILE_APP
+                    + "&_type=json&contentId=" + contentId);
+            String body = restClient.get().uri(uri).retrieve().body(String.class);
+            List<JsonNode> items = extractItems(body);
+            if (items.isEmpty()) return null;
+            String overview = items.get(0).path("overview").asText("");
+            return overview.isBlank() ? null : overview;
+        } catch (Exception e) {
+            log.warn("TourAPI 소개글 조회 실패 (contentId={}): {}", contentId, e.getMessage());
+            return null;
+        }
     }
 
     private Set<String> fetchFamousContentIds() {
