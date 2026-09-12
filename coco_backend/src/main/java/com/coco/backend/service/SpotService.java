@@ -30,7 +30,7 @@ public class SpotService {
 
     /**
      * TourAPI에서 필터링된 후보를 가져와 아직 DB에 없는 것만 저장한다.
-     * (다국어 title 컬럼이 현재 엔티티엔 없어서 한글 제목 하나만 저장한다.)
+     * (TourAPI가 현재 한국어 서비스만 연동되어 있어서 titleKo만 채우고, titleEn/titleJa는 번역이 붙을 때까지 null로 둔다.)
      */
     public int importFromTourApi() {
         List<TourApiService.TourApiCandidate> candidates = tourApiService.fetchCandidates();
@@ -45,7 +45,7 @@ public class SpotService {
 
             Spot spot = Spot.builder()
                     .tourApiid(c.tourApiId())
-                    .title(c.title())
+                    .titleKo(c.title())
                     .lat(c.lat())
                     .lng(c.lng())
                     .address(c.address())
@@ -73,7 +73,7 @@ public class SpotService {
 
             Spot spot = Spot.builder()
                     .kakaoPlaceId(c.kakaoPlaceId())
-                    .title(c.title())
+                    .titleKo(c.title())
                     .lat(c.lat())
                     .lng(c.lng())
                     .address(c.address())
@@ -93,14 +93,14 @@ public class SpotService {
         Map<Long, long[]> engagementBySpotId = fetchEngagement(spots);
 
         return spots.stream()
-                .map(s -> toResponse(s, engagementBySpotId.get(s.getId())))
+                .map(s -> toResponse(s, engagementBySpotId.get(s.getId()), locale))
                 .toList();
     }
 
     /** 스팟 상세 화면용 단건 조회. 존재하지 않으면 빈 Optional. */
-    public Optional<SpotResponse> getById(Long id) {
+    public Optional<SpotResponse> getById(Long id, String locale) {
         return spotRepository.findById(id)
-                .map(spot -> toResponse(spot, fetchEngagement(List.of(spot)).get(spot.getId())));
+                .map(spot -> toResponse(spot, fetchEngagement(List.of(spot)).get(spot.getId()), locale));
     }
 
     // 검색 결과가 너무 많아지는 걸 막는 상한. 코스 만들기 "+ 스팟 추가" 같은 자동완성성
@@ -108,15 +108,15 @@ public class SpotService {
     private static final int SEARCH_RESULT_LIMIT = 20;
 
     /** 제목/주소에 키워드가 포함된 스팟 검색 — 코스 만들기 "+ 스팟 추가" 등에서 사용. */
-    public List<SpotResponse> search(String query) {
+    public List<SpotResponse> search(String query, String locale) {
         List<Spot> spots = spotRepository
-                .findByTitleContainingIgnoreCaseOrAddressContainingIgnoreCase(query, query)
+                .searchByKeyword(query)
                 .stream()
                 .limit(SEARCH_RESULT_LIMIT)
                 .toList();
         Map<Long, long[]> engagementBySpotId = fetchEngagement(spots);
         return spots.stream()
-                .map(s -> toResponse(s, engagementBySpotId.get(s.getId())))
+                .map(s -> toResponse(s, engagementBySpotId.get(s.getId()), locale))
                 .toList();
     }
 
@@ -143,14 +143,14 @@ public class SpotService {
         return postCount >= TRENDING_POST_COUNT_THRESHOLD || likeSum >= TRENDING_LIKE_COUNT_THRESHOLD;
     }
 
-    private SpotResponse toResponse(Spot s, long[] engagement) {
+    private SpotResponse toResponse(Spot s, long[] engagement, String locale) {
         long postCount = engagement != null ? engagement[0] : 0;
         long likeSum = engagement != null ? engagement[1] : 0;
         boolean trending = isTrending(postCount, likeSum);
 
         return SpotResponse.builder()
                 .id(s.getId())
-                .title(s.getTitle())
+                .title(resolveTitle(s, locale))
                 .lat(s.getLat())
                 .lng(s.getLng())
                 .category(s.getCategory())
@@ -160,5 +160,15 @@ public class SpotService {
                 .isLocalPick(Boolean.TRUE.equals(s.getIsLocalPick()))
                 .trending(trending)
                 .build();
+    }
+
+    /** locale(ko/en/ja)에 맞는 title을 고른다. en/ja가 아직 번역되지 않았으면 titleKo로 폴백한다. */
+    private String resolveTitle(Spot s, String locale) {
+        String title = switch (locale == null ? "" : locale) {
+            case "en" -> s.getTitleEn();
+            case "ja" -> s.getTitleJa();
+            default -> s.getTitleKo();
+        };
+        return title != null ? title : s.getTitleKo();
     }
 }

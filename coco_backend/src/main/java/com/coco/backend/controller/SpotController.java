@@ -31,16 +31,18 @@ public class SpotController {
 
     /** 스팟 상세 화면용 단건 조회. */
     @GetMapping("/{id}")
-    public ResponseEntity<SpotResponse> getSpotById(@PathVariable Long id) {
-        return spotService.getById(id)
+    public ResponseEntity<SpotResponse> getSpotById(@PathVariable Long id,
+                                                     @RequestParam(defaultValue = "ko") String locale) {
+        return spotService.getById(id, locale)
                 .map(ResponseEntity::ok)
                 .orElseGet(() -> ResponseEntity.notFound().build());
     }
 
     /** 제목/주소 키워드 검색 — 코스 만들기 "+ 스팟 추가" 등에서 사용. */
     @GetMapping("/search")
-    public ResponseEntity<List<SpotResponse>> searchSpots(@RequestParam String q) {
-        return ResponseEntity.ok(spotService.search(q));
+    public ResponseEntity<List<SpotResponse>> searchSpots(@RequestParam String q,
+                                                           @RequestParam(defaultValue = "ko") String locale) {
+        return ResponseEntity.ok(spotService.search(q, locale));
     }
 
     /** TourAPI에서 필터링된 후보를 가져와 DB에 채워 넣는 수동 배치 트리거. */

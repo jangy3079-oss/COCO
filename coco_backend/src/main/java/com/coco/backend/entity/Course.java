@@ -10,37 +10,29 @@ import org.hibernate.annotations.CreationTimestamp;
 import java.time.LocalDateTime;
 
 @Entity
-@Table(name = "qna_posts")
-
+@Table(name = "courses")
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
-public class QnaPost {
+public class Course {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
-    @Column(name = "qna_post_id")
+    @Column(name = "course_id")
     private Long id;
 
-
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "user_id", nullable = false)
-    private User user;
+    @JoinColumn(name = "route_map_id", nullable = false)
+    private RouteMap routeMap;
 
-    @Column(length = 500)
-    private String question;
-
-    @Column(length = 5)
-
-    private String locale;
+    @Column(length = 100)
+    private String title;
 
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
 
     @Builder
-    public QnaPost(User user, String question, String locale) {
-        this.user = user;
-        this.question = question;
-        this.locale = locale;
+    public Course(RouteMap routeMap, String title) {
+        this.routeMap = routeMap;
+        this.title = title;
     }
 }
-

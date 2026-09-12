@@ -32,7 +32,7 @@ public class AuthService {
                 .email(request.getEmail())
                 .password(passwordEncoder.encode(request.getPassword()))
                 .nickname(request.getNickname())
-                .language(request.getLocale())
+                .locale(request.getLocale())
                 .role(parseRole(request.getRole()))
                 .build();
 
@@ -67,7 +67,7 @@ public class AuthService {
                 .email(user.getEmail())
                 .nickname(user.getNickname())
                 .role(user.getRole().name())
-                .locale(user.getLanguage())
+                .locale(user.getLocale())
                 .build();
     }
 }

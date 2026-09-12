@@ -97,6 +97,45 @@ CREATE TABLE feed_post_likes (
     CONSTRAINT uq_feed_like  UNIQUE (user_id, feed_post_id)
 );
 
+CREATE TABLE route_maps (
+    route_map_id BIGSERIAL    NOT NULL,
+    user_id      BIGINT       NOT NULL,
+    title        VARCHAR(100),
+    visibility   VARCHAR(20)  NOT NULL DEFAULT 'PRIVATE',
+    created_at   TIMESTAMP    DEFAULT NOW(),
+    PRIMARY KEY (route_map_id),
+    CONSTRAINT fk_routemap_user FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE
+);
+
+CREATE TABLE route_map_spots (
+    route_map_spot_id BIGSERIAL NOT NULL,
+    route_map_id      BIGINT    NOT NULL,
+    spot_id           BIGINT    NOT NULL,
+    added_at          TIMESTAMP DEFAULT NOW(),
+    PRIMARY KEY (route_map_spot_id),
+    CONSTRAINT fk_rmspot_routemap FOREIGN KEY (route_map_id) REFERENCES route_maps(route_map_id) ON DELETE CASCADE,
+    CONSTRAINT fk_rmspot_spot     FOREIGN KEY (spot_id)      REFERENCES spots(spot_id)           ON DELETE CASCADE
+);
+
+CREATE TABLE courses (
+    course_id    BIGSERIAL    NOT NULL,
+    route_map_id BIGINT       NOT NULL,
+    title        VARCHAR(100),
+    created_at   TIMESTAMP    DEFAULT NOW(),
+    PRIMARY KEY (course_id),
+    CONSTRAINT fk_course_routemap FOREIGN KEY (route_map_id) REFERENCES route_maps(route_map_id) ON DELETE CASCADE
+);
+
+CREATE TABLE course_spots (
+    course_spot_id BIGSERIAL NOT NULL,
+    course_id      BIGINT    NOT NULL,
+    spot_id        BIGINT    NOT NULL,
+    sort_order     INT       NOT NULL,
+    PRIMARY KEY (course_spot_id),
+    CONSTRAINT fk_cspot_course FOREIGN KEY (course_id) REFERENCES courses(course_id) ON DELETE CASCADE,
+    CONSTRAINT fk_cspot_spot   FOREIGN KEY (spot_id)   REFERENCES spots(spot_id)     ON DELETE CASCADE
+);
+
 -- 인덱스
 CREATE INDEX idx_feed_user      ON feed_posts      (user_id);
 CREATE INDEX idx_feed_spot      ON feed_posts      (spot_id);
@@ -107,3 +146,7 @@ CREATE INDEX idx_ans_post       ON qna_answers     (qna_post_id);
 CREATE INDEX idx_slike_user     ON spot_likes      (user_id);
 CREATE INDEX idx_flike_user     ON feed_post_likes (user_id);
 CREATE INDEX idx_spot_loc       ON spots           (lat, lng);
+CREATE INDEX idx_routemap_user  ON route_maps      (user_id);
+CREATE INDEX idx_rmspot_routemap ON route_map_spots (route_map_id);
+CREATE INDEX idx_course_routemap ON courses         (route_map_id);
+CREATE INDEX idx_cspot_course   ON course_spots     (course_id);

@@ -20,7 +20,7 @@ spring:
       max-request-size: 5MB
 
 server:
-  port: 8080
+  port: ${PORT:8080}
 
 # 피드 게시물 사진 등 업로드 파일이 저장될 로컬 디스크 경로.
 # (working directory 기준 상대경로 — 배포 시 절대경로로 바꾸고 싶으면 UPLOAD_DIR로 오버라이드)

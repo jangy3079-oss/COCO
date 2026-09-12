@@ -141,7 +141,7 @@ public class FeedService {
                 .imageUrl(p.getImageUrl())
                 .description(p.getDescription())
                 .spotId(spot.getId())
-                .spotName(spot.getTitle())
+                .spotName(spot.getTitleKo())
                 .lat(spot.getLat())
                 .lng(spot.getLng())
                 .likeCount(p.getLikeCount())

@@ -27,8 +27,14 @@ public class Spot {
     @Column(name = "kakao_place_id", length = 20)
     private String kakaoPlaceId;
 
-    @Column(length = 100)
-    private String title;
+    @Column(name = "title_ko", length = 100)
+    private String titleKo;
+
+    @Column(name = "title_en", length = 100)
+    private String titleEn;
+
+    @Column(name = "title_ja", length = 100)
+    private String titleJa;
 
 
     @Column(nullable = false)
@@ -65,10 +71,12 @@ public class Spot {
     private LocalDateTime createdAt;
 
     @Builder
-    public Spot(String tourApiid, String kakaoPlaceId, String title, Double lat, Double lng, String address, String category, String imageUrl, String description, Boolean isLocalPick) {
+    public Spot(String tourApiid, String kakaoPlaceId, String titleKo, String titleEn, String titleJa, Double lat, Double lng, String address, String category, String imageUrl, String description, Boolean isLocalPick) {
         this.tourApiid = tourApiid;
         this.kakaoPlaceId = kakaoPlaceId;
-        this.title = title;
+        this.titleKo = titleKo;
+        this.titleEn = titleEn;
+        this.titleJa = titleJa;
         this.lat = lat;
         this.lng = lng;
         this.address = address;

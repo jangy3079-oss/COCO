@@ -26,7 +26,7 @@ public class FeedPost {
     private User user;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "spot_id", nullable = false)
+    @JoinColumn(name = "spot_id")
     private Spot spot;
 
     @Column(name = "image_url", columnDefinition = "TEXT")
