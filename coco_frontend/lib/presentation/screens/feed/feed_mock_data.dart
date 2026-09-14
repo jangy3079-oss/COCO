@@ -142,7 +142,7 @@ FeedItem feedItemFromPost(FeedPost p) {
     source: FeedSource.user,
     author: p.userNickname,
     category: '골목',
-    place: p.spotName,
+    place: p.spotName ?? '', // 스팟 태그 없이 쓴 글이면 빈 문자열 — 카드/상세에서 위치 배지 숨김
     desc: p.description ?? '',
     neighborhood: '',
     dongId: 'all',

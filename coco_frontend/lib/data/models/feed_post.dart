@@ -5,10 +5,10 @@ class FeedPost {
   final String userNickname;
   final String? imageUrl;
   final String? description;
-  final int spotId;
-  final String spotName;
-  final double lat;
-  final double lng;
+  final int? spotId; // 스팟 태그 없이 쓴 글이면 null
+  final String? spotName;
+  final double? lat;
+  final double? lng;
   final int likeCount;
   final DateTime createdAt;
   final bool trending; // SpotService.isTrending 기준 — 피드 카드 "인기" 배지용
@@ -19,10 +19,10 @@ class FeedPost {
     required this.userNickname,
     this.imageUrl,
     this.description,
-    required this.spotId,
-    required this.spotName,
-    required this.lat,
-    required this.lng,
+    this.spotId,
+    this.spotName,
+    this.lat,
+    this.lng,
     required this.likeCount,
     required this.createdAt,
     required this.trending,
@@ -35,10 +35,10 @@ class FeedPost {
       userNickname: json['userNickname'] as String? ?? '',
       imageUrl: json['imageUrl'] as String?,
       description: json['description'] as String?,
-      spotId: json['spotId'] as int,
-      spotName: json['spotName'] as String? ?? '',
-      lat: (json['lat'] as num).toDouble(),
-      lng: (json['lng'] as num).toDouble(),
+      spotId: json['spotId'] as int?,
+      spotName: json['spotName'] as String?,
+      lat: (json['lat'] as num?)?.toDouble(),
+      lng: (json['lng'] as num?)?.toDouble(),
       likeCount: json['likeCount'] as int? ?? 0,
       createdAt: DateTime.parse(json['createdAt'] as String),
       trending: json['trending'] as bool? ?? false,

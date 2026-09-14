@@ -18,8 +18,8 @@ class FeedRepository {
         .toList();
   }
 
-  /// 로그인한 사용자가 스팟을 태그해서 글을 쓴다. 로그인 안 된 상태면 백엔드가 401을 준다.
-  Future<FeedPost> createPost({String? imageUrl, String? description, required int spotId}) async {
+  /// 로그인한 사용자가 글을 쓴다. 스팟 태그는 선택 — 로그인 안 된 상태면 백엔드가 401을 준다.
+  Future<FeedPost> createPost({String? imageUrl, String? description, int? spotId}) async {
     final response = await _dio.post('/api/feed', data: {
       'imageUrl': imageUrl,
       'description': description,

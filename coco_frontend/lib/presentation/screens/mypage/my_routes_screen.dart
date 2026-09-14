@@ -1,18 +1,20 @@
+import 'dart:ui';
+
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:pointer_interceptor/pointer_interceptor.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../widgets/map/kakao_map_view.dart';
 import '../map/map_mock_data.dart';
 
-/// "내가 만든 코스" 화면 — MY탭 메뉴 및 상단 지도 모듈에서 진입.
-/// (구 "나의 지도" 화면과 "내가 만든 골목지도" 화면을 하나로 통합함)
-/// 리스트 탭에서는 mockMyRoutes(내가 만든 코스)를 보여주고, 카드를 펼치면
-/// 스팟 순서 또는 미니맵(지도에서 보기)을 바로 확인할 수 있다. 지도 탭에서는
-/// 내가 찜한 스팟 전체를 지도 위에서 한눈에 볼 수 있다(구 "나의 지도" 기능).
-/// "저장 · 좋아요"의 "저장한 코스" 탭(다른 사람이 만든 코스를 저장한 목록)과는
-/// 별개로, 여기는 내가 직접 만든 코스만 다룬다.
+/// "나의 골목지도"(찜한 스팟 전체를 보여주는 지도) / "코스"(내가 만든 코스) 통합 화면.
+/// MY탭 상단 모듈·메뉴에서 진입하며, initialTab으로 기본 탭을 정한다(상단 모듈은 골목지도,
+/// "내가 만든 코스" 메뉴는 코스가 기본).
+/// 지도 탭(map_screen.dart)과 동일하게 전체화면 지도 위에 블러 헤더가 뜨는 스타일로 통일했다
+/// — 예전엔 작은 패딩 박스 안에 지도가 들어있는 형태였다.
 class MyRoutesScreen extends StatefulWidget {
-  const MyRoutesScreen({super.key});
+  final String initialTab; // 'alley'(나의 골목지도) | 'course'(코스)
+  const MyRoutesScreen({super.key, this.initialTab = 'alley'});
 
   @override
   State<MyRoutesScreen> createState() => _MyRoutesScreenState();
@@ -21,9 +23,26 @@ class MyRoutesScreen extends StatefulWidget {
 enum _RouteViewMode { list, map }
 
 class _MyRoutesScreenState extends State<MyRoutesScreen> {
-  String _tab = 'list'; // list | map (상단 리스트/지도 탭)
+  late String _tab = widget.initialTab;
   String? _expandedRouteId;
   final Map<String, _RouteViewMode> _viewModes = {};
+  final TextEditingController _searchController = TextEditingController();
+  String _query = '';
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  void _switchTab(String tab) {
+    if (_tab == tab) return;
+    setState(() {
+      _tab = tab;
+      _query = '';
+      _searchController.clear();
+    });
+  }
 
   Future<void> _createNew() async {
     await context.push('/map/route/new');
@@ -40,120 +59,230 @@ class _MyRoutesScreenState extends State<MyRoutesScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final routes = mockMyRoutes;
+    final isAlley = _tab == 'alley';
+    final query = _query.trim();
+
     final likedSpots = mockSpots.where((s) => savedSpotIds.contains(s.id)).toList();
+    final filteredSpots = query.isEmpty ? likedSpots : likedSpots.where((s) => s.name.contains(query)).toList();
+
+    final routes = mockMyRoutes;
+    final filteredRoutes = query.isEmpty ? routes : routes.where((r) => r.name.contains(query)).toList();
 
     return Scaffold(
       backgroundColor: Colors.white,
-      body: SafeArea(
-        child: Column(
-          children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(8, 8, 20, 8),
-              child: Row(
-                children: [
-                  IconButton(onPressed: () => context.pop(), icon: const Icon(Icons.arrow_back_rounded)),
-                  const SizedBox(width: 6),
-                  const Expanded(
-                    child: Text('내가 만든 코스', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: CocoTheme.secondary)),
-                  ),
-                ],
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
-              child: Row(
-                children: [
-                  _TabChip(label: '리스트', selected: _tab == 'list', onTap: () => setState(() => _tab = 'list')),
-                  const SizedBox(width: 8),
-                  _TabChip(label: '지도', selected: _tab == 'map', onTap: () => setState(() => _tab = 'map')),
-                  const Spacer(),
-                  Text(
-                    _tab == 'map' ? '찜한 스팟 ${likedSpots.length}곳' : '코스 ${routes.length}개',
-                    style: TextStyle(fontSize: 12, color: Colors.grey.shade500),
-                  ),
-                ],
-              ),
-            ),
-            Expanded(
-              child: _tab == 'map'
-                  ? Padding(
-                      padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(16),
-                        child: likedSpots.isEmpty
-                            ? _EmptyLikedMap(onGoToMap: () => context.go('/map'))
-                            : Builder(builder: (context) {
-                                final center = spotsCenter(likedSpots);
-                                return KakaoMapView(
-                                  centerLat: center.$1,
-                                  centerLng: center.$2,
-                                  level: 6,
-                                  markers: [
-                                    for (final s in likedSpots) KakaoMapMarker(id: s.id, lat: s.lat, lng: s.lng, name: s.name),
-                                  ],
-                                  onMarkerTap: (spotId) => context.push('/map/spot/$spotId'),
-                                );
+      body: Stack(
+        children: [
+          // 본문 — 골목지도 탭은 전체화면 지도, 코스 탭은 리스트. 둘 다 위에 블러 헤더가 뜬다.
+          Positioned.fill(
+            child: isAlley
+                ? (filteredSpots.isEmpty
+                    ? _EmptyLikedMap(onGoToMap: () => context.go('/map'))
+                    : Builder(builder: (context) {
+                        final center = spotsCenter(filteredSpots);
+                        return KakaoMapView(
+                          centerLat: center.$1,
+                          centerLng: center.$2,
+                          level: 6,
+                          markers: [
+                            for (final s in filteredSpots) KakaoMapMarker(id: s.id, lat: s.lat, lng: s.lng, name: s.name),
+                          ],
+                          onMarkerTap: (spotId) => context.push('/map/spot/$spotId'),
+                        );
+                      }))
+                : (filteredRoutes.isEmpty
+                    ? Padding(
+                        padding: const EdgeInsets.only(top: 200),
+                        child: Center(
+                          child: Text(
+                            routes.isEmpty ? '아직 만든 코스가 없어요\n지도 탭에서 스팟을 담아 코스를 만들어보세요' : '검색 결과가 없어요',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(fontSize: 14, height: 1.7, color: Colors.grey.shade500),
+                          ),
+                        ),
+                      )
+                    : ListView(
+                        padding: const EdgeInsets.fromLTRB(20, 200, 20, 20),
+                        children: [
+                          for (final r in filteredRoutes) ...[
+                            _RouteCard(
+                              route: r,
+                              expanded: _expandedRouteId == r.id,
+                              viewMode: _viewModes[r.id] ?? _RouteViewMode.list,
+                              onToggleExpanded: () => setState(() {
+                                _expandedRouteId = _expandedRouteId == r.id ? null : r.id;
                               }),
-                      ),
-                    )
-                  : routes.isEmpty
-                      ? Center(
-                          child: Text('아직 만든 코스가 없어요\n지도 탭에서 스팟을 담아 코스를 만들어보세요',
-                              textAlign: TextAlign.center, style: TextStyle(fontSize: 14, height: 1.7, color: Colors.grey.shade500)),
-                        )
-                      : ListView(
-                          padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
-                          children: [
-                            for (final r in routes) ...[
-                              _RouteCard(
-                                route: r,
-                                expanded: _expandedRouteId == r.id,
-                                viewMode: _viewModes[r.id] ?? _RouteViewMode.list,
-                                onToggleExpanded: () => setState(() {
-                                  _expandedRouteId = _expandedRouteId == r.id ? null : r.id;
-                                }),
-                                onViewModeChanged: (m) => setState(() => _viewModes[r.id] = m),
-                                onEdit: () => _editRoute(r),
-                                onViewOnMap: () => context.push('/map/route/preview', extra: {
-                                  'name': r.name,
-                                  'stops': r.stops,
-                                  'routeId': r.id,
-                                  'isOwner': true,
-                                }),
-                              ),
-                              const SizedBox(height: 12),
-                            ],
-                            _NewRouteButton(onTap: _createNew),
+                              onViewModeChanged: (m) => setState(() => _viewModes[r.id] = m),
+                              onEdit: () => _editRoute(r),
+                              onViewOnMap: () => context.push('/map/route/preview', extra: {
+                                'name': r.name,
+                                'stops': r.stops,
+                                'routeId': r.id,
+                                'isOwner': true,
+                              }),
+                            ),
+                            const SizedBox(height: 12),
+                          ],
+                          _NewRouteButton(onTap: _createNew),
+                        ],
+                      )),
+          ),
+          // 타이틀 자리에 탭 전환(나의 골목지도/코스) + 부제목 + 검색창 — 지도탭과 동일한
+          // 블러 그라데이션 헤더. 카카오맵(HtmlElementView) 바로 위에 뜨는 인터랙티브
+          // 위젯이라 PointerInterceptor로 감싸야 탭/검색 입력이 지도로 새지 않는다
+          // (map_screen.dart의 검색 드롭다운·하단 시트와 동일한 이유).
+          Positioned(
+            left: 0,
+            right: 0,
+            top: 0,
+            child: PointerInterceptor(
+              child: ShaderMask(
+                shaderCallback: (rect) => const LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [Colors.white, Colors.white, Colors.transparent],
+                  stops: [0.0, 0.68, 1.0],
+                ).createShader(rect),
+                blendMode: BlendMode.dstIn,
+                child: ClipRect(
+                  child: BackdropFilter(
+                    filter: ImageFilter.blur(sigmaX: 14, sigmaY: 14),
+                    child: Container(
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          begin: Alignment.topCenter,
+                          end: Alignment.bottomCenter,
+                          stops: const [0.0, 0.6, 1.0],
+                          colors: [
+                            Colors.white.withOpacity(0.96),
+                            Colors.white.withOpacity(0.78),
+                            Colors.white.withOpacity(0.0),
                           ],
                         ),
+                      ),
+                      child: SafeArea(
+                        bottom: false,
+                        child: Padding(
+                          padding: const EdgeInsets.fromLTRB(8, 10, 20, 16),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  IconButton(onPressed: () => context.pop(), icon: const Icon(Icons.arrow_back_rounded)),
+                                  const SizedBox(width: 2),
+                                  _HeaderTabLabel(label: '나의 골목지도', selected: isAlley, onTap: () => _switchTab('alley')),
+                                  const SizedBox(width: 14),
+                                  _HeaderTabLabel(label: '코스', selected: !isAlley, onTap: () => _switchTab('course')),
+                                ],
+                              ),
+                              const SizedBox(height: 6),
+                              Padding(
+                                padding: const EdgeInsets.only(left: 12),
+                                child: Text(
+                                  isAlley ? '찜한 스팟 ${likedSpots.length}곳을 지도에서 확인하세요' : '내가 만든 코스 ${routes.length}개',
+                                  style: TextStyle(fontSize: 13, color: Colors.grey.shade600),
+                                ),
+                              ),
+                              const SizedBox(height: 12),
+                              Padding(
+                                padding: const EdgeInsets.only(left: 12),
+                                child: _RoutesSearchBar(
+                                  controller: _searchController,
+                                  hintText: isAlley ? '찜한 스팟 검색...' : '코스 검색...',
+                                  onChanged: (v) => setState(() => _query = v),
+                                  onClear: () => setState(() {
+                                    _query = '';
+                                    _searchController.clear();
+                                  }),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
             ),
-          ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// 헤더의 "나의 골목지도"/"코스" 탭 라벨. 레퍼런스(인연/통화)처럼 선택된 쪽은 진하게 검정,
+/// 선택 안 된 쪽은 회색 — 배경/테두리 없이 텍스트 색·굵기로만 구분한다.
+class _HeaderTabLabel extends StatelessWidget {
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+  const _HeaderTabLabel({required this.label, required this.selected, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      behavior: HitTestBehavior.opaque,
+      child: Text(
+        label,
+        style: TextStyle(
+          fontSize: 22,
+          fontWeight: selected ? FontWeight.w800 : FontWeight.w600,
+          color: selected ? CocoTheme.secondary : Colors.grey.shade400,
         ),
       ),
     );
   }
 }
 
-class _TabChip extends StatelessWidget {
-  final String label;
-  final bool selected;
-  final VoidCallback onTap;
-  const _TabChip({required this.label, required this.selected, required this.onTap});
+/// map_screen.dart의 _MapSearchBar와 동일한 스타일 — hint 문구만 탭에 따라 달라진다
+/// (라이브러리 프라이빗이라 그대로 재사용이 안 돼서 동일한 모양으로 새로 둠).
+class _RoutesSearchBar extends StatelessWidget {
+  final TextEditingController controller;
+  final String hintText;
+  final ValueChanged<String> onChanged;
+  final VoidCallback onClear;
+
+  const _RoutesSearchBar({
+    required this.controller,
+    required this.hintText,
+    required this.onChanged,
+    required this.onClear,
+  });
 
   @override
   Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(18),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 7),
-        decoration: BoxDecoration(
-          color: selected ? CocoTheme.secondary : Colors.white,
-          borderRadius: BorderRadius.circular(18),
-          border: Border.all(color: selected ? CocoTheme.secondary : Colors.grey.shade300),
+    return Container(
+      height: 48,
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(24),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.08),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: TextField(
+        controller: controller,
+        onChanged: onChanged,
+        decoration: InputDecoration(
+          border: InputBorder.none,
+          prefixIcon: const Icon(Icons.search, color: Colors.grey),
+          suffixIcon: controller.text.isEmpty
+              ? null
+              : IconButton(
+                  icon: const Icon(Icons.close_rounded, color: Colors.grey, size: 20),
+                  onPressed: onClear,
+                ),
+          hintText: hintText,
+          hintStyle: const TextStyle(fontSize: 14, color: Colors.grey),
+          contentPadding: const EdgeInsets.symmetric(vertical: 14),
         ),
-        child: Text(label, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: selected ? Colors.white : CocoTheme.secondary)),
       ),
     );
   }
@@ -378,7 +507,7 @@ class _SegmentButton extends StatelessWidget {
   }
 }
 
-/// 지도 탭에서 찜한 스팟이 하나도 없을 때 보여주는 빈 상태 (구 my_map_screen.dart의 _EmptyMap).
+/// 골목지도 탭에서 찜한 스팟이 하나도 없을 때 보여주는 빈 상태.
 class _EmptyLikedMap extends StatelessWidget {
   final VoidCallback onGoToMap;
   const _EmptyLikedMap({required this.onGoToMap});

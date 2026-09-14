@@ -22,6 +22,15 @@ class KakaoMapMarker {
   });
 }
 
+class MapFocusTarget {
+  final String id;
+  final double lat;
+  final double lng;
+  final String? name;
+  final String? subtitle;
+  const MapFocusTarget({required this.id, required this.lat, required this.lng, this.name, this.subtitle});
+}
+
 class KakaoMapView extends StatelessWidget {
   final double centerLat;
   final double centerLng;
@@ -32,6 +41,7 @@ class KakaoMapView extends StatelessWidget {
   final double? myLocationLng;
   final void Function(double lat, double lng)? onMapTap;
   final void Function(double swLat, double swLng, double neLat, double neLng)? onBoundsChanged;
+  final MapFocusTarget? focusTarget;
 
   const KakaoMapView({
     super.key,
@@ -44,6 +54,7 @@ class KakaoMapView extends StatelessWidget {
     this.myLocationLng,
     this.onMapTap,
     this.onBoundsChanged,
+    this.focusTarget,
   });
 
   @override

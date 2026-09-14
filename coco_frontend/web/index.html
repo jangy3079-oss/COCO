@@ -53,6 +53,21 @@
     window.__cocoKakaoLoadPromise = null;
     window.__cocoKakaoCallout = {}; // divId -> 현재 열려있는 핀 정보 말풍선(CustomOverlay), 없으면 null
 
+    // 말풍선이 "뿅" 튀어나오는 느낌으로 뜨도록 하는 바운스 팝업 애니메이션.
+    // CustomOverlay는 매번 새 DOM을 만들어 붙이므로 클래스만 한 번 정의해두면 계속 재사용된다.
+    (function cocoInjectStyles() {
+      var style = document.createElement('style');
+      style.textContent =
+        '@keyframes cocoPopIn {' +
+        '0% { transform: scale(0.7); opacity: 0; }' +
+        '60% { transform: scale(1.03); opacity: 1; }' +
+        '82% { transform: scale(0.99); }' +
+        '100% { transform: scale(1); opacity: 1; }' +
+        '}' +
+        '.coco-pop-in { transform-origin: 50% 100%; animation: cocoPopIn 0.28s cubic-bezier(0.34, 1.2, 0.64, 1) both; }';
+      document.head.appendChild(style);
+    })();
+
     // 핀을 탭하면 바로 상세로 이동하지 않고 이 말풍선을 먼저 띄운다 — 이름/카테고리를
     // 보여주고, "자세히 보기"를 한 번 더 눌러야 실제 onMarkerClick(상세 이동)이 호출된다.
     function cocoHideCallout(divId) {
@@ -68,6 +83,14 @@
 
       var wrap = document.createElement('div');
       wrap.style.cssText = 'position:relative;transform:translateY(-14px);';
+
+      // 실제로 애니메이션이 붙는 건 이 안쪽 pop — wrap 자체의 translateY 위치 보정과
+      // 애니메이션용 scale transform이 서로 안 겹치게 분리했다(같은 엘리먼트에 두면
+      // 애니메이션이 끝나는 순간 위치 보정 transform이 사라져버림).
+      var pop = document.createElement('div');
+      pop.className = 'coco-pop-in';
+      pop.style.cssText = 'position:relative;';
+      wrap.appendChild(pop);
 
       var card = document.createElement('div');
       card.style.cssText =
@@ -98,13 +121,13 @@
       });
       card.appendChild(detailBtn);
 
-      wrap.appendChild(card);
+      pop.appendChild(card);
 
       var caret = document.createElement('div');
       caret.style.cssText =
         'position:absolute;left:50%;bottom:-6px;transform:translateX(-50%);width:0;height:0;' +
         'border-left:6px solid transparent;border-right:6px solid transparent;border-top:6px solid #fff;';
-      wrap.appendChild(caret);
+      pop.appendChild(caret);
 
       var closeBtn = document.createElement('div');
       closeBtn.textContent = '×';
@@ -115,7 +138,7 @@
         e.stopPropagation();
         cocoHideCallout(divId);
       });
-      wrap.appendChild(closeBtn);
+      pop.appendChild(closeBtn);
 
       var overlay = new kakao.maps.CustomOverlay({
         position: new kakao.maps.LatLng(m.lat, m.lng),
@@ -129,20 +152,54 @@
       window.__cocoKakaoCallout[divId] = overlay;
     }
 
-    // 핀이 몰릴 때(핀 천국) 화면 픽셀 기준으로 가까운 마커끼리 묶어서 하나의
-    // 클러스터 버블로 보여준다. 카카오 공식 MarkerClusterer는 kakao.maps.Marker만
-    // 지원해서(우리는 CustomOverlay로 직접 그리기 때문에 못 씀) 간단한 격자(grid)
-    // 기반 클러스터링을 직접 구현한다: 지도를 픽셀 격자로 나누고, 같은 칸에 들어온
-    // 마커들을 하나로 묶는다. 줌/이동으로 화면이 바뀔 때마다(=idle 이벤트) 다시 계산한다.
-    var COCO_CLUSTER_CELL_PX = 110;
+    // 핀을 누르면 지도가 그 핀을 중심으로 부드럽게 이동(panTo)한 뒤 말풍선을 띄운다.
+    // panTo가 끝나면 'idle' 이벤트가 한 번 더 발생해서 cocoRenderClusters가 다시
+    // 돌며 열려있던 말풍선을 지워버리므로(마커 재계산 시 항상 먼저 닫음), 이동이
+    // 끝난 뒤(=그 idle 이벤트 이후)에 말풍선을 띄워야 바로 사라지지 않는다.
+    // 혹시 이미 그 핀이 중심이라 panTo가 아무 것도 안 움직여서 idle이 안 오는
+    // 경우를 대비해 타임아웃 폴백도 같이 둔다.
+    function cocoShowCalloutAfterPan(divId, map, m, onMarkerClick) {
+      var shown = false;
+      function showOnce() {
+        if (shown) return;
+        shown = true;
+        kakao.maps.event.removeListener(map, 'idle', showOnce);
+        cocoShowCallout(divId, map, m, onMarkerClick);
+      }
+      kakao.maps.event.addListener(map, 'idle', showOnce);
+      setTimeout(showOnce, 400);
+      map.panTo(new kakao.maps.LatLng(m.lat, m.lng));
+    }
+
+    // 핀이 몰릴 때(핀 천국) 화면 위에서 실제로 원(핀/클러스터 버블)끼리 겹칠 때만
+    // 하나로 묶는다. 격자(grid)로 칸을 나누던 이전 방식은 칸 경계에 걸친 핀이 안
+    // 묶이거나, 반대로 클러스터 버블 반지름이 칸 크기보다 커서 옆 칸 버블과 서로
+    // 겹쳐 보이는(뭉친 원들이 지저분하게 겹쳐 보이는) 문제가 있었다. 대신 각 핀/
+    // 클러스터를 화면 픽셀 원으로 보고, 겹치는 쌍이 하나도 없을 때까지 계속
+    // 합치는 방식(계층적 병합)으로 바꿨다 — 그래서 작은 클러스터 두 개가 서로
+    // 겹치면 그 클러스터끼리도 자동으로 더 큰 클러스터 하나로 다시 뭉친다.
+    var COCO_SMALL_PIN_PX = 8; // 평범한 스팟 핀 지름 — 눈에 덜 띄게 아주 작게
+    var COCO_BIG_PIN_PX = 20; // 로컬픽/인기 핀 지름
+    var COCO_OVERLAP_SLACK_PX = 4; // 테두리(2~3px)까지 감안해 이 정도 겹치면 "겹친다"로 간주
+
+    function cocoPinRadiusPx(m) {
+      return (m.trending || m.isLocalPick ? COCO_BIG_PIN_PX : COCO_SMALL_PIN_PX) / 2;
+    }
+
+    function cocoClusterSizePx(count) {
+      return Math.min(34 + count * 4, 64); // 개수가 많을수록 커지되 상한을 둠
+    }
 
     function cocoRenderClusters(divId) {
       var map = window.__cocoKakaoMaps[divId];
       var raw = window.__cocoKakaoMarkersRaw[divId] || [];
       if (!map) return;
 
-      // 마커를 다시 그리는 시점엔 예전 핀을 가리키던 말풍선이 위치를 잃을 수 있어 같이 닫는다.
-      cocoHideCallout(divId);
+      // 말풍선(CustomOverlay)은 자기 lat/lng 좌표를 직접 들고 있어서 마커 배열이
+      // 다시 그려져도 위치가 깨지지 않는다 — 그래서 여기서 자동으로 닫지 않는다.
+      // (예전엔 매번 닫았는데, 핀 탭 시 panTo로 지도가 살짝 움직이면 뷰포트 재조회 →
+      // 마커 재계산이 뒤따라 일어나서 말풍선이 뜨자마자 바로 닫혀버리는 버그가 있었음.
+      // 닫기는 "×" 버튼과 지도 빈 곳 탭 핸들러가 이미 처리하므로 이걸로 충분하다.)
 
       (window.__cocoKakaoMarkers[divId] || []).forEach(function (m) { m.setMap(null); });
       (window.__cocoKakaoOverlays[divId] || []).forEach(function (o) { o.setMap(null); });
@@ -150,26 +207,53 @@
       var projection = map.getProjection();
       var onMarkerClick = window.__cocoMarkerClickHandlers[divId];
 
-      // 격자 칸 -> 그 칸에 속한 원본 마커들
-      var cells = {};
-      raw.forEach(function (m) {
-        var point = projection.pointFromCoords(new kakao.maps.LatLng(m.lat, m.lng));
-        var cellX = Math.floor(point.x / COCO_CLUSTER_CELL_PX);
-        var cellY = Math.floor(point.y / COCO_CLUSTER_CELL_PX);
-        var key = cellX + '_' + cellY;
-        if (!cells[key]) cells[key] = [];
-        cells[key].push(m);
+      function project(lat, lng) {
+        return projection.pointFromCoords(new kakao.maps.LatLng(lat, lng));
+      }
+
+      // 마커 하나당 노드 하나로 시작 — 반지름은 그 핀 자신의 시각적 반지름.
+      var nodes = raw.map(function (m) {
+        var p = project(m.lat, m.lng);
+        return { lat: m.lat, lng: m.lng, x: p.x, y: p.y, members: [m] };
       });
+
+      function radiusOf(node) {
+        return node.members.length === 1 ? cocoPinRadiusPx(node.members[0]) : cocoClusterSizePx(node.members.length) / 2;
+      }
+
+      // 겹치는 쌍이 하나도 안 남을 때까지 반복해서 합친다. 합칠 때마다 중심(위경도
+      // 평균)과 반지름(멤버 수 기준)을 다시 계산하므로, 합쳐져서 커진 원이 세 번째
+      // 원과 또 겹치면 다음 반복에서 그것도 같이 합쳐진다.
+      var mergedAny = true;
+      while (mergedAny) {
+        mergedAny = false;
+        for (var i = 0; i < nodes.length && !mergedAny; i++) {
+          for (var j = i + 1; j < nodes.length; j++) {
+            var a = nodes[i], b = nodes[j];
+            var dx = a.x - b.x, dy = a.y - b.y;
+            var dist = Math.sqrt(dx * dx + dy * dy);
+            if (dist < radiusOf(a) + radiusOf(b) + COCO_OVERLAP_SLACK_PX) {
+              var members = a.members.concat(b.members);
+              var lat = members.reduce(function (s, m) { return s + m.lat; }, 0) / members.length;
+              var lng = members.reduce(function (s, m) { return s + m.lng; }, 0) / members.length;
+              var p = project(lat, lng);
+              nodes.splice(j, 1);
+              nodes.splice(i, 1, { lat: lat, lng: lng, x: p.x, y: p.y, members: members });
+              mergedAny = true;
+              break;
+            }
+          }
+        }
+      }
 
       var newMarkers = [];
       var newOverlays = [];
 
-      Object.keys(cells).forEach(function (key) {
-        var group = cells[key];
-        if (group.length === 1) {
-          renderSinglePin(group[0]);
+      nodes.forEach(function (node) {
+        if (node.members.length === 1) {
+          renderSinglePin(node.members[0]);
         } else {
-          renderClusterBubble(group);
+          renderClusterBubble(node.members);
         }
       });
 
@@ -179,17 +263,19 @@
         // 색은 로컬 픽일 때만 강조색(주황) — 로컬 픽은 항상 "큰 강조된 점"이 되고,
         // trending만 있는 건 "큰 점"(색은 기본), 둘 다 없으면 "작은 점".
         var isBig = m.trending || m.isLocalPick;
-        var size = isBig ? 30 : 14; // 평범한 스팟은 눈에 덜 띄게 확실히 작게
+        var size = isBig ? COCO_BIG_PIN_PX : COCO_SMALL_PIN_PX;
+        var borderWidth = isBig ? 3 : 2; // 점이 워낙 작아져서 두꺼운 테두리는 비율이 안 맞음
         var color = m.isLocalPick ? '#FF7A33' : '#2F8FE0';
         var pin = document.createElement('div');
         pin.style.cssText =
           'width:' + size + 'px;height:' + size + 'px;border-radius:50%;background:' + color + ';' +
-          'border:3px solid #fff;box-shadow:0 2px 6px rgba(0,0,0,0.35);cursor:pointer;';
-        // 바로 이동하지 않고 이름/카테고리 말풍선을 먼저 띄운다 — "자세히 보기"를
-        // 한 번 더 눌러야 실제 onMarkerClick(상세 화면 이동)이 호출된다.
+          'border:' + borderWidth + 'px solid #fff;box-shadow:0 2px 6px rgba(0,0,0,0.35);cursor:pointer;';
+        // 바로 이동하지 않고, 지도를 이 핀 중심으로 부드럽게 옮긴 뒤 이름/카테고리
+        // 말풍선을 띄운다 — "자세히 보기"를 한 번 더 눌러야 실제 onMarkerClick(상세
+        // 화면 이동)이 호출된다.
         pin.addEventListener('click', function (e) {
           e.stopPropagation();
-          cocoShowCallout(divId, map, m, onMarkerClick);
+          cocoShowCalloutAfterPan(divId, map, m, onMarkerClick);
         });
         var pinOverlay = new kakao.maps.CustomOverlay({
           position: position, content: pin, xAnchor: 0.5, yAnchor: 0.5, clickable: true,
@@ -208,7 +294,7 @@
             'box-shadow:0 1px 4px rgba(0,0,0,0.25);white-space:nowrap;cursor:pointer;';
           tag.addEventListener('click', function (e) {
             e.stopPropagation();
-            cocoShowCallout(divId, map, m, onMarkerClick);
+            cocoShowCalloutAfterPan(divId, map, m, onMarkerClick);
           });
           var overlay = new kakao.maps.CustomOverlay({
             position: position, content: tag, yAnchor: 1.9, clickable: true,
@@ -223,7 +309,7 @@
         var avgLng = group.reduce(function (s, m) { return s + m.lng; }, 0) / group.length;
         var position = new kakao.maps.LatLng(avgLat, avgLng);
 
-        var size = Math.min(34 + group.length * 4, 64); // 개수가 많을수록 커지되 상한을 둠
+        var size = cocoClusterSizePx(group.length);
         // 커질수록 아래 지도가 살짝 비쳐 보이도록 더 반투명하게 — 뭉친 핀 느낌을 줄인다.
         var alpha = Math.max(0.45, 0.75 - group.length * 0.03);
         var bubble = document.createElement('div');
@@ -310,6 +396,21 @@
     window.cocoSetKakaoCenter = function (divId, lat, lng) {
       var map = window.__cocoKakaoMaps[divId];
       if (map) map.setCenter(new kakao.maps.LatLng(lat, lng));
+    };
+
+    // 검색 결과 탭 전용 — 단순 재중심(cocoSetKakaoCenter)과 달리 살짝 확대까지
+    // 하고, 이동이 끝나면 핀을 직접 탭했을 때와 똑같은 말풍선(뿅 애니메이션 포함)을
+    // 띄운다. 확대는 애니메이션 없이 즉시 적용하고, 이동은 기존 panTo 애니메이션을
+    // 그대로 재사용(cocoShowCalloutAfterPan)한다.
+    var COCO_SEARCH_FOCUS_LEVEL = 3;
+
+    window.cocoFocusSpot = function (divId, markerJson) {
+      var map = window.__cocoKakaoMaps[divId];
+      if (!map) return;
+      var m = JSON.parse(markerJson);
+      var onMarkerClick = window.__cocoMarkerClickHandlers[divId];
+      map.setLevel(COCO_SEARCH_FOCUS_LEVEL);
+      cocoShowCalloutAfterPan(divId, map, m, onMarkerClick);
     };
 
     // 지도를 직접 눌러서 좌표를 찍는 용도(스팟 등록 화면의 "지도를 눌러 위치를

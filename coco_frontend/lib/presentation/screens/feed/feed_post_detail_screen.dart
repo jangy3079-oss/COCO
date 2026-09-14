@@ -221,7 +221,8 @@ class _FeedPostDetailScreenState extends State<FeedPostDetailScreen> {
                       padding: const EdgeInsets.fromLTRB(20, 14, 20, 0),
                       child: Text(item.desc, style: TextStyle(fontSize: 14, height: 1.7, color: Colors.black.withOpacity(0.7))),
                     ),
-                    if (!_isRoute)
+                    // 스팟 태그 없이 쓴 글이면 place가 빈 문자열이라 위치 배지를 아예 안 그린다.
+                    if (!_isRoute && item.place.isNotEmpty)
                       Padding(
                         padding: const EdgeInsets.fromLTRB(20, 14, 20, 0),
                         child: InkWell(

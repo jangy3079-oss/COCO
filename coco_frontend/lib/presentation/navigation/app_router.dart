@@ -137,7 +137,7 @@ final appRouter = GoRouter(
     ),
     GoRoute(
       path: '/mypage/routes',
-      builder: (c, s) => const MyRoutesScreen(),
+      builder: (c, s) => MyRoutesScreen(initialTab: (s.extra as String?) ?? 'alley'),
     ),
     GoRoute(
       path: '/mypage/settings',

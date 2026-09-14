@@ -801,7 +801,8 @@ class _FeedCardPhoto extends StatelessWidget {
                     ),
                   ),
                 )
-              else
+              // 스팟 태그 없이 쓴 글이면 place가 빈 문자열이라 위치 배지를 아예 안 그린다.
+              else if (item.place.isNotEmpty)
                 Positioned(
                   left: 10,
                   bottom: 10,

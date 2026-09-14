@@ -61,6 +61,22 @@ external void _cocoSetMapClickHandler(JSString divId, JSFunction onClick);
 @JS('cocoSetBoundsChangedHandler')
 external void _cocoSetBoundsChangedHandler(JSString divId, JSFunction onBoundsChanged);
 
+@JS('cocoFocusSpot')
+external void _cocoFocusSpot(JSString divId, JSString markerJson);
+
+// 검색 결과 탭처럼 "특정 스팟으로 살짝 확대해서 이동 + 도착하면 핀 탭과 동일한
+// 말풍선(뿅 애니메이션)을 띄운다"를 요청할 때 쓰는 값. centerLat/centerLng(단순
+// 재중심, 콜아웃 없음)와는 별개 경로 — 매번 새 인스턴스를 만들어서 넘기면 동일
+// 좌표라도(같은 스팟 재검색) 매번 새로 포커스가 걸린다(기본 == 이 identity 비교라서).
+class MapFocusTarget {
+  final String id;
+  final double lat;
+  final double lng;
+  final String? name;
+  final String? subtitle;
+  const MapFocusTarget({required this.id, required this.lat, required this.lng, this.name, this.subtitle});
+}
+
 class KakaoMapView extends StatefulWidget {
   final double centerLat;
   final double centerLng;
@@ -73,6 +89,7 @@ class KakaoMapView extends StatefulWidget {
   // 지도 화면(뷰포트)이 바뀔 때(드래그/줌 종료)마다 호출 — 화면에 보이는 범위만큼만
   // 서버에 다시 요청해서 핀 밀집을 막고 싶을 때 사용(뷰포트 쿼리).
   final void Function(double swLat, double swLng, double neLat, double neLng)? onBoundsChanged;
+  final MapFocusTarget? focusTarget;
 
   const KakaoMapView({
     super.key,
@@ -85,6 +102,7 @@ class KakaoMapView extends StatefulWidget {
     this.myLocationLng,
     this.onMapTap,
     this.onBoundsChanged,
+    this.focusTarget,
   });
 
   @override
@@ -171,6 +189,20 @@ class _KakaoMapViewState extends State<KakaoMapView> {
     }
     if (oldWidget.markers != widget.markers) {
       _updateMarkers();
+    }
+    // focusTarget은 매번 새 인스턴스로 넘어오는 일회성 요청이라 identity(!=)만으로
+    // "새 요청인지"를 판단한다 — centerLat/centerLng 재중심(콜아웃 없음)과 달리
+    // 확대 + panTo + 말풍선을 한번에 처리한다.
+    final focusTarget = widget.focusTarget;
+    if (focusTarget != null && focusTarget != oldWidget.focusTarget) {
+      final json = jsonEncode({
+        'id': focusTarget.id,
+        'lat': focusTarget.lat,
+        'lng': focusTarget.lng,
+        'name': focusTarget.name,
+        'subtitle': focusTarget.subtitle,
+      });
+      _cocoFocusSpot(_divId.toJS, json.toJS);
     }
     if (oldWidget.myLocationLat != widget.myLocationLat || oldWidget.myLocationLng != widget.myLocationLng) {
       _updateMyLocation();

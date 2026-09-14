@@ -51,7 +51,7 @@ class _FeedComposerScreenState extends State<FeedComposerScreen> {
 
   bool get _nextEnabled => switch (_step) {
         1 => true, // 사진은 선택이라 안 골라도 다음으로 넘어갈 수 있음
-        2 => _selectedSpot != null,
+        2 => true, // 스팟 태그도 선택 — 안 골라도 다음으로 넘어갈 수 있음
         _ => true,
       };
 
@@ -133,11 +133,10 @@ class _FeedComposerScreenState extends State<FeedComposerScreen> {
 
   Future<void> _submit() async {
     final desc = _descController.text.trim();
-    final spot = _selectedSpot;
-    if (desc.isEmpty || spot == null || _submitting || _uploadingImage) return;
+    if (desc.isEmpty || _submitting || _uploadingImage) return;
     setState(() => _submitting = true);
     try {
-      await _feedRepository.createPost(description: desc, spotId: spot.id, imageUrl: _uploadedImageUrl);
+      await _feedRepository.createPost(description: desc, spotId: _selectedSpot?.id, imageUrl: _uploadedImageUrl);
       if (!mounted) return;
       context.pop();
     } catch (e) {
@@ -338,7 +337,7 @@ class _LocationStep extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text('장소를 태그해주세요', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: CocoTheme.secondary)),
+        const Text('장소를 태그해주세요 (선택)', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: CocoTheme.secondary)),
         const SizedBox(height: 12),
         TextField(
           onChanged: onQueryChanged,

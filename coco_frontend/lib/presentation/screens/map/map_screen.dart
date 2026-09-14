@@ -34,9 +34,16 @@ class _MapScreenState extends State<MapScreen> {
   // mapDefaultCenterLat/Lng(부산 남포동)를 그대로 쓴다.
   double _centerLat = mapDefaultCenterLat;
   double _centerLng = mapDefaultCenterLng;
+  // 실제 GPS 위치 — 카메라 중심(_centerLat/_centerLng)과 별개로 "내 위치" 파란 점
+  // 표시에만 쓴다. 예전엔 이 둘을 같이 썼는데, 그러면 검색 등으로 카메라만 옮겨도
+  // 파란 점이 실제로 있지도 않은 곳으로 같이 끌려가는 버그가 생겨서 분리했다.
+  double? _myLat, _myLng;
   // GPS로 실제 위치를 구했을 때만 true — 지도 위 "내 위치" 파란 점은 이 값이
   // true일 때만 표시한다(기본 좌표로 조용히 폴백한 경우에는 점을 띄우지 않음).
   bool _locationAvailable = false;
+  // 검색 결과 탭 등으로 특정 스팟에 확대+이동+말풍선을 한 번에 요청할 때 쓴다.
+  // _openSearchResult에서 매번 새 인스턴스를 만들어 넣는다.
+  MapFocusTarget? _focusTarget;
 
   // 지도 화면(뷰포트) 범위 — 드래그/줌이 끝날 때마다 갱신되며, 이 범위 안에 있는
   // 스팟만 지도/하단 시트에 표시한다(핀 밀집 방지). null이면 아직 한 번도 idle
@@ -49,30 +56,50 @@ class _MapScreenState extends State<MapScreen> {
   // 지도 마커뿐 아니라 하단 "주변 스팟" 시트(_nearbySheetSpots)도 이 값을 함께 참조한다.
   final _spotRepository = SpotRepository();
   List<db.Spot> _dbSpots = [];
+  int _dbSpotsRequestSeq = 0; // 마지막으로 보낸 뷰포트 조회 순번 — 응답이 늦게 와도 최신 것만 반영하기 위함
 
   void _onBoundsChanged(double swLat, double swLng, double neLat, double neLng) {
-    setState(() {
-      _swLat = swLat;
-      _swLng = swLng;
-      _neLat = neLat;
-      _neLng = neLng;
+    // 카카오맵 idle 이벤트가 (예: setCenter 직후) 동기적으로 곧바로 발생하면, 이 콜백이
+    // Flutter의 build/didUpdateWidget 처리 도중에 재진입해서 "setState() called during
+    // build" 예외가 난다 — 검색 결과 탭 시 지도 recenter는 되는데 핀이 안 갱신되던 원인.
+    // 한 프레임 뒤로 미뤄서 build 바깥에서 안전하게 처리한다.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      setState(() {
+        _swLat = swLat;
+        _swLng = swLng;
+        _neLat = neLat;
+        _neLng = neLng;
+      });
+      _fetchDbSpots();
     });
-    _fetchDbSpots();
   }
 
   Future<void> _fetchDbSpots() async {
     final swLat = _swLat, swLng = _swLng, neLat = _neLat, neLng = _neLng;
     if (swLat == null || swLng == null || neLat == null || neLng == null) return;
+    // 지도가 빠르게 여러 번 움직이면(검색 결과 탭 → panTo 등) 이전 요청의 응답이
+    // 나중에 도착할 수 있어, 그 순간의 요청 번호를 찍어두고 응답 시점에 비교한다.
+    final requestSeq = ++_dbSpotsRequestSeq;
+    // "골목"은 category 태그뿐 아니라 이름에 "골목"이 들어간 곳도 잡아야 해서, 서버에는
+    // 카테고리 필터 없이 전체를 요청한 뒤 클라이언트에서 한 번 더 걸러낸다. 그 외
+    // 카테고리는 지금처럼 서버 쪽 category 파라미터로 정확히 걸러진다.
+    final isAlleyFilter = _selectedCategory == '골목';
     try {
       final spots = await _spotRepository.fetchSpotsInViewport(
         swLat: swLat,
         neLat: neLat,
         swLng: swLng,
         neLng: neLng,
-        category: _selectedCategory == '전체' ? null : _selectedCategory,
+        category: (_selectedCategory == '전체' || isAlleyFilter) ? null : _selectedCategory,
       );
       if (!mounted) return;
-      setState(() => _dbSpots = spots);
+      // 그 사이 더 최신 요청이 나갔다면 이 응답은 오래된 뷰포트 것이므로 버린다.
+      if (requestSeq != _dbSpotsRequestSeq) return;
+      final filtered = isAlleyFilter
+          ? spots.where((s) => s.category == '골목' || s.title.contains('골목')).toList()
+          : spots;
+      setState(() => _dbSpots = filtered);
       // 코스 저장 등 다른 화면에서도 id만으로 이 스팟들을 다시 찾을 수 있게 캐싱.
       for (final spot in spots) {
         dbSpotCache['db-${spot.id}'] = mockSpotFromDb(spot);
@@ -152,14 +179,19 @@ class _MapScreenState extends State<MapScreen> {
     FocusScope.of(context).unfocus();
   }
 
-  // 예전엔 검색 결과를 탭하면 바로 상세 화면으로 이동했는데, 지금은 그 스팟의
-  // 핀 위치로 지도만 이동시킨다 — 상세를 보려면 그 자리에서 핀을 눌러 말풍선의
-  // "자세히 보기"까지 눌러야 한다(핀 탭 흐름과 진입 경로를 통일).
+  // 검색 결과를 탭하면 그 스팟 쪽으로 살짝 확대 + 부드럽게 이동한 뒤, 핀을 직접
+  // 탭했을 때와 같은 말풍선(뿅 애니메이션 포함)을 띄운다 — "자세히 보기"까지
+  // 눌러야 상세로 이동하는 흐름은 핀 탭과 동일하게 유지.
   void _openSearchResult(MockSpot spot) {
     _clearSearch();
     setState(() {
-      _centerLat = spot.lat;
-      _centerLng = spot.lng;
+      _focusTarget = MapFocusTarget(
+        id: spot.id,
+        lat: spot.lat,
+        lng: spot.lng,
+        name: spot.name,
+        subtitle: spot.category,
+      );
     });
   }
 
@@ -189,6 +221,8 @@ class _MapScreenState extends State<MapScreen> {
       setState(() {
         _centerLat = position.latitude;
         _centerLng = position.longitude;
+        _myLat = position.latitude;
+        _myLng = position.longitude;
         _locationAvailable = true;
       });
     } catch (_) {
@@ -197,9 +231,13 @@ class _MapScreenState extends State<MapScreen> {
   }
 
   List<MockSpot> get _filteredSpots {
+    // "골목"은 category 태그가 붙은 곳뿐 아니라, 이름에 "골목"이라는 단어가 들어간
+    // 곳도 같이 잡는다 — 다른 카테고리는 태그만으로 정확히 걸러진다.
     final byCategory = _selectedCategory == '전체'
         ? mockSpots
-        : mockSpots.where((s) => s.category == _selectedCategory).toList();
+        : _selectedCategory == '골목'
+            ? mockSpots.where((s) => s.category == '골목' || s.name.contains('골목')).toList()
+            : mockSpots.where((s) => s.category == _selectedCategory).toList();
     final swLat = _swLat, swLng = _swLng, neLat = _neLat, neLng = _neLng;
     if (swLat == null || swLng == null || neLat == null || neLng == null) {
       return byCategory;
@@ -301,9 +339,10 @@ class _MapScreenState extends State<MapScreen> {
                   onMarkerTap: (spotId) => spotId.startsWith('db-')
                       ? context.push('/map/spot/$spotId')
                       : _openSpotDetail(mockSpotById(spotId)),
-                  myLocationLat: _locationAvailable ? _centerLat : null,
-                  myLocationLng: _locationAvailable ? _centerLng : null,
+                  myLocationLat: _locationAvailable ? _myLat : null,
+                  myLocationLng: _locationAvailable ? _myLng : null,
                   onBoundsChanged: _onBoundsChanged,
+                  focusTarget: _focusTarget,
                 ),
               ),
               // 타이틀 + 검색창 + 카테고리 필터 (지도 위에 블러 그라데이션과 함께 떠 있는 형태.
@@ -371,10 +410,15 @@ class _MapScreenState extends State<MapScreen> {
                                 // 검색어가 있을 때만 결과 드롭다운을 보여준다 — 목업은 즉시,
                                 // DB는 300ms 디바운스 후 반영되므로 검색 도중 결과가 순간적으로
                                 // 늘어나는 건 자연스러운 동작.
+                                // 카카오맵(HtmlElementView)이 바로 아래 깔려 있어서, PointerInterceptor
+                                // 없이는 탭 이벤트가 그 밑 실제 DOM(지도)으로 새어나가 "가끔씩만 동작"하는
+                                // 문제가 생긴다 — 하단 시트(_NearbySpotsSheet)와 동일한 처리.
                                 if (_searchQuery.trim().isNotEmpty)
-                                  _SearchResultsDropdown(
-                                    results: _searchResults,
-                                    onTap: _openSearchResult,
+                                  PointerInterceptor(
+                                    child: _SearchResultsDropdown(
+                                      results: _searchResults,
+                                      onTap: _openSearchResult,
+                                    ),
                                   ),
                                 const SizedBox(height: 10),
                                 _CategoryChipsRow(
@@ -535,7 +579,12 @@ class _SearchResultsDropdown extends StatelessWidget {
           ),
         ],
       ),
-      child: results.isEmpty
+      // ListTile은 잉크 스플래시를 가장 가까운 Material 조상에 그리는데, 바로 위가
+      // 배경색 있는 DecoratedBox(Container)라서 Material이 없다는 프레임워크 경고가
+      // 떴었다 — Flutter가 안내한 대로 투명 Material로 감싸서 해결.
+      child: Material(
+        color: Colors.transparent,
+        child: results.isEmpty
           ? const Padding(
               padding: EdgeInsets.symmetric(vertical: 20),
               child: Center(
@@ -558,6 +607,7 @@ class _SearchResultsDropdown extends StatelessWidget {
                 );
               },
             ),
+      ),
     );
   }
 }
