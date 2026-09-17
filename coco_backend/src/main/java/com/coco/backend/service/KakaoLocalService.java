@@ -107,6 +107,11 @@ public class KakaoLocalService {
     // 붙여 category_group_code 없는 순수 텍스트 검색으로 따로 조회한다.
     private static final String PARK_KEYWORD_SUFFIX = " 공원";
 
+    // "골목"도 공원과 마찬가지로 대응하는 카테고리 그룹 코드가 없다. 대신 보수동 책방골목,
+    // 깡통시장 인쇄골목처럼 실제로 "OO골목"이라는 지명이 부산에 많아서, 동 이름 + "골목"
+    // 키워드로 검색하면 진짜 골목 지명들을 찾아낼 수 있다.
+    private static final String ALLEY_KEYWORD_SUFFIX = " 골목";
+
     private static final int PAGE_SIZE = 15; // 카카오 로컬 API 한 페이지 최대치
     private static final int MAX_PAGE = 3; // size 15 * 3페이지 = 45건 (카카오 키워드 검색 쿼리당 상한)
 
@@ -116,6 +121,25 @@ public class KakaoLocalService {
         Set<String> seenPlaceIds = new HashSet<>();
 
         for (String dong : TARGET_DONGS) {
+            // 공원/골목 전용 키워드 검색이 카테고리 그룹 루프보다 더 정확한 판단이라, 이 둘을
+            // 먼저 돌려서 dedup 셋(seenPlaceIds)을 채운다. 이렇게 해야 뒤에 도는 뭉뚱그린
+            // 카테고리 루프(AT4 등)가 같은 장소를 만나도 이미 dedup에 걸려서 잘못된 카테고리로
+            // 덮어쓰지 못한다.
+            try {
+                for (JsonNode item : callKeywordSearch(dong + PARK_KEYWORD_SUFFIX, null)) {
+                    addCandidate(result, seenPlaceIds, item, dong, "공원");
+                }
+            } catch (Exception e) {
+                log.warn("카카오 로컬 공원 조회 실패 (dong={}): {}", dong, e.getMessage());
+            }
+            try {
+                for (JsonNode item : callKeywordSearch(dong + ALLEY_KEYWORD_SUFFIX, null)) {
+                    addCandidate(result, seenPlaceIds, item, dong, "골목");
+                }
+            } catch (Exception e) {
+                log.warn("카카오 로컬 골목 조회 실패 (dong={}): {}", dong, e.getMessage());
+            }
+
             for (String categoryGroupCode : TARGET_CATEGORY_GROUP_CODES) {
                 try {
                     String cocoCategory = mapToCocoCategory(categoryGroupCode);
@@ -125,14 +149,6 @@ public class KakaoLocalService {
                 } catch (Exception e) {
                     log.warn("카카오 로컬 조회 실패 (dong={}, categoryGroupCode={}): {}", dong, categoryGroupCode, e.getMessage());
                 }
-            }
-            // 공원은 카테고리 코드가 없어서 "{동} 공원" 자유 텍스트로 따로 조회한다.
-            try {
-                for (JsonNode item : callKeywordSearch(dong + PARK_KEYWORD_SUFFIX, null)) {
-                    addCandidate(result, seenPlaceIds, item, dong, "공원");
-                }
-            } catch (Exception e) {
-                log.warn("카카오 로컬 공원 조회 실패 (dong={}): {}", dong, e.getMessage());
             }
         }
         log.info("카카오 로컬 후보 수집 완료: {}건", result.size());
@@ -206,13 +222,16 @@ public class KakaoLocalService {
         return new KakaoLocalCandidate(placeId, title, address, lat, lng, cocoCategory);
     }
 
-    // 카카오 카테고리 그룹 → COCO 스팟 카테고리(노포|공원|카페|골목) 매핑.
-    // "공원"은 이 매핑을 안 거치고 fetchCandidates()에서 직접 지정한다(카테고리 그룹 코드가 없음).
+    // 카카오 카테고리 그룹 → COCO 스팟 카테고리(음식점|카페|공원|골목|명소|문화시설) 매핑.
+    // "공원"/"골목"은 이 매핑을 안 거치고 fetchCandidates()에서 전용 키워드 검색으로 직접
+    // 지정한다(대응하는 카테고리 그룹 코드가 없음).
     private String mapToCocoCategory(String categoryGroupCode) {
         return switch (categoryGroupCode) {
-            case "FD6" -> "노포";
+            case "FD6" -> "음식점";
             case "CE7" -> "카페";
-            default -> "골목"; // AT4(관광명소), CT1(문화시설)
+            case "AT4" -> "명소";
+            case "CT1" -> "문화시설";
+            default -> "명소";
         };
     }
 
