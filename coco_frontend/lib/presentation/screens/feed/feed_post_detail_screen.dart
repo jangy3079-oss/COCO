@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/network/dio_client.dart';
 import '../../../data/repositories/feed_repository.dart';
+import '../../../l10n/generated/app_localizations.dart';
 import 'feed_mock_data.dart';
 import 'feed_screen.dart' show showShareSheet;
 
@@ -83,7 +84,11 @@ class _FeedPostDetailScreenState extends State<FeedPostDetailScreen> {
     if (postId == null) {
       // 목업 시드 게시물은 예전처럼 로컬에만 추가.
       setState(() {
-        widget.item.comments.add(FeedComment(id: 'c${DateTime.now().millisecondsSinceEpoch}', author: '나', text: text));
+        widget.item.comments.add(FeedComment(
+          id: 'c${DateTime.now().millisecondsSinceEpoch}',
+          author: AppLocalizations.of(context)!.feedMeAvatarLabel,
+          text: text,
+        ));
       });
       _commentController.clear();
       return;
@@ -103,7 +108,7 @@ class _FeedPostDetailScreenState extends State<FeedPostDetailScreen> {
       if (!mounted) return;
       setState(() => _submittingComment = false);
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('댓글을 올리지 못했어요. 로그인 상태를 확인해주세요.')),
+        SnackBar(content: Text(AppLocalizations.of(context)!.feedPostDetailCommentFailed)),
       );
     }
   }
@@ -120,6 +125,7 @@ class _FeedPostDetailScreenState extends State<FeedPostDetailScreen> {
   Widget build(BuildContext context) {
     final item = widget.item;
     final color = categoryColor(item.category);
+    final l10n = AppLocalizations.of(context)!;
 
     return Scaffold(
       backgroundColor: Colors.white,
@@ -131,7 +137,7 @@ class _FeedPostDetailScreenState extends State<FeedPostDetailScreen> {
               child: Row(
                 children: [
                   IconButton(onPressed: () => context.pop(), icon: const Icon(Icons.arrow_back_rounded)),
-                  const Text('게시물', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: CocoTheme.secondary)),
+                  Text(l10n.feedPostDetailPageTitle, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: CocoTheme.secondary)),
                 ],
               ),
             ),
@@ -296,7 +302,7 @@ class _FeedPostDetailScreenState extends State<FeedPostDetailScreen> {
                     ),
                     Padding(
                       padding: const EdgeInsets.fromLTRB(20, 4, 20, 4),
-                      child: Text('댓글 ${item.comments.length}', style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: CocoTheme.secondary)),
+                      child: Text(l10n.feedPostDetailCommentsCount(item.comments.length), style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: CocoTheme.secondary)),
                     ),
                     for (final c in item.comments)
                       Padding(
@@ -336,7 +342,7 @@ class _FeedPostDetailScreenState extends State<FeedPostDetailScreen> {
                     child: TextField(
                       controller: _commentController,
                       decoration: InputDecoration(
-                        hintText: '댓글을 남겨보세요',
+                        hintText: l10n.feedPostDetailCommentHint,
                         filled: true,
                         fillColor: const Color(0xFFF8F8F8),
                         contentPadding: const EdgeInsets.symmetric(horizontal: 14),
@@ -359,7 +365,7 @@ class _FeedPostDetailScreenState extends State<FeedPostDetailScreen> {
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
                     ),
                     onPressed: _submitComment,
-                    child: const Text('등록'),
+                    child: Text(l10n.feedPostDetailCommentSubmit),
                   ),
                 ],
               ),
@@ -379,7 +385,7 @@ class _LocalBadge extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
       decoration: BoxDecoration(color: CocoTheme.primary.withOpacity(0.12), borderRadius: BorderRadius.circular(10)),
-      child: const Text('로컬', style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w700, color: CocoTheme.primary)),
+      child: Text(AppLocalizations.of(context)!.feedLocalBadge, style: const TextStyle(fontSize: 10.5, fontWeight: FontWeight.w700, color: CocoTheme.primary)),
     );
   }
 }
@@ -427,7 +433,7 @@ class _RouteMapSlide extends StatelessWidget {
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 5),
               decoration: BoxDecoration(color: Colors.white.withOpacity(0.94), borderRadius: BorderRadius.circular(14)),
-              child: const Text('공유된 골목지도', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: CocoTheme.primary)),
+              child: Text(AppLocalizations.of(context)!.feedRouteMapSlideBadge, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: CocoTheme.primary)),
             ),
           ),
         ],
@@ -503,6 +509,7 @@ class _RouteSummaryCardState extends State<_RouteSummaryCard> {
   @override
   Widget build(BuildContext context) {
     final item = widget.item;
+    final l10n = AppLocalizations.of(context)!;
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(borderRadius: BorderRadius.circular(14), border: Border.all(color: Colors.black.withOpacity(0.08))),
@@ -514,17 +521,17 @@ class _RouteSummaryCardState extends State<_RouteSummaryCard> {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                 decoration: BoxDecoration(color: CocoTheme.primary.withOpacity(0.12), borderRadius: BorderRadius.circular(10)),
-                child: const Text('코스', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: CocoTheme.primary)),
+                child: Text(l10n.feedRouteSummaryBadge, style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: CocoTheme.primary)),
               ),
               const SizedBox(width: 6),
-              Text('by ${item.author} · 부산 로컬', style: TextStyle(fontSize: 11, color: Colors.black.withOpacity(0.35))),
+              Text(l10n.feedRouteSummaryAuthorLine(item.author ?? ''), style: TextStyle(fontSize: 11, color: Colors.black.withOpacity(0.35))),
             ],
           ),
           const SizedBox(height: 10),
           Text(item.displayTitle, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: CocoTheme.secondary)),
           const SizedBox(height: 4),
           Text(
-            '스팟 ${item.stopCount ?? 0}곳 · ${item.distanceKm.toStringAsFixed(1)}km · 약 ${item.durationMin}분',
+            l10n.feedRouteSummaryStats(item.stopCount ?? 0, item.distanceKm.toStringAsFixed(1), item.durationMin),
             style: TextStyle(fontSize: 12, color: Colors.black.withOpacity(0.45)),
           ),
           const SizedBox(height: 12),
@@ -547,7 +554,7 @@ class _RouteSummaryCardState extends State<_RouteSummaryCard> {
                             'routeId': item.routeId,
                             'isOwner': item.source == FeedSource.user,
                           }),
-                  child: const Text('코스 보기', style: TextStyle(color: CocoTheme.secondary, fontWeight: FontWeight.w600)),
+                  child: Text(l10n.feedRouteSummaryViewButton, style: const TextStyle(color: CocoTheme.secondary, fontWeight: FontWeight.w600)),
                 ),
               ),
               const SizedBox(width: 8),
@@ -561,7 +568,7 @@ class _RouteSummaryCardState extends State<_RouteSummaryCard> {
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                   ),
                   onPressed: () => setState(() => item.routeSaved = !item.routeSaved),
-                  child: Text(item.routeSaved ? '저장됨' : '저장', style: const TextStyle(fontWeight: FontWeight.w600)),
+                  child: Text(item.routeSaved ? l10n.feedSaveButtonSaved : l10n.feedSaveButtonUnsaved, style: const TextStyle(fontWeight: FontWeight.w600)),
                 ),
               ),
             ],
@@ -570,7 +577,7 @@ class _RouteSummaryCardState extends State<_RouteSummaryCard> {
             Padding(
               padding: const EdgeInsets.only(top: 9),
               child: Text(
-                'MY 탭 › 저장한 코스에 담겼어요 (내가 만든 코스와 따로 보여요)',
+                l10n.feedRouteSummarySavedHint,
                 style: TextStyle(fontSize: 11, color: Colors.black.withOpacity(0.4)),
               ),
             ),

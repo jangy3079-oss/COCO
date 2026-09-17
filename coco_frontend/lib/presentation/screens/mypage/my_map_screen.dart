@@ -3,6 +3,7 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../l10n/generated/app_localizations.dart';
 import '../map/map_mock_data.dart';
 import '../map/map_screen.dart' show MockMapBackground;
 
@@ -15,6 +16,7 @@ class MyMapScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final spots = mockSpots.where((s) => savedSpotIds.contains(s.id)).toList();
+    final l10n = AppLocalizations.of(context)!;
 
     return Scaffold(
       backgroundColor: CocoTheme.surface,
@@ -75,9 +77,9 @@ class MyMapScreen extends StatelessWidget {
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
                                     const SizedBox(height: 8),
-                                    const Text('나의 지도', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: CocoTheme.secondary)),
+                                    Text(l10n.myMapPageTitle, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: CocoTheme.secondary)),
                                     const SizedBox(height: 2),
-                                    Text('찜한 스팟 ${spots.length}곳', style: TextStyle(fontSize: 13, color: Colors.grey.shade600)),
+                                    Text(l10n.myMapSavedCount(spots.length), style: TextStyle(fontSize: 13, color: Colors.grey.shade600)),
                                   ],
                                 ),
                               ],
@@ -121,6 +123,7 @@ class _EmptyMap extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     return Container(
       color: const Color(0xFFEAE8E2),
       alignment: Alignment.center,
@@ -129,14 +132,14 @@ class _EmptyMap extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Text('아직 찜한 스팟이 없어요', style: TextStyle(fontSize: 14, color: Colors.grey.shade600)),
+            Text(l10n.myPageMapCardEmpty, style: TextStyle(fontSize: 14, color: Colors.grey.shade600)),
             const SizedBox(height: 6),
-            Text('지도 탭에서 스팟을 찜해보세요', style: TextStyle(fontSize: 13, color: Colors.grey.shade500)),
+            Text(l10n.myMapEmptySubtitle, style: TextStyle(fontSize: 13, color: Colors.grey.shade500)),
             const SizedBox(height: 18),
             FilledButton(
               style: FilledButton.styleFrom(backgroundColor: CocoTheme.primary),
               onPressed: onGoToMap,
-              child: const Text('지도로 가기'),
+              child: Text(l10n.myMapGoToMapButton),
             ),
           ],
         ),

@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../data/repositories/spot_repository.dart';
+import '../../../l10n/generated/app_localizations.dart';
 import 'map_mock_data.dart';
 
 /// 골목지도(코스) 만들기 화면.
@@ -103,7 +104,7 @@ class _RouteBuilderScreenState extends State<RouteBuilderScreen> {
     setState(() {
       _stops.add(spot);
       _addedDuringSearch.add(spot.id);
-      _toastMessage = '${spot.name} 스팟이 추가되었습니다';
+      _toastMessage = AppLocalizations.of(context)!.routeBuilderSpotAddedToast(spot.name);
     });
     _toastTimer = Timer(const Duration(milliseconds: 1600), () {
       if (mounted) setState(() => _toastMessage = null);
@@ -133,13 +134,13 @@ class _RouteBuilderScreenState extends State<RouteBuilderScreen> {
   void _handleSave() {
     if (_nameController.text.trim().isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('코스 이름을 입력해주세요')),
+        SnackBar(content: Text(AppLocalizations.of(context)!.routeBuilderNameRequiredWarning)),
       );
       return;
     }
     if (_stops.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('스팟을 1개 이상 담아주세요')),
+        SnackBar(content: Text(AppLocalizations.of(context)!.routeBuilderStopsRequiredWarning)),
       );
       return;
     }
@@ -177,6 +178,7 @@ class _RouteBuilderScreenState extends State<RouteBuilderScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     return Scaffold(
       backgroundColor: Colors.white,
       body: Stack(
@@ -194,14 +196,14 @@ class _RouteBuilderScreenState extends State<RouteBuilderScreen> {
                   ),
                   Expanded(
                     child: Text(
-                      widget.editingRouteId != null ? '${widget.initialName} 편집' : '코스 만들기',
+                      widget.editingRouteId != null ? l10n.routeBuilderEditTitle(widget.initialName) : l10n.routeBuilderCreateTitle,
                       textAlign: TextAlign.center,
                       style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: CocoTheme.secondary),
                     ),
                   ),
                   TextButton(
                     onPressed: _handleSave,
-                    child: const Text('완료', style: TextStyle(color: CocoTheme.primary, fontWeight: FontWeight.w700)),
+                    child: Text(l10n.routeBuilderDoneButton, style: const TextStyle(color: CocoTheme.primary, fontWeight: FontWeight.w700)),
                   ),
                 ],
               ),
@@ -219,12 +221,12 @@ class _RouteBuilderScreenState extends State<RouteBuilderScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text('코스 이름', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: CocoTheme.secondary)),
+                        Text(l10n.routeBuilderNameLabel, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: CocoTheme.secondary)),
                         const SizedBox(height: 8),
                         TextField(
                           controller: _nameController,
                           decoration: InputDecoration(
-                            hintText: '예: 겨울밤 노포 투어',
+                            hintText: l10n.routeBuilderNameHint,
                             filled: true,
                             fillColor: const Color(0xFFF8F8F8),
                             contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
@@ -244,7 +246,7 @@ class _RouteBuilderScreenState extends State<RouteBuilderScreen> {
                   Padding(
                     padding: const EdgeInsets.fromLTRB(16, 20, 16, 4),
                     child: Text(
-                      '담은 스팟 (${_stops.length})',
+                      l10n.routeBuilderStopsCountLabel(_stops.length),
                       style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: CocoTheme.secondary),
                     ),
                   ),
@@ -268,7 +270,7 @@ class _RouteBuilderScreenState extends State<RouteBuilderScreen> {
                         side: BorderSide(color: CocoTheme.primary, style: BorderStyle.solid, width: 1.5),
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                       ),
-                      child: const Text('+ 스팟 추가', style: TextStyle(color: CocoTheme.primary, fontWeight: FontWeight.w600)),
+                      child: Text(l10n.routeBuilderAddSpotButton, style: const TextStyle(color: CocoTheme.primary, fontWeight: FontWeight.w600)),
                     ),
                   ),
                 ],
@@ -283,7 +285,7 @@ class _RouteBuilderScreenState extends State<RouteBuilderScreen> {
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                 ),
                 onPressed: _handleSave,
-                child: const Text('코스 저장하기', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
+                child: Text(l10n.mapSaveCourseButton, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
               ),
             ),
           ],
@@ -346,6 +348,7 @@ class _StopSearchOverlay extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     final candidates = _candidates;
     return Positioned.fill(
       child: Material(
@@ -370,8 +373,8 @@ class _StopSearchOverlay extends StatelessWidget {
                               child: TextField(
                                 autofocus: true,
                                 onChanged: onQueryChanged,
-                                decoration: const InputDecoration(
-                                  hintText: '장소명 또는 주소 검색',
+                                decoration: InputDecoration(
+                                  hintText: l10n.feedComposerLocationSearchHint,
                                   border: InputBorder.none,
                                   isDense: true,
                                 ),
@@ -385,12 +388,12 @@ class _StopSearchOverlay extends StatelessWidget {
                     const SizedBox(width: 12),
                     GestureDetector(
                       onTap: onCancel,
-                      child: Text('취소', style: TextStyle(fontSize: 14, color: Colors.black.withOpacity(0.5))),
+                      child: Text(l10n.feedRouteComposeCancel, style: TextStyle(fontSize: 14, color: Colors.black.withOpacity(0.5))),
                     ),
                     const SizedBox(width: 14),
                     GestureDetector(
                       onTap: onConfirm,
-                      child: const Text('완료', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: CocoTheme.primary)),
+                      child: Text(l10n.routeBuilderDoneButton, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: CocoTheme.primary)),
                     ),
                   ],
                 ),
@@ -399,7 +402,7 @@ class _StopSearchOverlay extends StatelessWidget {
                 padding: const EdgeInsets.fromLTRB(20, 0, 20, 10),
                 child: Align(
                   alignment: Alignment.centerLeft,
-                  child: Text('${stops.length}개 담김', style: TextStyle(fontSize: 12, color: Colors.black.withOpacity(0.4))),
+                  child: Text(l10n.routeBuilderStopsAddedCount(stops.length), style: TextStyle(fontSize: 12, color: Colors.black.withOpacity(0.4))),
                 ),
               ),
               Expanded(
@@ -409,7 +412,7 @@ class _StopSearchOverlay extends StatelessWidget {
                         ? Padding(
                             padding: const EdgeInsets.symmetric(vertical: 56, horizontal: 24),
                             child: Center(
-                              child: Text('검색 결과가 없어요', style: TextStyle(fontSize: 14, color: Colors.black.withOpacity(0.4))),
+                              child: Text(l10n.mapSearchNoResults, style: TextStyle(fontSize: 14, color: Colors.black.withOpacity(0.4))),
                             ),
                           )
                         : ListView.separated(
@@ -560,7 +563,7 @@ class _RouteMiniMap extends StatelessWidget {
       clipBehavior: Clip.hardEdge,
       child: stops.isEmpty
           ? Center(
-              child: Text('스팟을 추가하면 경로가 표시돼요', style: TextStyle(fontSize: 12, color: Colors.grey.shade500)),
+              child: Text(AppLocalizations.of(context)!.routeBuilderEmptyMiniMap, style: TextStyle(fontSize: 12, color: Colors.grey.shade500)),
             )
           : LayoutBuilder(
               builder: (context, constraints) {

@@ -33,5 +33,352 @@
   "signupButton": "Sign Up",
   "alreadyHaveAccountPrompt": "Already have an account?",
   "goToLogin": "Log In",
-  "signupSuccessMessage": "Sign up complete"
+  "signupSuccessMessage": "Sign up complete",
+
+  "navFeed": "Feed",
+  "navMap": "Map",
+  "navCommunity": "Community",
+  "navMy": "MY",
+
+  "feedShareTitle": "Share",
+  "feedShareKakao": "KakaoTalk",
+  "feedShareInstagram": "Instagram",
+  "feedShareMessage": "Message",
+  "feedHeaderTitle": "Feed",
+  "feedBasisSuffix": "area",
+  "feedMeAvatarLabel": "Me",
+  "feedFilterAll": "All",
+  "feedFilterDaily": "Daily",
+  "feedFilterRoute": "Course",
+  "feedFilterSheetTitle": "Feed Filters",
+  "feedFilterReset": "Reset",
+  "feedFilterDongLabel": "Neighborhood",
+  "feedFilterCurrentLocationPlaceholder": "Current location: Nampo-dong, Jung-gu",
+  "feedFilterSortLabel": "Sort",
+  "feedFilterApplyButton": "View {count} posts",
+  "@feedFilterApplyButton": {
+    "placeholders": { "count": { "type": "int" } }
+  },
+  "feedEmptyTitle": "No posts match your filters",
+  "feedEmptySubtitle": "Try changing your filters",
+  "feedLoadingMore": "Loading...",
+  "feedEndOfList": "You've seen it all",
+  "feedLocalBadge": "Local",
+  "feedTrendingBadge": "Trending",
+  "feedRouteSpotCountBadge": "Course · {count} spots",
+  "@feedRouteSpotCountBadge": {
+    "placeholders": { "count": { "type": "int" } }
+  },
+  "feedRankingSavedHint": "You can find saved courses in the MY tab › Saved & Liked",
+  "feedRankSpotCount": "{count} spots",
+  "@feedRankSpotCount": {
+    "placeholders": { "count": { "type": "int" } }
+  },
+  "feedRankStatsLine": "Saved {saves} · Liked {likes} · Shared {shares}",
+  "@feedRankStatsLine": {
+    "placeholders": {
+      "saves": { "type": "int" },
+      "likes": { "type": "int" },
+      "shares": { "type": "int" }
+    }
+  },
+  "feedSaveButtonSaved": "Saved",
+  "feedSaveButtonUnsaved": "Save",
+
+  "feedComposerStepTitle": "New Post ({step}/{total})",
+  "@feedComposerStepTitle": {
+    "placeholders": { "step": { "type": "int" }, "total": { "type": "int" } }
+  },
+  "feedComposerPhotoUploadFailed": "Failed to upload photo. Please try again.",
+  "feedComposerPostFailed": "Couldn't post. Please check that you're logged in.",
+  "feedComposerNextButton": "Next",
+  "feedComposerSubmitting": "Posting...",
+  "feedComposerSubmitButton": "Post",
+  "feedComposerPhotoStepTitle": "Add a photo (optional)",
+  "feedComposerPhotoStepHint": "Choose one photo from your gallery (optional)",
+  "feedComposerLocationStepTitle": "Tag a spot (optional)",
+  "feedComposerLocationSearchHint": "Search by name or address",
+  "feedComposerLocationNoResults": "No results found",
+  "feedComposerDescStepTitle": "Write a short description",
+  "feedComposerDescHint": "Share your thoughts about this spot",
+
+  "feedPostDetailPageTitle": "Post",
+  "feedPostDetailCommentFailed": "Couldn't post comment. Please check that you're logged in.",
+  "feedPostDetailCommentsCount": "Comments {count}",
+  "@feedPostDetailCommentsCount": {
+    "placeholders": { "count": { "type": "int" } }
+  },
+  "feedPostDetailCommentHint": "Leave a comment",
+  "feedPostDetailCommentSubmit": "Post",
+  "feedRouteMapSlideBadge": "Shared Course Map",
+  "feedRouteSummaryBadge": "Course",
+  "feedRouteSummaryAuthorLine": "by {author} · Busan local",
+  "@feedRouteSummaryAuthorLine": {
+    "placeholders": { "author": { "type": "String" } }
+  },
+  "feedRouteSummaryStats": "{count} spots · {km}km · about {min} min",
+  "@feedRouteSummaryStats": {
+    "placeholders": {
+      "count": { "type": "int" },
+      "km": { "type": "String" },
+      "min": { "type": "int" }
+    }
+  },
+  "feedRouteSummaryViewButton": "View Course",
+  "feedRouteSummarySavedHint": "Saved to MY tab › Saved Courses (kept separate from courses you made)",
+
+  "feedRouteComposeCancel": "Cancel",
+  "feedRouteComposeTitle": "Share to Feed",
+  "feedRouteComposePosting": "Posting...",
+  "feedRouteComposePostButton": "Post",
+  "feedRouteComposeAttachedBadge": "Course attached",
+  "feedRouteComposeStopsSummary": "{count} spots · {km}km · route included",
+  "@feedRouteComposeStopsSummary": {
+    "placeholders": { "count": { "type": "int" }, "km": { "type": "String" } }
+  },
+  "feedRouteComposeChangeButton": "Change",
+  "feedRouteComposeIntroLabel": "Description",
+  "feedRouteComposeIntroHint": "Write why you made this course, or what day it's best to walk",
+  "feedRouteComposeCoverSpotLabel": "Cover spot",
+  "feedRouteComposeCoverSpotHint": "Used as the feed thumbnail",
+  "feedRouteComposeVisibilityLabel": "Visibility",
+  "feedRouteComposePrivateTitle": "Only me",
+  "feedRouteComposePrivateSubtitle": "Won't appear in the feed",
+  "feedRouteComposePublicTitle": "Share publicly",
+  "feedRouteComposePublicSubtitle": "Appears in the trending ranking too",
+  "feedRouteComposeSubmitButton": "Post",
+
+  "qnaHeaderTitle": "Community",
+  "qnaHeaderSubtitle": "Locals answer tourists' questions",
+  "qnaFilterUnanswered": "Unanswered",
+  "qnaFilterMine": "My Questions",
+  "qnaSortLatest": "Latest",
+  "qnaSortUnansweredFirst": "Unanswered First",
+  "qnaEmptyState": "No questions match your filters",
+  "qnaRoleTourist": "Tourist",
+  "qnaSolvedBadge": "✓ Solved",
+  "qnaAnswerCountZero": "No answers yet",
+  "qnaAnswerCount": "{count} answers",
+  "@qnaAnswerCount": {
+    "placeholders": { "count": { "type": "int" } }
+  },
+
+  "qnaComposerTitle": "Ask a Question",
+  "qnaComposerTitleHint": "Title",
+  "qnaComposerBodyHint": "Ask anything about this neighborhood",
+  "qnaComposerSpotTagLabel": "Tag a Spot",
+  "qnaComposerOptionalLabel": "Optional",
+  "qnaComposerLanguageNoticePrefix": "This question will be posted in ",
+  "qnaComposerLanguageNoticeLang": "Korean",
+  "qnaComposerLanguageNoticeSuffix": ". Locals will try to reply in the same language when possible.",
+
+  "qnaPostDetailPageTitle": "Question",
+  "qnaPostDetailReportButton": "Report",
+  "qnaPostDetailReportSubmitted": "Your report has been submitted",
+  "qnaPostDetailViewOnMap": "View on Map",
+  "qnaPostDetailLanguageNotice": "This question was written in Korean",
+  "qnaPostDetailAutoRefreshHint": "Auto-refreshes every 15s",
+  "qnaPostDetailAnswerHint": "Leave an answer",
+  "qnaAdoptedBadge": "✓ Adopted",
+  "qnaAdoptButton": "Adopt this answer",
+
+  "myPageMenuMyPosts": "My Posts",
+  "myPageMenuSaved": "Saved & Liked",
+  "myPageMenuMyCourses": "My Courses",
+  "myPageMenuQnaActivity": "My Q&A Activity",
+  "myPageMenuEditProfile": "Edit Profile",
+  "myPageMenuNotificationSettings": "Notification Settings",
+  "myPageMenuSettings": "Settings",
+  "myPageMenuAbout": "About COCO",
+  "myPageComingSoon": "Coming soon",
+  "myPageMapCardEmpty": "No saved spots yet",
+  "myPageMapCardTitle": "My Alley Map",
+  "myPageMapCardSubtitle": "{count} saved spots · View all ›",
+  "@myPageMapCardSubtitle": {
+    "placeholders": { "count": { "type": "int" } }
+  },
+
+  "myMapPageTitle": "My Map",
+  "myMapSavedCount": "{count} saved spots",
+  "@myMapSavedCount": {
+    "placeholders": { "count": { "type": "int" } }
+  },
+  "myMapEmptySubtitle": "Save spots from the Map tab",
+  "myMapGoToMapButton": "Go to Map",
+
+  "myPostsFilterFeed": "Feed Posts",
+  "myPostsFilterQna": "Questions",
+  "myPostsTimeToday": "Today",
+  "myPostsTimeYesterday": "Yesterday",
+  "myPostsTimeThisWeek": "This week",
+  "myPostsTimeLastMonth": "Last month",
+  "myPostsFeedMeta": "{likes} likes · {comments} comments",
+  "@myPostsFeedMeta": {
+    "placeholders": { "likes": { "type": "int" }, "comments": { "type": "int" } }
+  },
+  "myPostsKindFeed": "Feed",
+  "commonDeleteLabel": "Delete",
+  "myPostsEmptyState": "No posts yet",
+  "myPostsGoToFeedButton": "Go to Feed",
+
+  "mySavedFilterSpots": "Saved Spots",
+  "mySavedFilterLikedFeed": "Liked Posts",
+  "mySavedFilterSavedFeed": "Saved Posts",
+  "mySavedFilterRoutes": "Saved Courses",
+  "mySavedMetaLiked": "@{author} · {count} likes",
+  "@mySavedMetaLiked": {
+    "placeholders": { "author": { "type": "String" }, "count": { "type": "int" } }
+  },
+  "mySavedMetaSaved": "@{author} · {count} saves",
+  "@mySavedMetaSaved": {
+    "placeholders": { "author": { "type": "String" }, "count": { "type": "int" } }
+  },
+  "mySavedMetaRoute": "{count} spots · Made by me",
+  "@mySavedMetaRoute": {
+    "placeholders": { "count": { "type": "int" } }
+  },
+  "mySavedActionUnlike": "Unlike",
+  "mySavedActionUnsave": "Unsave",
+  "mySavedActionUnwish": "Unsave",
+  "mySavedEmptyLikedFeed": "No liked posts yet",
+  "mySavedEmptySavedFeed": "No saved posts yet",
+  "mySavedEmptyRoutes": "No courses made yet\nMake one from the Map tab",
+  "mySavedEmptySpots": "No saved spots yet\nSave spots from the Map tab",
+
+  "myRoutesTabCourse": "Courses",
+  "myRoutesAlleySubtitle": "See your {count} saved spots on the map",
+  "@myRoutesAlleySubtitle": {
+    "placeholders": { "count": { "type": "int" } }
+  },
+  "myRoutesCourseSubtitle": "{count} courses you made",
+  "@myRoutesCourseSubtitle": {
+    "placeholders": { "count": { "type": "int" } }
+  },
+  "myRoutesSearchHintSpots": "Search saved spots...",
+  "myRoutesSearchHintCourse": "Search courses...",
+  "myRoutesEmptyCourseNone": "No courses made yet\nAdd spots from the Map tab to make one",
+  "myRoutesEmptySearchResult": "No results found",
+  "myRoutesStopsDistance": "{count} spots · {km}km",
+  "@myRoutesStopsDistance": {
+    "placeholders": { "count": { "type": "int" }, "km": { "type": "String" } }
+  },
+  "myRoutesStatsPublic": "{likes} likes · {saves} saves · {shares} shares",
+  "@myRoutesStatsPublic": {
+    "placeholders": { "likes": { "type": "int" }, "saves": { "type": "int" }, "shares": { "type": "int" } }
+  },
+  "myRoutesPrivateDraft": "Only me · Draft",
+  "myRoutesPrivate": "Only me",
+  "myRoutesEditButton": "Edit",
+  "myRoutesViewOnMapButton": "View on Map",
+  "myRoutesCourseDetailButton": "Course Details",
+  "myRoutesVisibilityPublic": "Public",
+  "myRoutesNewRouteButton": "+ New Course",
+
+  "profileEditSaveButton": "Save",
+  "profileEditChangePhotoButton": "Change Photo",
+  "profileEditPhotoComingSoon": "Photo changes are coming soon",
+  "profileEditNicknameLabel": "Nickname",
+  "profileEditBioLabel": "Bio",
+  "profileEditBioHint": "Add a short bio",
+  "profileEditEmailLabel": "Email",
+  "profileEditEmailImmutableHint": "Email can't be changed",
+  "profileEditUserTypeLabel": "Account Type",
+  "profileEditUserTypeImmutableHint": "The type you chose at signup can't be changed",
+
+  "settingsLogoutConfirmTitle": "Log out?",
+  "settingsLogoutButton": "Log Out",
+  "settingsSectionLanguage": "Language",
+  "settingsSectionNotifications": "Notifications",
+  "settingsPushNotificationLabel": "Receive push notifications",
+  "settingsSectionAccount": "Account",
+  "settingsDeleteAccountLabel": "Delete Account",
+  "settingsDeleteAccountDisabledHint": "Disabled in this demo",
+
+  "mapPageTitle": "Map",
+  "mapPageSubtitle": "Find alleys and old shops near you",
+  "mapSearchHint": "Search alleys, old shops, parks...",
+  "mapMyRoutesTooltip": "My Courses",
+  "mapSearchNoResults": "No results found",
+  "mapRegisterSpotButton": "Add Spot",
+  "mapNearbySpotsTitle": "Nearby Spots",
+  "mapNearbySpotsCount": "{count}",
+  "@mapNearbySpotsCount": {
+    "placeholders": { "count": { "type": "int" } }
+  },
+  "mapSaveCourseButton": "Save Course",
+  "mapSaveCourseEmptyWarning": "Bookmark a spot first to add it to a course",
+  "mapCategoryAll": "All",
+  "mapCategoryOldStore": "Old Shops",
+  "mapCategoryAlley": "Alleys",
+  "mapCategoryPark": "Parks",
+  "mapCategoryCafe": "Cafes",
+
+  "routeBuilderEditTitle": "Edit {name}",
+  "@routeBuilderEditTitle": {
+    "placeholders": { "name": { "type": "String" } }
+  },
+  "routeBuilderCreateTitle": "Create Course",
+  "routeBuilderDoneButton": "Done",
+  "routeBuilderNameLabel": "Course Name",
+  "routeBuilderNameHint": "e.g. Winter Night Old-Shop Tour",
+  "routeBuilderStopsCountLabel": "Spots Added ({count})",
+  "@routeBuilderStopsCountLabel": {
+    "placeholders": { "count": { "type": "int" } }
+  },
+  "routeBuilderAddSpotButton": "+ Add Spot",
+  "routeBuilderNameRequiredWarning": "Please enter a course name",
+  "routeBuilderStopsRequiredWarning": "Add at least one spot",
+  "routeBuilderSpotAddedToast": "{name} was added",
+  "@routeBuilderSpotAddedToast": {
+    "placeholders": { "name": { "type": "String" } }
+  },
+  "routeBuilderStopsAddedCount": "{count} added",
+  "@routeBuilderStopsAddedCount": {
+    "placeholders": { "count": { "type": "int" } }
+  },
+  "routeBuilderEmptyMiniMap": "Add spots to see the route",
+
+  "routePreviewStats": "{count} spots · {km}km · about {min} min",
+  "@routePreviewStats": {
+    "placeholders": {
+      "count": { "type": "int" },
+      "km": { "type": "String" },
+      "min": { "type": "int" }
+    }
+  },
+  "routePreviewLikeLabel": "Like",
+  "routePreviewShareLabel": "Share",
+
+  "loginWelcomeBackTitle": "Welcome back",
+  "loginSubtitle": "Sign in with your email",
+  "loginPasswordHide": "Hide",
+  "loginPasswordShow": "Show",
+  "loginKeepSignedIn": "Keep me signed in",
+  "loginForgotPassword": "Forgot password?",
+  "loginNoAccountPrompt": "Don't have an account? ",
+
+  "signupStep1Title": "How will you\nuse COCO?",
+  "signupStep1Subtitle": "This can't be changed after signup",
+  "signupRoleLocalDesc": "Introduce your neighborhood's old shops and alleys, and answer tourists' questions",
+  "signupRoleTouristDesc": "Discover real neighborhood tips from locals and save alley maps",
+  "signupStep2Title": "Create your account",
+  "signupRoleSuffix": "Signing up",
+  "signupNicknameHint": "The name shown on COCO",
+  "signupPasswordHint": "At least 8 characters",
+  "signupPwStrengthWeak": "Weak",
+  "signupPwStrengthMedium": "Medium",
+  "signupPwStrengthStrong": "Strong",
+  "signupAgreeAllTerms": "Agree to all terms",
+  "signupTermsService": "Terms of Service",
+  "signupTermsPrivacy": "Privacy Policy consent",
+  "signupTermsMarketing": "Receive notifications and updates",
+  "signupTermRequired": "Required",
+  "signupTermOptional": "Optional",
+  "signupTermsViewButton": "View",
+  "signupCompleteButton": "Complete Sign Up",
+  "signupCompleteSnackbar": "Sign up complete",
+
+  "splashTagline": "Beyond the landmarks everyone stops at,\nthe real everyday you've never reached.",
+  "splashGetStartedButton": "Get Started",
+  "splashHaveAccountButton": "I already have an account"
 }

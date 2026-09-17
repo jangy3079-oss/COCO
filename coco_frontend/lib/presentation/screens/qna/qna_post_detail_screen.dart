@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../data/models/user_type.dart';
+import '../../../l10n/generated/app_localizations.dart';
 import 'qna_mock_data.dart';
 
 /// 질문 상세 + 답변 채택 화면. QnaScreen에서 push할 때 같은 QnaPost 인스턴스를
@@ -33,7 +34,7 @@ class _QnaPostDetailScreenState extends State<QnaPostDetailScreen> {
     setState(() {
       widget.post.answers.add(QnaAnswer(
         id: 'a${DateTime.now().millisecondsSinceEpoch}',
-        author: '나',
+        author: AppLocalizations.of(context)!.feedMeAvatarLabel,
         isLocal: false,
         content: text,
         timeLabel: '방금',
@@ -44,12 +45,13 @@ class _QnaPostDetailScreenState extends State<QnaPostDetailScreen> {
 
   void _report() {
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('신고가 접수되었습니다'), duration: Duration(seconds: 1)),
+      SnackBar(content: Text(AppLocalizations.of(context)!.qnaPostDetailReportSubmitted), duration: const Duration(seconds: 1)),
     );
   }
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     final post = widget.post;
     final isLocalAuthor = post.authorRole == UserType.local;
     final spot = post.taggedSpot;
@@ -68,11 +70,11 @@ class _QnaPostDetailScreenState extends State<QnaPostDetailScreen> {
               child: Row(
                 children: [
                   IconButton(onPressed: () => context.pop(), icon: const Icon(Icons.arrow_back_rounded)),
-                  const Text('질문', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: CocoTheme.secondary)),
+                  Text(l10n.qnaPostDetailPageTitle, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: CocoTheme.secondary)),
                   const Spacer(),
                   TextButton(
                     onPressed: _report,
-                    child: Text('신고', style: TextStyle(fontSize: 12, color: Colors.grey.shade400)),
+                    child: Text(l10n.qnaPostDetailReportButton, style: TextStyle(fontSize: 12, color: Colors.grey.shade400)),
                   ),
                 ],
               ),
@@ -98,7 +100,7 @@ class _QnaPostDetailScreenState extends State<QnaPostDetailScreen> {
                                   borderRadius: BorderRadius.circular(10),
                                 ),
                                 child: Text(
-                                  isLocalAuthor ? '로컬' : '관광객',
+                                  isLocalAuthor ? l10n.feedLocalBadge : l10n.qnaRoleTourist,
                                   style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: isLocalAuthor ? CocoTheme.primary : Colors.grey.shade700),
                                 ),
                               ),
@@ -107,7 +109,7 @@ class _QnaPostDetailScreenState extends State<QnaPostDetailScreen> {
                                 Container(
                                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                                   decoration: BoxDecoration(color: const Color(0xFFE6F1FB), borderRadius: BorderRadius.circular(10)),
-                                  child: const Text('✓ 해결됨', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: CocoTheme.primary)),
+                                  child: Text(l10n.qnaSolvedBadge, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: CocoTheme.primary)),
                                 ),
                               ],
                               const Spacer(),
@@ -153,14 +155,14 @@ class _QnaPostDetailScreenState extends State<QnaPostDetailScreen> {
                                         ],
                                       ),
                                     ),
-                                    const Text('지도에서 보기', style: TextStyle(fontSize: 12, color: CocoTheme.primary)),
+                                    Text(l10n.qnaPostDetailViewOnMap, style: const TextStyle(fontSize: 12, color: CocoTheme.primary)),
                                   ],
                                 ),
                               ),
                             ),
                           ],
                           const SizedBox(height: 10),
-                          Text('이 질문은 한국어로 작성되었어요', style: TextStyle(fontSize: 11, color: Colors.grey.shade400)),
+                          Text(l10n.qnaPostDetailLanguageNotice, style: TextStyle(fontSize: 11, color: Colors.grey.shade400)),
                         ],
                       ),
                     ),
@@ -169,8 +171,8 @@ class _QnaPostDetailScreenState extends State<QnaPostDetailScreen> {
                       child: Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          Text('답변 ${post.answers.length}', style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: CocoTheme.secondary)),
-                          Text('15초마다 자동 새로고침', style: TextStyle(fontSize: 11, color: Colors.grey.shade400)),
+                          Text(l10n.qnaAnswerCount(post.answers.length), style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: CocoTheme.secondary)),
+                          Text(l10n.qnaPostDetailAutoRefreshHint, style: TextStyle(fontSize: 11, color: Colors.grey.shade400)),
                         ],
                       ),
                     ),
@@ -196,7 +198,7 @@ class _QnaPostDetailScreenState extends State<QnaPostDetailScreen> {
                     child: TextField(
                       controller: _answerController,
                       decoration: InputDecoration(
-                        hintText: '답변을 남겨보세요',
+                        hintText: l10n.qnaPostDetailAnswerHint,
                         filled: true,
                         fillColor: const Color(0xFFF6F6F4),
                         contentPadding: const EdgeInsets.symmetric(horizontal: 14),
@@ -241,6 +243,7 @@ class _AnswerCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     return Container(
       margin: const EdgeInsets.fromLTRB(16, 6, 16, 0),
       padding: const EdgeInsets.all(14),
@@ -266,7 +269,7 @@ class _AnswerCard extends StatelessWidget {
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
                   decoration: BoxDecoration(color: const Color(0xFFE6F1FB), borderRadius: BorderRadius.circular(9)),
-                  child: const Text('로컬', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: CocoTheme.primary)),
+                  child: Text(l10n.feedLocalBadge, style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: CocoTheme.primary)),
                 ),
               ],
               if (isAdopted) ...[
@@ -274,7 +277,7 @@ class _AnswerCard extends StatelessWidget {
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
                   decoration: BoxDecoration(color: CocoTheme.primary, borderRadius: BorderRadius.circular(9)),
-                  child: const Text('✓ 채택됨', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: Colors.white)),
+                  child: Text(l10n.qnaAdoptedBadge, style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: Colors.white)),
                 ),
               ],
               const Spacer(),
@@ -294,7 +297,7 @@ class _AnswerCard extends StatelessWidget {
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                 ),
                 onPressed: onAdopt,
-                child: const Text('이 답변 채택하기', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: CocoTheme.primary)),
+                child: Text(l10n.qnaAdoptButton, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: CocoTheme.primary)),
               ),
             ),
           ],

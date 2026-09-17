@@ -4,6 +4,7 @@ import '../../../core/network/auth_token_store.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../data/models/user_type.dart';
 import '../../../data/repositories/auth_repository.dart';
+import '../../../l10n/generated/app_localizations.dart';
 
 class SignupScreen extends StatefulWidget {
   const SignupScreen({super.key});
@@ -81,7 +82,7 @@ class _SignupScreenState extends State<SignupScreen> {
       AuthTokenStore.setToken(result.accessToken);
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('가입이 완료됐어요')),
+        SnackBar(content: Text(AppLocalizations.of(context)!.signupCompleteSnackbar)),
       );
       context.go('/feed');
     } on AuthException catch (e) {
@@ -134,26 +135,27 @@ class _SignupScreenState extends State<SignupScreen> {
   }
 
   Widget _buildStep1() {
+    final l10n = AppLocalizations.of(context)!;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text(
-          '어떻게 COCO를\n사용하실 건가요?',
-          style: TextStyle(fontSize: 26, fontWeight: FontWeight.w800, height: 1.4, color: CocoTheme.secondary),
+        Text(
+          l10n.signupStep1Title,
+          style: const TextStyle(fontSize: 26, fontWeight: FontWeight.w800, height: 1.4, color: CocoTheme.secondary),
         ),
         const SizedBox(height: 8),
-        Text('가입 후에는 변경할 수 없어요', style: TextStyle(fontSize: 14, color: Colors.grey.shade600)),
+        Text(l10n.signupStep1Subtitle, style: TextStyle(fontSize: 14, color: Colors.grey.shade600)),
         const SizedBox(height: 28),
         _RoleCard(
-          title: '로컬 주민',
-          description: '내 동네의 노포와 골목을 소개하고, 관광객 질문에 답해요',
+          title: l10n.userTypeLocal,
+          description: l10n.signupRoleLocalDesc,
           selected: _role == UserType.local,
           onTap: () => setState(() => _role = UserType.local),
         ),
         const SizedBox(height: 12),
         _RoleCard(
-          title: '관광객',
-          description: '주민이 알려주는 진짜 동네 정보를 찾고, 골목지도를 저장해요',
+          title: l10n.userTypeTourist,
+          description: l10n.signupRoleTouristDesc,
           selected: _role == UserType.tourist,
           onTap: () => setState(() => _role = UserType.tourist),
         ),
@@ -167,7 +169,7 @@ class _SignupScreenState extends State<SignupScreen> {
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
             ),
             onPressed: () => setState(() => _step = 2),
-            child: const Text('다음', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
+            child: Text(l10n.feedComposerNextButton, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
           ),
         ),
       ],
@@ -175,11 +177,12 @@ class _SignupScreenState extends State<SignupScreen> {
   }
 
   Widget _buildStep2() {
-    final roleLabel = _role == UserType.local ? '로컬 주민' : '관광객';
+    final l10n = AppLocalizations.of(context)!;
+    final roleLabel = _role == UserType.local ? l10n.userTypeLocal : l10n.userTypeTourist;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text('계정을 만들어요', style: TextStyle(fontSize: 26, fontWeight: FontWeight.w800, color: CocoTheme.secondary)),
+        Text(l10n.signupStep2Title, style: const TextStyle(fontSize: 26, fontWeight: FontWeight.w800, color: CocoTheme.secondary)),
         const SizedBox(height: 8),
         Row(
           children: [
@@ -189,19 +192,19 @@ class _SignupScreenState extends State<SignupScreen> {
               child: Text(roleLabel, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: CocoTheme.primary)),
             ),
             const SizedBox(width: 8),
-            Text('으로 가입 중', style: TextStyle(fontSize: 13, color: Colors.grey.shade600)),
+            Text(l10n.signupRoleSuffix, style: TextStyle(fontSize: 13, color: Colors.grey.shade600)),
           ],
         ),
         const SizedBox(height: 28),
         _SignupField(
-          label: '닉네임',
+          label: l10n.nicknameLabel,
           controller: _nicknameController,
-          hintText: 'COCO에서 보일 이름',
+          hintText: l10n.signupNicknameHint,
           onChanged: (_) => setState(() {}),
         ),
         const SizedBox(height: 16),
         _SignupField(
-          label: '이메일',
+          label: l10n.emailLabel,
           controller: _emailController,
           hintText: 'you@example.com',
           keyboardType: TextInputType.emailAddress,
@@ -209,9 +212,9 @@ class _SignupScreenState extends State<SignupScreen> {
         ),
         const SizedBox(height: 16),
         _SignupField(
-          label: '비밀번호',
+          label: l10n.passwordLabel,
           controller: _passwordController,
-          hintText: '8자 이상',
+          hintText: l10n.signupPasswordHint,
           obscureText: true,
           onChanged: (_) => setState(() {}),
         ),
@@ -231,7 +234,12 @@ class _SignupScreenState extends State<SignupScreen> {
             ),
             const SizedBox(width: 8),
             Text(
-              const ['', '약함', '보통', '안전'][_pwStrength],
+              [
+                '',
+                l10n.signupPwStrengthWeak,
+                l10n.signupPwStrengthMedium,
+                l10n.signupPwStrengthStrong,
+              ][_pwStrength],
               style: TextStyle(fontSize: 11, color: Colors.grey.shade500),
             ),
           ],
@@ -249,25 +257,25 @@ class _SignupScreenState extends State<SignupScreen> {
                   children: [
                     _BoxCheck(checked: _agreeAll),
                     const SizedBox(width: 10),
-                    const Text('약관 전체 동의', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: CocoTheme.secondary)),
+                    Text(l10n.signupAgreeAllTerms, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: CocoTheme.secondary)),
                   ],
                 ),
               ),
               const SizedBox(height: 4),
               _TermRow(
-                label: '서비스 이용약관',
+                label: l10n.signupTermsService,
                 required: true,
                 checked: _agreeService,
                 onTap: () => setState(() => _agreeService = !_agreeService),
               ),
               _TermRow(
-                label: '개인정보 수집·이용 동의',
+                label: l10n.signupTermsPrivacy,
                 required: true,
                 checked: _agreePrivacy,
                 onTap: () => setState(() => _agreePrivacy = !_agreePrivacy),
               ),
               _TermRow(
-                label: '알림 및 소식 받기',
+                label: l10n.signupTermsMarketing,
                 required: false,
                 checked: _agreeMarketing,
                 onTap: () => setState(() => _agreeMarketing = !_agreeMarketing),
@@ -292,7 +300,7 @@ class _SignupScreenState extends State<SignupScreen> {
                     height: 20,
                     child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
                   )
-                : const Text('가입 완료', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
+                : Text(l10n.signupCompleteButton, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
           ),
         ),
       ],
@@ -445,6 +453,7 @@ class _TermRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 9),
       child: Row(
@@ -463,7 +472,7 @@ class _TermRow extends StatelessWidget {
                   Text(label, style: TextStyle(fontSize: 13, color: Colors.grey.shade700)),
                   const SizedBox(width: 6),
                   Text(
-                    required ? '필수' : '선택',
+                    required ? l10n.signupTermRequired : l10n.signupTermOptional,
                     style: TextStyle(fontSize: 11, color: required ? CocoTheme.primary : Colors.grey.shade400),
                   ),
                 ],
@@ -472,9 +481,9 @@ class _TermRow extends StatelessWidget {
           ),
           InkWell(
             onTap: () => ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('준비 중이에요'), duration: Duration(seconds: 1)),
+              SnackBar(content: Text(l10n.myPageComingSoon), duration: const Duration(seconds: 1)),
             ),
-            child: Text('보기', style: TextStyle(fontSize: 12, color: Colors.grey.shade400)),
+            child: Text(l10n.signupTermsViewButton, style: TextStyle(fontSize: 12, color: Colors.grey.shade400)),
           ),
         ],
       ),

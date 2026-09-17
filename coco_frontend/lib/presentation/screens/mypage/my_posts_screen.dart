@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../l10n/generated/app_localizations.dart';
 import '../feed/feed_mock_data.dart';
 import '../qna/qna_mock_data.dart';
 import 'mypage_mock_data.dart';
@@ -22,19 +23,21 @@ class _MyPostsScreenState extends State<MyPostsScreen> {
   // FeedItem에는 실제 타임스탬프가 없고 정렬용 ts(정수)만 있어서, 정확한 상대
   // 시간 대신 근사치 라벨을 보여준다. 실 서버 연동 시 created_at 기준으로 교체.
   String _feedTimeLabel(FeedItem f) {
-    if (f.ts >= 8) return '오늘';
-    if (f.ts >= 6) return '어제';
-    if (f.ts >= 3) return '이번 주';
-    return '지난달';
+    final l10n = AppLocalizations.of(context)!;
+    if (f.ts >= 8) return l10n.myPostsTimeToday;
+    if (f.ts >= 6) return l10n.myPostsTimeYesterday;
+    if (f.ts >= 3) return l10n.myPostsTimeThisWeek;
+    return l10n.myPostsTimeLastMonth;
   }
 
   List<_PostEntry> get _entries {
+    final l10n = AppLocalizations.of(context)!;
     final feedEntries = mockFeedItems
         .where((f) => f.source == FeedSource.user && f.author == myNickname)
         .map((f) => _PostEntry(
               kind: 'feed',
               title: f.place,
-              meta: '좋아요 ${f.likeCount} · 댓글 ${f.comments.length}',
+              meta: l10n.myPostsFeedMeta(f.likeCount, f.comments.length),
               timeLabel: _feedTimeLabel(f),
               solved: false,
               sortTs: f.ts,
@@ -48,7 +51,7 @@ class _MyPostsScreenState extends State<MyPostsScreen> {
     final qnaEntries = qnaMockPosts.where((p) => p.mine).map((p) => _PostEntry(
           kind: 'qna',
           title: p.title,
-          meta: '답변 ${p.answers.length}',
+          meta: l10n.qnaAnswerCount(p.answers.length),
           timeLabel: p.timeLabel,
           solved: p.solved,
           sortTs: p.ts,
@@ -70,6 +73,7 @@ class _MyPostsScreenState extends State<MyPostsScreen> {
   @override
   Widget build(BuildContext context) {
     final entries = _entries;
+    final l10n = AppLocalizations.of(context)!;
 
     return Scaffold(
       backgroundColor: Colors.white,
@@ -82,7 +86,7 @@ class _MyPostsScreenState extends State<MyPostsScreen> {
                 children: [
                   IconButton(onPressed: () => context.pop(), icon: const Icon(Icons.arrow_back_rounded)),
                   const SizedBox(width: 6),
-                  const Text('내가 쓴 글', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: CocoTheme.secondary)),
+                  Text(l10n.myPageMenuMyPosts, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: CocoTheme.secondary)),
                 ],
               ),
             ),
@@ -90,11 +94,11 @@ class _MyPostsScreenState extends State<MyPostsScreen> {
               padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
               child: Row(
                 children: [
-                  _FilterChip(label: '전체', selected: _filter == 'all', onTap: () => setState(() => _filter = 'all')),
+                  _FilterChip(label: l10n.feedFilterAll, selected: _filter == 'all', onTap: () => setState(() => _filter = 'all')),
                   const SizedBox(width: 8),
-                  _FilterChip(label: '피드 게시물', selected: _filter == 'feed', onTap: () => setState(() => _filter = 'feed')),
+                  _FilterChip(label: l10n.myPostsFilterFeed, selected: _filter == 'feed', onTap: () => setState(() => _filter = 'feed')),
                   const SizedBox(width: 8),
-                  _FilterChip(label: '질문', selected: _filter == 'qna', onTap: () => setState(() => _filter = 'qna')),
+                  _FilterChip(label: l10n.myPostsFilterQna, selected: _filter == 'qna', onTap: () => setState(() => _filter = 'qna')),
                 ],
               ),
             ),
@@ -168,6 +172,7 @@ class _PostRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     final isFeed = entry.kind == 'feed';
     return InkWell(
       onTap: entry.onTap,
@@ -199,7 +204,7 @@ class _PostRow extends StatelessWidget {
                           borderRadius: BorderRadius.circular(9),
                         ),
                         child: Text(
-                          isFeed ? '피드' : '질문',
+                          isFeed ? l10n.myPostsKindFeed : l10n.myPostsFilterQna,
                           style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: isFeed ? Colors.grey.shade700 : CocoTheme.primary),
                         ),
                       ),
@@ -208,7 +213,7 @@ class _PostRow extends StatelessWidget {
                         Container(
                           padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
                           decoration: BoxDecoration(color: const Color(0xFFE6F1FB), borderRadius: BorderRadius.circular(9)),
-                          child: const Text('✓ 해결됨', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: CocoTheme.primary)),
+                          child: Text(l10n.qnaSolvedBadge, style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: CocoTheme.primary)),
                         ),
                       ],
                       const Spacer(),
@@ -226,7 +231,7 @@ class _PostRow extends StatelessWidget {
               icon: Text('⋯', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: Colors.grey.shade400)),
               padding: EdgeInsets.zero,
               onSelected: (_) => entry.onDelete(),
-              itemBuilder: (context) => const [PopupMenuItem(value: 'delete', child: Text('삭제'))],
+              itemBuilder: (context) => [PopupMenuItem(value: 'delete', child: Text(l10n.commonDeleteLabel))],
             ),
           ],
         ),
@@ -241,18 +246,19 @@ class _EmptyPosts extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(24),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Text('아직 쓴 글이 없어요', style: TextStyle(fontSize: 14, color: Colors.grey.shade500)),
+            Text(l10n.myPostsEmptyState, style: TextStyle(fontSize: 14, color: Colors.grey.shade500)),
             const SizedBox(height: 16),
             FilledButton(
               style: FilledButton.styleFrom(backgroundColor: CocoTheme.primary, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20))),
               onPressed: onGoToFeed,
-              child: const Text('피드로 가기'),
+              child: Text(l10n.myPostsGoToFeedButton),
             ),
           ],
         ),

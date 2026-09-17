@@ -33,5 +33,352 @@
   "signupButton": "登録する",
   "alreadyHaveAccountPrompt": "すでにアカウントをお持ちですか?",
   "goToLogin": "ログイン",
-  "signupSuccessMessage": "登録が完了しました"
+  "signupSuccessMessage": "登録が完了しました",
+
+  "navFeed": "フィード",
+  "navMap": "マップ",
+  "navCommunity": "コミュニティ",
+  "navMy": "MY",
+
+  "feedShareTitle": "共有する",
+  "feedShareKakao": "カカオトーク",
+  "feedShareInstagram": "インスタグラム",
+  "feedShareMessage": "メッセージ",
+  "feedHeaderTitle": "フィード",
+  "feedBasisSuffix": "基準",
+  "feedMeAvatarLabel": "私",
+  "feedFilterAll": "全体",
+  "feedFilterDaily": "日常",
+  "feedFilterRoute": "コース",
+  "feedFilterSheetTitle": "フィードフィルター",
+  "feedFilterReset": "リセット",
+  "feedFilterDongLabel": "地域",
+  "feedFilterCurrentLocationPlaceholder": "現在地 中区 南浦洞",
+  "feedFilterSortLabel": "並び替え",
+  "feedFilterApplyButton": "{count}件の投稿を見る",
+  "@feedFilterApplyButton": {
+    "placeholders": { "count": { "type": "int" } }
+  },
+  "feedEmptyTitle": "条件に合う投稿がありません",
+  "feedEmptySubtitle": "フィルターを変えて探してみてください",
+  "feedLoadingMore": "読み込み中...",
+  "feedEndOfList": "すべて確認しました",
+  "feedLocalBadge": "ローカル",
+  "feedTrendingBadge": "人気",
+  "feedRouteSpotCountBadge": "コース・スポット{count}件",
+  "@feedRouteSpotCountBadge": {
+    "placeholders": { "count": { "type": "int" } }
+  },
+  "feedRankingSavedHint": "保存したコースはMYタブの保存・いいねで確認できます",
+  "feedRankSpotCount": "スポット{count}件",
+  "@feedRankSpotCount": {
+    "placeholders": { "count": { "type": "int" } }
+  },
+  "feedRankStatsLine": "保存{saves}・いいね{likes}・共有{shares}",
+  "@feedRankStatsLine": {
+    "placeholders": {
+      "saves": { "type": "int" },
+      "likes": { "type": "int" },
+      "shares": { "type": "int" }
+    }
+  },
+  "feedSaveButtonSaved": "保存済み",
+  "feedSaveButtonUnsaved": "保存",
+
+  "feedComposerStepTitle": "投稿作成 ({step}/{total})",
+  "@feedComposerStepTitle": {
+    "placeholders": { "step": { "type": "int" }, "total": { "type": "int" } }
+  },
+  "feedComposerPhotoUploadFailed": "写真のアップロードに失敗しました。もう一度お試しください。",
+  "feedComposerPostFailed": "投稿できませんでした。ログイン状態をご確認ください。",
+  "feedComposerNextButton": "次へ",
+  "feedComposerSubmitting": "投稿中...",
+  "feedComposerSubmitButton": "投稿する",
+  "feedComposerPhotoStepTitle": "写真を追加してください（任意）",
+  "feedComposerPhotoStepHint": "ギャラリーから写真を1枚選んでください（任意）",
+  "feedComposerLocationStepTitle": "場所をタグ付けしてください（任意）",
+  "feedComposerLocationSearchHint": "場所名または住所を検索",
+  "feedComposerLocationNoResults": "検索結果がありません",
+  "feedComposerDescStepTitle": "一言コメントを残してください",
+  "feedComposerDescHint": "このスポットについての感想を書いてください",
+
+  "feedPostDetailPageTitle": "投稿",
+  "feedPostDetailCommentFailed": "コメントを投稿できませんでした。ログイン状態をご確認ください。",
+  "feedPostDetailCommentsCount": "コメント {count}",
+  "@feedPostDetailCommentsCount": {
+    "placeholders": { "count": { "type": "int" } }
+  },
+  "feedPostDetailCommentHint": "コメントを残してください",
+  "feedPostDetailCommentSubmit": "登録",
+  "feedRouteMapSlideBadge": "共有された路地マップ",
+  "feedRouteSummaryBadge": "コース",
+  "feedRouteSummaryAuthorLine": "by {author} · 釜山ローカル",
+  "@feedRouteSummaryAuthorLine": {
+    "placeholders": { "author": { "type": "String" } }
+  },
+  "feedRouteSummaryStats": "スポット{count}件・{km}km・約{min}分",
+  "@feedRouteSummaryStats": {
+    "placeholders": {
+      "count": { "type": "int" },
+      "km": { "type": "String" },
+      "min": { "type": "int" }
+    }
+  },
+  "feedRouteSummaryViewButton": "コースを見る",
+  "feedRouteSummarySavedHint": "MYタブ›保存したコースに追加されました(自分が作ったコースとは別に表示されます)",
+
+  "feedRouteComposeCancel": "キャンセル",
+  "feedRouteComposeTitle": "フィードに共有",
+  "feedRouteComposePosting": "投稿中...",
+  "feedRouteComposePostButton": "投稿",
+  "feedRouteComposeAttachedBadge": "コース添付",
+  "feedRouteComposeStopsSummary": "スポット{count}件・{km}km・ルート含む",
+  "@feedRouteComposeStopsSummary": {
+    "placeholders": { "count": { "type": "int" }, "km": { "type": "String" } }
+  },
+  "feedRouteComposeChangeButton": "変更",
+  "feedRouteComposeIntroLabel": "紹介文",
+  "feedRouteComposeIntroHint": "このコースを作った理由や、歩くのにおすすめの日を書いてください",
+  "feedRouteComposeCoverSpotLabel": "代表スポット",
+  "feedRouteComposeCoverSpotHint": "フィードのサムネイルに使われます",
+  "feedRouteComposeVisibilityLabel": "公開範囲",
+  "feedRouteComposePrivateTitle": "自分だけ",
+  "feedRouteComposePrivateSubtitle": "フィードには表示されません",
+  "feedRouteComposePublicTitle": "全体公開",
+  "feedRouteComposePublicSubtitle": "人気ランキングにも表示されます",
+  "feedRouteComposeSubmitButton": "投稿する",
+
+  "qnaHeaderTitle": "コミュニティ",
+  "qnaHeaderSubtitle": "観光客の質問に地元住民が答えます",
+  "qnaFilterUnanswered": "未回答",
+  "qnaFilterMine": "自分の質問",
+  "qnaSortLatest": "最新順",
+  "qnaSortUnansweredFirst": "未回答優先",
+  "qnaEmptyState": "条件に合う質問がありません",
+  "qnaRoleTourist": "観光客",
+  "qnaSolvedBadge": "✓ 解決済み",
+  "qnaAnswerCountZero": "まだ回答がありません",
+  "qnaAnswerCount": "回答{count}件",
+  "@qnaAnswerCount": {
+    "placeholders": { "count": { "type": "int" } }
+  },
+
+  "qnaComposerTitle": "質問を作成",
+  "qnaComposerTitleHint": "タイトル",
+  "qnaComposerBodyHint": "この町について気になることを聞いてみてください",
+  "qnaComposerSpotTagLabel": "場所タグ",
+  "qnaComposerOptionalLabel": "任意",
+  "qnaComposerLanguageNoticePrefix": "この質問は",
+  "qnaComposerLanguageNoticeLang": "韓国語",
+  "qnaComposerLanguageNoticeSuffix": "で投稿されます。ローカル住民はできるだけ同じ言語で答えます。",
+
+  "qnaPostDetailPageTitle": "質問",
+  "qnaPostDetailReportButton": "通報",
+  "qnaPostDetailReportSubmitted": "通報が送信されました",
+  "qnaPostDetailViewOnMap": "マップで見る",
+  "qnaPostDetailLanguageNotice": "この質問は韓国語で書かれました",
+  "qnaPostDetailAutoRefreshHint": "15秒ごとに自動更新",
+  "qnaPostDetailAnswerHint": "回答を残してください",
+  "qnaAdoptedBadge": "✓ 採用済み",
+  "qnaAdoptButton": "この回答を採用する",
+
+  "myPageMenuMyPosts": "書いた投稿",
+  "myPageMenuSaved": "保存・いいね",
+  "myPageMenuMyCourses": "自分が作ったコース",
+  "myPageMenuQnaActivity": "質問・回答の活動",
+  "myPageMenuEditProfile": "プロフィール編集",
+  "myPageMenuNotificationSettings": "通知設定",
+  "myPageMenuSettings": "設定",
+  "myPageMenuAbout": "COCOのご案内",
+  "myPageComingSoon": "準備中です",
+  "myPageMapCardEmpty": "まだ保存したスポットがありません",
+  "myPageMapCardTitle": "私の路地マップ",
+  "myPageMapCardSubtitle": "保存したスポット{count}件・すべて見る ›",
+  "@myPageMapCardSubtitle": {
+    "placeholders": { "count": { "type": "int" } }
+  },
+
+  "myMapPageTitle": "私のマップ",
+  "myMapSavedCount": "保存したスポット{count}件",
+  "@myMapSavedCount": {
+    "placeholders": { "count": { "type": "int" } }
+  },
+  "myMapEmptySubtitle": "マップタブでスポットを保存してみてください",
+  "myMapGoToMapButton": "マップへ",
+
+  "myPostsFilterFeed": "フィード投稿",
+  "myPostsFilterQna": "質問",
+  "myPostsTimeToday": "今日",
+  "myPostsTimeYesterday": "昨日",
+  "myPostsTimeThisWeek": "今週",
+  "myPostsTimeLastMonth": "先月",
+  "myPostsFeedMeta": "いいね{likes}・コメント{comments}",
+  "@myPostsFeedMeta": {
+    "placeholders": { "likes": { "type": "int" }, "comments": { "type": "int" } }
+  },
+  "myPostsKindFeed": "フィード",
+  "commonDeleteLabel": "削除",
+  "myPostsEmptyState": "まだ書いた投稿がありません",
+  "myPostsGoToFeedButton": "フィードへ",
+
+  "mySavedFilterSpots": "保存したスポット",
+  "mySavedFilterLikedFeed": "いいねしたフィード",
+  "mySavedFilterSavedFeed": "保存したフィード",
+  "mySavedFilterRoutes": "保存したコース",
+  "mySavedMetaLiked": "@{author}・いいね{count}",
+  "@mySavedMetaLiked": {
+    "placeholders": { "author": { "type": "String" }, "count": { "type": "int" } }
+  },
+  "mySavedMetaSaved": "@{author}・保存{count}",
+  "@mySavedMetaSaved": {
+    "placeholders": { "author": { "type": "String" }, "count": { "type": "int" } }
+  },
+  "mySavedMetaRoute": "スポット{count}件・自分が作ったコース",
+  "@mySavedMetaRoute": {
+    "placeholders": { "count": { "type": "int" } }
+  },
+  "mySavedActionUnlike": "いいね解除",
+  "mySavedActionUnsave": "保存解除",
+  "mySavedActionUnwish": "保存解除",
+  "mySavedEmptyLikedFeed": "いいねしたフィードがありません",
+  "mySavedEmptySavedFeed": "保存したフィードがありません",
+  "mySavedEmptyRoutes": "作ったコースがありません\nマップタブでコースを作ってみてください",
+  "mySavedEmptySpots": "保存したスポットがありません\nマップタブでスポットを保存してみてください",
+
+  "myRoutesTabCourse": "コース",
+  "myRoutesAlleySubtitle": "保存したスポット{count}件をマップで確認しましょう",
+  "@myRoutesAlleySubtitle": {
+    "placeholders": { "count": { "type": "int" } }
+  },
+  "myRoutesCourseSubtitle": "自分が作ったコース{count}件",
+  "@myRoutesCourseSubtitle": {
+    "placeholders": { "count": { "type": "int" } }
+  },
+  "myRoutesSearchHintSpots": "保存したスポットを検索...",
+  "myRoutesSearchHintCourse": "コースを検索...",
+  "myRoutesEmptyCourseNone": "まだ作ったコースがありません\nマップタブでスポットを集めてコースを作ってみてください",
+  "myRoutesEmptySearchResult": "検索結果がありません",
+  "myRoutesStopsDistance": "スポット{count}件・{km}km",
+  "@myRoutesStopsDistance": {
+    "placeholders": { "count": { "type": "int" }, "km": { "type": "String" } }
+  },
+  "myRoutesStatsPublic": "いいね{likes}・保存{saves}・共有{shares}",
+  "@myRoutesStatsPublic": {
+    "placeholders": { "likes": { "type": "int" }, "saves": { "type": "int" }, "shares": { "type": "int" } }
+  },
+  "myRoutesPrivateDraft": "自分だけ・作成中",
+  "myRoutesPrivate": "自分だけ",
+  "myRoutesEditButton": "編集",
+  "myRoutesViewOnMapButton": "マップで見る",
+  "myRoutesCourseDetailButton": "コース詳細",
+  "myRoutesVisibilityPublic": "全体公開",
+  "myRoutesNewRouteButton": "+ 新しいコースを作る",
+
+  "profileEditSaveButton": "保存",
+  "profileEditChangePhotoButton": "写真を変更",
+  "profileEditPhotoComingSoon": "写真の変更は準備中です",
+  "profileEditNicknameLabel": "ニックネーム",
+  "profileEditBioLabel": "自己紹介",
+  "profileEditBioHint": "自己紹介を追加してみてください",
+  "profileEditEmailLabel": "メールアドレス",
+  "profileEditEmailImmutableHint": "メールアドレスは変更できません",
+  "profileEditUserTypeLabel": "会員タイプ",
+  "profileEditUserTypeImmutableHint": "登録時に選んだタイプは変更できません",
+
+  "settingsLogoutConfirmTitle": "ログアウトしますか?",
+  "settingsLogoutButton": "ログアウト",
+  "settingsSectionLanguage": "言語",
+  "settingsSectionNotifications": "通知",
+  "settingsPushNotificationLabel": "プッシュ通知を受け取る",
+  "settingsSectionAccount": "アカウント",
+  "settingsDeleteAccountLabel": "退会する",
+  "settingsDeleteAccountDisabledHint": "デモでは無効化されています",
+
+  "mapPageTitle": "マップ",
+  "mapPageSubtitle": "近くの路地と老舗を探してみましょう",
+  "mapSearchHint": "路地、老舗、公園を検索...",
+  "mapMyRoutesTooltip": "マイコース",
+  "mapSearchNoResults": "検索結果がありません",
+  "mapRegisterSpotButton": "スポット登録",
+  "mapNearbySpotsTitle": "周辺スポット",
+  "mapNearbySpotsCount": "{count}件",
+  "@mapNearbySpotsCount": {
+    "placeholders": { "count": { "type": "int" } }
+  },
+  "mapSaveCourseButton": "コースを保存",
+  "mapSaveCourseEmptyWarning": "まず保存したいスポットをブックマークしてください",
+  "mapCategoryAll": "全体",
+  "mapCategoryOldStore": "老舗",
+  "mapCategoryAlley": "路地",
+  "mapCategoryPark": "公園",
+  "mapCategoryCafe": "カフェ",
+
+  "routeBuilderEditTitle": "{name} 編集",
+  "@routeBuilderEditTitle": {
+    "placeholders": { "name": { "type": "String" } }
+  },
+  "routeBuilderCreateTitle": "コースを作る",
+  "routeBuilderDoneButton": "完了",
+  "routeBuilderNameLabel": "コース名",
+  "routeBuilderNameHint": "例: 冬の夜の老舗ツアー",
+  "routeBuilderStopsCountLabel": "集めたスポット ({count})",
+  "@routeBuilderStopsCountLabel": {
+    "placeholders": { "count": { "type": "int" } }
+  },
+  "routeBuilderAddSpotButton": "+ スポット追加",
+  "routeBuilderNameRequiredWarning": "コース名を入力してください",
+  "routeBuilderStopsRequiredWarning": "スポットを1つ以上追加してください",
+  "routeBuilderSpotAddedToast": "{name}スポットが追加されました",
+  "@routeBuilderSpotAddedToast": {
+    "placeholders": { "name": { "type": "String" } }
+  },
+  "routeBuilderStopsAddedCount": "{count}件追加済み",
+  "@routeBuilderStopsAddedCount": {
+    "placeholders": { "count": { "type": "int" } }
+  },
+  "routeBuilderEmptyMiniMap": "スポットを追加すると経路が表示されます",
+
+  "routePreviewStats": "スポット{count}件・{km}km・約{min}分",
+  "@routePreviewStats": {
+    "placeholders": {
+      "count": { "type": "int" },
+      "km": { "type": "String" },
+      "min": { "type": "int" }
+    }
+  },
+  "routePreviewLikeLabel": "いいね",
+  "routePreviewShareLabel": "共有",
+
+  "loginWelcomeBackTitle": "また会えて嬉しいです",
+  "loginSubtitle": "メールアドレスでログインしてください",
+  "loginPasswordHide": "隠す",
+  "loginPasswordShow": "表示",
+  "loginKeepSignedIn": "ログイン状態を維持",
+  "loginForgotPassword": "パスワードをお忘れですか",
+  "loginNoAccountPrompt": "アカウントをお持ちでないですか? ",
+
+  "signupStep1Title": "COCOを\nどう使いますか？",
+  "signupStep1Subtitle": "登録後は変更できません",
+  "signupRoleLocalDesc": "自分の町の老舗や路地を紹介し、観光客の質問に答えます",
+  "signupRoleTouristDesc": "住民が教えてくれる本当の町の情報を見つけ、路地マップを保存します",
+  "signupStep2Title": "アカウントを作成します",
+  "signupRoleSuffix": "で登録中",
+  "signupNicknameHint": "COCOで表示される名前",
+  "signupPasswordHint": "8文字以上",
+  "signupPwStrengthWeak": "弱い",
+  "signupPwStrengthMedium": "普通",
+  "signupPwStrengthStrong": "安全",
+  "signupAgreeAllTerms": "すべての規約に同意",
+  "signupTermsService": "サービス利用規約",
+  "signupTermsPrivacy": "個人情報の収集・利用への同意",
+  "signupTermsMarketing": "通知およびお知らせを受け取る",
+  "signupTermRequired": "必須",
+  "signupTermOptional": "任意",
+  "signupTermsViewButton": "見る",
+  "signupCompleteButton": "登録完了",
+  "signupCompleteSnackbar": "登録が完了しました",
+
+  "splashTagline": "誰もが立ち止まるランドマークの向こうに、\nあなたの足がまだ触れていない本当の日常。",
+  "splashGetStartedButton": "はじめる",
+  "splashHaveAccountButton": "すでにアカウントをお持ちです"
 }

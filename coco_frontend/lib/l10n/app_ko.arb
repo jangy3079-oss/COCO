@@ -33,5 +33,352 @@
   "signupButton": "가입하기",
   "alreadyHaveAccountPrompt": "이미 계정이 있으신가요?",
   "goToLogin": "로그인",
-  "signupSuccessMessage": "회원가입이 완료됐어요"
+  "signupSuccessMessage": "회원가입이 완료됐어요",
+
+  "navFeed": "피드",
+  "navMap": "지도",
+  "navCommunity": "커뮤니티",
+  "navMy": "MY",
+
+  "feedShareTitle": "공유하기",
+  "feedShareKakao": "카카오톡",
+  "feedShareInstagram": "인스타그램",
+  "feedShareMessage": "메시지",
+  "feedHeaderTitle": "피드",
+  "feedBasisSuffix": "기준",
+  "feedMeAvatarLabel": "나",
+  "feedFilterAll": "전체",
+  "feedFilterDaily": "일상",
+  "feedFilterRoute": "코스",
+  "feedFilterSheetTitle": "피드 필터",
+  "feedFilterReset": "초기화",
+  "feedFilterDongLabel": "동네",
+  "feedFilterCurrentLocationPlaceholder": "현재 위치 중구 남포동",
+  "feedFilterSortLabel": "정렬",
+  "feedFilterApplyButton": "{count}개 게시물 보기",
+  "@feedFilterApplyButton": {
+    "placeholders": { "count": { "type": "int" } }
+  },
+  "feedEmptyTitle": "조건에 맞는 게시물이 없어요",
+  "feedEmptySubtitle": "필터를 바꿔서 다시 찾아보세요",
+  "feedLoadingMore": "불러오는 중...",
+  "feedEndOfList": "모두 확인했어요",
+  "feedLocalBadge": "로컬",
+  "feedTrendingBadge": "인기",
+  "feedRouteSpotCountBadge": "코스 · 스팟 {count}곳",
+  "@feedRouteSpotCountBadge": {
+    "placeholders": { "count": { "type": "int" } }
+  },
+  "feedRankingSavedHint": "저장한 코스는 MY 탭 › 저장 · 좋아요에서 다시 볼 수 있어요",
+  "feedRankSpotCount": "스팟 {count}곳",
+  "@feedRankSpotCount": {
+    "placeholders": { "count": { "type": "int" } }
+  },
+  "feedRankStatsLine": "저장 {saves} · 좋아요 {likes} · 공유 {shares}",
+  "@feedRankStatsLine": {
+    "placeholders": {
+      "saves": { "type": "int" },
+      "likes": { "type": "int" },
+      "shares": { "type": "int" }
+    }
+  },
+  "feedSaveButtonSaved": "저장됨",
+  "feedSaveButtonUnsaved": "저장",
+
+  "feedComposerStepTitle": "게시물 작성 ({step}/{total})",
+  "@feedComposerStepTitle": {
+    "placeholders": { "step": { "type": "int" }, "total": { "type": "int" } }
+  },
+  "feedComposerPhotoUploadFailed": "사진 업로드에 실패했어요. 다시 시도해주세요.",
+  "feedComposerPostFailed": "게시물을 올리지 못했어요. 로그인 상태를 확인해주세요.",
+  "feedComposerNextButton": "다음",
+  "feedComposerSubmitting": "게시 중...",
+  "feedComposerSubmitButton": "게시하기",
+  "feedComposerPhotoStepTitle": "사진을 올려주세요 (선택)",
+  "feedComposerPhotoStepHint": "갤러리에서 사진 한 장을 선택하세요 (선택 사항)",
+  "feedComposerLocationStepTitle": "장소를 태그해주세요 (선택)",
+  "feedComposerLocationSearchHint": "장소명 또는 주소 검색",
+  "feedComposerLocationNoResults": "검색 결과가 없어요",
+  "feedComposerDescStepTitle": "한줄 설명을 남겨주세요",
+  "feedComposerDescHint": "이 스팟에 대한 후기를 적어주세요",
+
+  "feedPostDetailPageTitle": "게시물",
+  "feedPostDetailCommentFailed": "댓글을 올리지 못했어요. 로그인 상태를 확인해주세요.",
+  "feedPostDetailCommentsCount": "댓글 {count}",
+  "@feedPostDetailCommentsCount": {
+    "placeholders": { "count": { "type": "int" } }
+  },
+  "feedPostDetailCommentHint": "댓글을 남겨보세요",
+  "feedPostDetailCommentSubmit": "등록",
+  "feedRouteMapSlideBadge": "공유된 골목지도",
+  "feedRouteSummaryBadge": "코스",
+  "feedRouteSummaryAuthorLine": "by {author} · 부산 로컬",
+  "@feedRouteSummaryAuthorLine": {
+    "placeholders": { "author": { "type": "String" } }
+  },
+  "feedRouteSummaryStats": "스팟 {count}곳 · {km}km · 약 {min}분",
+  "@feedRouteSummaryStats": {
+    "placeholders": {
+      "count": { "type": "int" },
+      "km": { "type": "String" },
+      "min": { "type": "int" }
+    }
+  },
+  "feedRouteSummaryViewButton": "코스 보기",
+  "feedRouteSummarySavedHint": "MY 탭 › 저장한 코스에 담겼어요 (내가 만든 코스와 따로 보여요)",
+
+  "feedRouteComposeCancel": "취소",
+  "feedRouteComposeTitle": "피드에 공유",
+  "feedRouteComposePosting": "게시 중...",
+  "feedRouteComposePostButton": "게시",
+  "feedRouteComposeAttachedBadge": "코스 첨부",
+  "feedRouteComposeStopsSummary": "스팟 {count}곳 · {km}km · 동선 포함",
+  "@feedRouteComposeStopsSummary": {
+    "placeholders": { "count": { "type": "int" }, "km": { "type": "String" } }
+  },
+  "feedRouteComposeChangeButton": "변경",
+  "feedRouteComposeIntroLabel": "소개 글",
+  "feedRouteComposeIntroHint": "이 코스를 왜 만들었는지, 어떤 날 걷기 좋은지 적어보세요",
+  "feedRouteComposeCoverSpotLabel": "대표 스팟",
+  "feedRouteComposeCoverSpotHint": "피드 썸네일로 쓰여요",
+  "feedRouteComposeVisibilityLabel": "공개 범위",
+  "feedRouteComposePrivateTitle": "나만 보기",
+  "feedRouteComposePrivateSubtitle": "피드에 올라가지 않아요",
+  "feedRouteComposePublicTitle": "전체 공유",
+  "feedRouteComposePublicSubtitle": "인기순 랭킹에 함께 노출돼요",
+  "feedRouteComposeSubmitButton": "게시하기",
+
+  "qnaHeaderTitle": "커뮤니티",
+  "qnaHeaderSubtitle": "관광객의 질문에 동네 주민이 답해요",
+  "qnaFilterUnanswered": "미답변",
+  "qnaFilterMine": "내 질문",
+  "qnaSortLatest": "최신순",
+  "qnaSortUnansweredFirst": "미답변 우선",
+  "qnaEmptyState": "조건에 맞는 질문이 없어요",
+  "qnaRoleTourist": "관광객",
+  "qnaSolvedBadge": "✓ 해결됨",
+  "qnaAnswerCountZero": "아직 답변 없어요",
+  "qnaAnswerCount": "답변 {count}",
+  "@qnaAnswerCount": {
+    "placeholders": { "count": { "type": "int" } }
+  },
+
+  "qnaComposerTitle": "질문 작성",
+  "qnaComposerTitleHint": "제목",
+  "qnaComposerBodyHint": "이 동네에 대해 궁금한 걸 물어보세요",
+  "qnaComposerSpotTagLabel": "장소 태그",
+  "qnaComposerOptionalLabel": "선택",
+  "qnaComposerLanguageNoticePrefix": "이 질문은 ",
+  "qnaComposerLanguageNoticeLang": "한국어",
+  "qnaComposerLanguageNoticeSuffix": "로 게시돼요. 로컬 주민이 가능하면 같은 언어로 답변해요.",
+
+  "qnaPostDetailPageTitle": "질문",
+  "qnaPostDetailReportButton": "신고",
+  "qnaPostDetailReportSubmitted": "신고가 접수되었습니다",
+  "qnaPostDetailViewOnMap": "지도에서 보기",
+  "qnaPostDetailLanguageNotice": "이 질문은 한국어로 작성되었어요",
+  "qnaPostDetailAutoRefreshHint": "15초마다 자동 새로고침",
+  "qnaPostDetailAnswerHint": "답변을 남겨보세요",
+  "qnaAdoptedBadge": "✓ 채택됨",
+  "qnaAdoptButton": "이 답변 채택하기",
+
+  "myPageMenuMyPosts": "내가 쓴 글",
+  "myPageMenuSaved": "저장 · 좋아요",
+  "myPageMenuMyCourses": "내가 만든 코스",
+  "myPageMenuQnaActivity": "내 질문 · 답변 활동",
+  "myPageMenuEditProfile": "프로필 수정",
+  "myPageMenuNotificationSettings": "알림 설정",
+  "myPageMenuSettings": "설정",
+  "myPageMenuAbout": "COCO 이용 안내",
+  "myPageComingSoon": "준비 중이에요",
+  "myPageMapCardEmpty": "아직 찜한 스팟이 없어요",
+  "myPageMapCardTitle": "나의 골목지도",
+  "myPageMapCardSubtitle": "찜한 스팟 {count}곳 · 전체보기 ›",
+  "@myPageMapCardSubtitle": {
+    "placeholders": { "count": { "type": "int" } }
+  },
+
+  "myMapPageTitle": "나의 지도",
+  "myMapSavedCount": "찜한 스팟 {count}곳",
+  "@myMapSavedCount": {
+    "placeholders": { "count": { "type": "int" } }
+  },
+  "myMapEmptySubtitle": "지도 탭에서 스팟을 찜해보세요",
+  "myMapGoToMapButton": "지도로 가기",
+
+  "myPostsFilterFeed": "피드 게시물",
+  "myPostsFilterQna": "질문",
+  "myPostsTimeToday": "오늘",
+  "myPostsTimeYesterday": "어제",
+  "myPostsTimeThisWeek": "이번 주",
+  "myPostsTimeLastMonth": "지난달",
+  "myPostsFeedMeta": "좋아요 {likes} · 댓글 {comments}",
+  "@myPostsFeedMeta": {
+    "placeholders": { "likes": { "type": "int" }, "comments": { "type": "int" } }
+  },
+  "myPostsKindFeed": "피드",
+  "commonDeleteLabel": "삭제",
+  "myPostsEmptyState": "아직 쓴 글이 없어요",
+  "myPostsGoToFeedButton": "피드로 가기",
+
+  "mySavedFilterSpots": "찜한 스팟",
+  "mySavedFilterLikedFeed": "좋아요한 피드",
+  "mySavedFilterSavedFeed": "저장한 피드",
+  "mySavedFilterRoutes": "저장한 코스",
+  "mySavedMetaLiked": "@{author} · 좋아요 {count}",
+  "@mySavedMetaLiked": {
+    "placeholders": { "author": { "type": "String" }, "count": { "type": "int" } }
+  },
+  "mySavedMetaSaved": "@{author} · 저장 {count}",
+  "@mySavedMetaSaved": {
+    "placeholders": { "author": { "type": "String" }, "count": { "type": "int" } }
+  },
+  "mySavedMetaRoute": "스팟 {count}곳 · 내가 만든 코스",
+  "@mySavedMetaRoute": {
+    "placeholders": { "count": { "type": "int" } }
+  },
+  "mySavedActionUnlike": "좋아요 해제",
+  "mySavedActionUnsave": "저장 해제",
+  "mySavedActionUnwish": "찜 해제",
+  "mySavedEmptyLikedFeed": "좋아요한 피드가 없어요",
+  "mySavedEmptySavedFeed": "저장한 피드가 없어요",
+  "mySavedEmptyRoutes": "만든 코스가 없어요\n지도 탭에서 코스를 만들어보세요",
+  "mySavedEmptySpots": "찜한 스팟이 없어요\n지도 탭에서 스팟을 찜해보세요",
+
+  "myRoutesTabCourse": "코스",
+  "myRoutesAlleySubtitle": "찜한 스팟 {count}곳을 지도에서 확인하세요",
+  "@myRoutesAlleySubtitle": {
+    "placeholders": { "count": { "type": "int" } }
+  },
+  "myRoutesCourseSubtitle": "내가 만든 코스 {count}개",
+  "@myRoutesCourseSubtitle": {
+    "placeholders": { "count": { "type": "int" } }
+  },
+  "myRoutesSearchHintSpots": "찜한 스팟 검색...",
+  "myRoutesSearchHintCourse": "코스 검색...",
+  "myRoutesEmptyCourseNone": "아직 만든 코스가 없어요\n지도 탭에서 스팟을 담아 코스를 만들어보세요",
+  "myRoutesEmptySearchResult": "검색 결과가 없어요",
+  "myRoutesStopsDistance": "스팟 {count}곳 · {km}km",
+  "@myRoutesStopsDistance": {
+    "placeholders": { "count": { "type": "int" }, "km": { "type": "String" } }
+  },
+  "myRoutesStatsPublic": "좋아요 {likes} · 저장 {saves} · 공유 {shares}",
+  "@myRoutesStatsPublic": {
+    "placeholders": { "likes": { "type": "int" }, "saves": { "type": "int" }, "shares": { "type": "int" } }
+  },
+  "myRoutesPrivateDraft": "나만 보기 · 작성 중",
+  "myRoutesPrivate": "나만 보기",
+  "myRoutesEditButton": "편집",
+  "myRoutesViewOnMapButton": "지도에서 보기",
+  "myRoutesCourseDetailButton": "코스 상세",
+  "myRoutesVisibilityPublic": "전체 공유",
+  "myRoutesNewRouteButton": "+ 새 코스 만들기",
+
+  "profileEditSaveButton": "저장",
+  "profileEditChangePhotoButton": "사진 변경",
+  "profileEditPhotoComingSoon": "사진 변경은 준비 중이에요",
+  "profileEditNicknameLabel": "닉네임",
+  "profileEditBioLabel": "자기소개",
+  "profileEditBioHint": "자기소개를 추가해보세요",
+  "profileEditEmailLabel": "이메일",
+  "profileEditEmailImmutableHint": "이메일은 변경할 수 없어요",
+  "profileEditUserTypeLabel": "회원 유형",
+  "profileEditUserTypeImmutableHint": "가입 시 선택한 유형은 변경할 수 없어요",
+
+  "settingsLogoutConfirmTitle": "로그아웃 하시겠어요?",
+  "settingsLogoutButton": "로그아웃",
+  "settingsSectionLanguage": "언어",
+  "settingsSectionNotifications": "알림",
+  "settingsPushNotificationLabel": "푸시 알림 받기",
+  "settingsSectionAccount": "계정",
+  "settingsDeleteAccountLabel": "회원 탈퇴",
+  "settingsDeleteAccountDisabledHint": "데모에서 비활성화",
+
+  "mapPageTitle": "지도",
+  "mapPageSubtitle": "내 주변 골목과 노포를 찾아보세요",
+  "mapSearchHint": "골목, 노포, 공원 검색...",
+  "mapMyRoutesTooltip": "내 코스",
+  "mapSearchNoResults": "검색 결과가 없어요",
+  "mapRegisterSpotButton": "스팟 등록",
+  "mapNearbySpotsTitle": "주변 스팟",
+  "mapNearbySpotsCount": "{count}곳",
+  "@mapNearbySpotsCount": {
+    "placeholders": { "count": { "type": "int" } }
+  },
+  "mapSaveCourseButton": "코스 저장하기",
+  "mapSaveCourseEmptyWarning": "담고 싶은 스팟을 먼저 북마크해주세요",
+  "mapCategoryAll": "전체",
+  "mapCategoryOldStore": "노포",
+  "mapCategoryAlley": "골목",
+  "mapCategoryPark": "공원",
+  "mapCategoryCafe": "카페",
+
+  "routeBuilderEditTitle": "{name} 편집",
+  "@routeBuilderEditTitle": {
+    "placeholders": { "name": { "type": "String" } }
+  },
+  "routeBuilderCreateTitle": "코스 만들기",
+  "routeBuilderDoneButton": "완료",
+  "routeBuilderNameLabel": "코스 이름",
+  "routeBuilderNameHint": "예: 겨울밤 노포 투어",
+  "routeBuilderStopsCountLabel": "담은 스팟 ({count})",
+  "@routeBuilderStopsCountLabel": {
+    "placeholders": { "count": { "type": "int" } }
+  },
+  "routeBuilderAddSpotButton": "+ 스팟 추가",
+  "routeBuilderNameRequiredWarning": "코스 이름을 입력해주세요",
+  "routeBuilderStopsRequiredWarning": "스팟을 1개 이상 담아주세요",
+  "routeBuilderSpotAddedToast": "{name} 스팟이 추가되었습니다",
+  "@routeBuilderSpotAddedToast": {
+    "placeholders": { "name": { "type": "String" } }
+  },
+  "routeBuilderStopsAddedCount": "{count}개 담김",
+  "@routeBuilderStopsAddedCount": {
+    "placeholders": { "count": { "type": "int" } }
+  },
+  "routeBuilderEmptyMiniMap": "스팟을 추가하면 경로가 표시돼요",
+
+  "routePreviewStats": "{count}개 스팟 · {km}km · 약 {min}분",
+  "@routePreviewStats": {
+    "placeholders": {
+      "count": { "type": "int" },
+      "km": { "type": "String" },
+      "min": { "type": "int" }
+    }
+  },
+  "routePreviewLikeLabel": "좋아요",
+  "routePreviewShareLabel": "공유",
+
+  "loginWelcomeBackTitle": "다시 만나서 반가워요",
+  "loginSubtitle": "이메일로 로그인해 주세요",
+  "loginPasswordHide": "숨기기",
+  "loginPasswordShow": "보기",
+  "loginKeepSignedIn": "로그인 상태 유지",
+  "loginForgotPassword": "비밀번호 찾기",
+  "loginNoAccountPrompt": "계정이 없으신가요? ",
+
+  "signupStep1Title": "어떻게 COCO를\n사용하실 건가요?",
+  "signupStep1Subtitle": "가입 후에는 변경할 수 없어요",
+  "signupRoleLocalDesc": "내 동네의 노포와 골목을 소개하고, 관광객 질문에 답해요",
+  "signupRoleTouristDesc": "주민이 알려주는 진짜 동네 정보를 찾고, 골목지도를 저장해요",
+  "signupStep2Title": "계정을 만들어요",
+  "signupRoleSuffix": "으로 가입 중",
+  "signupNicknameHint": "COCO에서 보일 이름",
+  "signupPasswordHint": "8자 이상",
+  "signupPwStrengthWeak": "약함",
+  "signupPwStrengthMedium": "보통",
+  "signupPwStrengthStrong": "안전",
+  "signupAgreeAllTerms": "약관 전체 동의",
+  "signupTermsService": "서비스 이용약관",
+  "signupTermsPrivacy": "개인정보 수집·이용 동의",
+  "signupTermsMarketing": "알림 및 소식 받기",
+  "signupTermRequired": "필수",
+  "signupTermOptional": "선택",
+  "signupTermsViewButton": "보기",
+  "signupCompleteButton": "가입 완료",
+  "signupCompleteSnackbar": "가입이 완료됐어요",
+
+  "splashTagline": "모두가 멈춰 서는 랜드마크 너머,\n당신의 발길이 닿지 않았던 진짜 일상.",
+  "splashGetStartedButton": "시작하기",
+  "splashHaveAccountButton": "이미 계정이 있어요"
 }

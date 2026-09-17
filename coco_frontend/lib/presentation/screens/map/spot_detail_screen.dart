@@ -2,7 +2,25 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../data/repositories/spot_repository.dart';
+import '../../../l10n/generated/app_localizations.dart';
 import 'map_mock_data.dart';
+
+// map_screen.dart의 _categoryLabel()과 동일한 원칙: category 원본 값(백엔드/필터링에 쓰이는
+// 한국어 키)은 그대로 두고, 화면에 보여줄 라벨만 다국어로 바꾼다.
+String _categoryLabel(String category, AppLocalizations l10n) {
+  switch (category) {
+    case '노포':
+      return l10n.mapCategoryOldStore;
+    case '골목':
+      return l10n.mapCategoryAlley;
+    case '공원':
+      return l10n.mapCategoryPark;
+    case '카페':
+      return l10n.mapCategoryCafe;
+    default:
+      return category;
+  }
+}
 
 class SpotDetailScreen extends StatefulWidget {
   final String spotId;
@@ -292,7 +310,7 @@ class _SpotPhotoHeader extends StatelessWidget {
                 borderRadius: BorderRadius.circular(16),
               ),
               child: Text(
-                spot.category,
+                _categoryLabel(spot.category, AppLocalizations.of(context)!),
                 style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w600),
               ),
             ),

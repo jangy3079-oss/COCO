@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../l10n/generated/app_localizations.dart';
 import '../../widgets/map/kakao_map_view.dart';
 import '../map/map_mock_data.dart';
 import 'mypage_mock_data.dart';
@@ -25,6 +26,7 @@ class _MypageScreenState extends State<MypageScreen> {
   @override
   Widget build(BuildContext context) {
     final savedSpots = mockSpots.where((s) => savedSpotIds.contains(s.id)).toList();
+    final l10n = AppLocalizations.of(context)!;
 
     return Scaffold(
       backgroundColor: Colors.white,
@@ -41,7 +43,10 @@ class _MypageScreenState extends State<MypageScreen> {
                   const SizedBox(height: 8),
                   Row(
                     children: [
-                      Text(myRoleLabel, style: TextStyle(fontSize: 14, color: Colors.grey.shade600)),
+                      Text(
+                        myRoleLabel == '로컬 주민' ? l10n.userTypeLocal : l10n.userTypeTourist,
+                        style: TextStyle(fontSize: 14, color: Colors.grey.shade600),
+                      ),
                       const SizedBox(width: 8),
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
@@ -59,18 +64,18 @@ class _MypageScreenState extends State<MypageScreen> {
               child: _MyMapCard(spots: savedSpots, onTap: () => _open('/mypage/routes')),
             ),
             Divider(height: 1, color: Colors.black.withOpacity(0.07)),
-            _MenuRow(icon: Icons.article_outlined, label: '내가 쓴 글', onTap: () => _open('/mypage/posts')),
-            _MenuRow(icon: Icons.favorite_border_rounded, label: '저장 · 좋아요', onTap: () => _open('/mypage/saved')),
-            _MenuRow(icon: Icons.map_outlined, label: '내가 만든 코스', onTap: () => _open('/mypage/routes', extra: 'course')),
-            _MenuRow(icon: Icons.forum_outlined, label: '내 질문 · 답변 활동', onTap: () => _open('/mypage/posts', extra: 'qna')),
-            _MenuRow(icon: Icons.person_outline_rounded, label: '프로필 수정', onTap: () => _open('/mypage/profile/edit')),
-            _MenuRow(icon: Icons.notifications_outlined, label: '알림 설정', onTap: () => _open('/mypage/settings')),
-            _MenuRow(icon: Icons.settings_outlined, label: '설정', onTap: () => _open('/mypage/settings')),
+            _MenuRow(icon: Icons.article_outlined, label: l10n.myPageMenuMyPosts, onTap: () => _open('/mypage/posts')),
+            _MenuRow(icon: Icons.favorite_border_rounded, label: l10n.myPageMenuSaved, onTap: () => _open('/mypage/saved')),
+            _MenuRow(icon: Icons.map_outlined, label: l10n.myPageMenuMyCourses, onTap: () => _open('/mypage/routes', extra: 'course')),
+            _MenuRow(icon: Icons.forum_outlined, label: l10n.myPageMenuQnaActivity, onTap: () => _open('/mypage/posts', extra: 'qna')),
+            _MenuRow(icon: Icons.person_outline_rounded, label: l10n.myPageMenuEditProfile, onTap: () => _open('/mypage/profile/edit')),
+            _MenuRow(icon: Icons.notifications_outlined, label: l10n.myPageMenuNotificationSettings, onTap: () => _open('/mypage/settings')),
+            _MenuRow(icon: Icons.settings_outlined, label: l10n.myPageMenuSettings, onTap: () => _open('/mypage/settings')),
             _MenuRow(
               icon: Icons.info_outline_rounded,
-              label: 'COCO 이용 안내',
+              label: l10n.myPageMenuAbout,
               onTap: () => ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('준비 중이에요'), duration: Duration(seconds: 1)),
+                SnackBar(content: Text(l10n.myPageComingSoon), duration: const Duration(seconds: 1)),
               ),
             ),
             const SizedBox(height: 24),
@@ -88,6 +93,7 @@ class _MyMapCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(18),
@@ -103,7 +109,7 @@ class _MyMapCard extends StatelessWidget {
                   ? Container(
                       color: const Color(0xFFEAE8E2),
                       alignment: Alignment.center,
-                      child: Text('아직 찜한 스팟이 없어요', style: TextStyle(fontSize: 13, color: Colors.grey.shade500)),
+                      child: Text(l10n.myPageMapCardEmpty, style: TextStyle(fontSize: 13, color: Colors.grey.shade500)),
                     )
                   // 미리보기는 탭만 카드 전체에서 받으면 되므로 지도 자체의 핀 탭은 막아둔다.
                   : IgnorePointer(
@@ -125,8 +131,8 @@ class _MyMapCard extends StatelessWidget {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Text('나의 골목지도', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: CocoTheme.secondary)),
-              Text('찜한 스팟 ${spots.length}곳 · 전체보기 ›', style: TextStyle(fontSize: 13, color: Colors.grey.shade600)),
+              Text(l10n.myPageMapCardTitle, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: CocoTheme.secondary)),
+              Text(l10n.myPageMapCardSubtitle(spots.length), style: TextStyle(fontSize: 13, color: Colors.grey.shade600)),
             ],
           ),
         ],

@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/network/dio_client.dart';
 import '../../../data/repositories/feed_repository.dart';
+import '../../../l10n/generated/app_localizations.dart';
 import 'feed_mock_data.dart';
 
 class FeedScreen extends StatefulWidget {
@@ -243,6 +244,7 @@ class _FeedScreenState extends State<FeedScreen> {
 /// 보고 공유수를 올릴지 말지 정한다.
 /// TODO: 실제 OS 공유 시트 연동 시 share_plus 등으로 교체.
 Future<bool> showShareSheet(BuildContext context) async {
+  final l10n = AppLocalizations.of(context)!;
   final shared = await showModalBottomSheet<bool>(
     context: context,
     backgroundColor: Colors.white,
@@ -254,15 +256,15 @@ Future<bool> showShareSheet(BuildContext context) async {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text('공유하기', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: CocoTheme.secondary)),
+            Text(l10n.feedShareTitle, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: CocoTheme.secondary)),
             const SizedBox(height: 18),
             Row(
               children: [
-                _ShareTile(icon: Icons.chat_bubble_rounded, color: const Color(0xFFFEE500), label: '카카오톡', onTap: () => Navigator.of(context).pop(true)),
+                _ShareTile(icon: Icons.chat_bubble_rounded, color: const Color(0xFFFEE500), label: l10n.feedShareKakao, onTap: () => Navigator.of(context).pop(true)),
                 const SizedBox(width: 16),
-                _ShareTile(icon: Icons.camera_alt_rounded, color: const Color(0xFFE1306C), label: '인스타그램', onTap: () => Navigator.of(context).pop(true)),
+                _ShareTile(icon: Icons.camera_alt_rounded, color: const Color(0xFFE1306C), label: l10n.feedShareInstagram, onTap: () => Navigator.of(context).pop(true)),
                 const SizedBox(width: 16),
-                _ShareTile(icon: Icons.sms_rounded, color: Colors.grey.shade600, label: '메시지', onTap: () => Navigator.of(context).pop(true)),
+                _ShareTile(icon: Icons.sms_rounded, color: Colors.grey.shade600, label: l10n.feedShareMessage, onTap: () => Navigator.of(context).pop(true)),
               ],
             ),
           ],
@@ -303,6 +305,7 @@ class _FeedHeaderBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
       child: Row(
@@ -312,7 +315,7 @@ class _FeedHeaderBar extends StatelessWidget {
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text('피드', style: TextStyle(fontSize: 28, fontWeight: FontWeight.w800, color: CocoTheme.secondary)),
+              Text(l10n.feedHeaderTitle, style: const TextStyle(fontSize: 28, fontWeight: FontWeight.w800, color: CocoTheme.secondary)),
               const SizedBox(height: 6),
               Row(
                 children: [
@@ -320,15 +323,15 @@ class _FeedHeaderBar extends StatelessWidget {
                   const SizedBox(width: 4),
                   Text(dongLabel, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: CocoTheme.primary)),
                   const SizedBox(width: 4),
-                  Text('기준', style: TextStyle(fontSize: 13, color: Colors.black.withOpacity(0.35))),
+                  Text(l10n.feedBasisSuffix, style: TextStyle(fontSize: 13, color: Colors.black.withOpacity(0.35))),
                 ],
               ),
             ],
           ),
-          const CircleAvatar(
+          CircleAvatar(
             radius: 17,
-            backgroundColor: Color(0xFFF0ECE6),
-            child: Text('나', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: CocoTheme.secondary)),
+            backgroundColor: const Color(0xFFF0ECE6),
+            child: Text(l10n.feedMeAvatarLabel, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: CocoTheme.secondary)),
           ),
         ],
       ),
@@ -351,6 +354,7 @@ class _FilterRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     return Row(
       children: [
         InkWell(
@@ -376,11 +380,11 @@ class _FilterRow extends StatelessWidget {
             scrollDirection: Axis.horizontal,
             child: Row(
               children: [
-                _TypeChip(label: '전체', selected: typeFilter == null, onTap: () => onTypeSelected(null)),
+                _TypeChip(label: l10n.feedFilterAll, selected: typeFilter == null, onTap: () => onTypeSelected(null)),
                 const SizedBox(width: 8),
-                _TypeChip(label: '일상', selected: typeFilter == FeedPostType.spot, onTap: () => onTypeSelected(FeedPostType.spot)),
+                _TypeChip(label: l10n.feedFilterDaily, selected: typeFilter == FeedPostType.spot, onTap: () => onTypeSelected(FeedPostType.spot)),
                 const SizedBox(width: 8),
-                _TypeChip(label: '코스', selected: typeFilter == FeedPostType.route, onTap: () => onTypeSelected(FeedPostType.route)),
+                _TypeChip(label: l10n.feedFilterRoute, selected: typeFilter == FeedPostType.route, onTap: () => onTypeSelected(FeedPostType.route)),
               ],
             ),
           ),
@@ -443,6 +447,7 @@ class _FilterSheet extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     return SafeArea(
       child: Padding(
         padding: const EdgeInsets.only(top: 14, bottom: 16),
@@ -459,11 +464,11 @@ class _FilterSheet extends StatelessWidget {
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  const Text('피드 필터', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: CocoTheme.secondary)),
+                  Text(l10n.feedFilterSheetTitle, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: CocoTheme.secondary)),
                   TextButton(
                     onPressed: onReset,
                     style: TextButton.styleFrom(padding: EdgeInsets.zero, minimumSize: Size.zero),
-                    child: Text('초기화', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: Colors.black.withOpacity(0.4))),
+                    child: Text(l10n.feedFilterReset, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: Colors.black.withOpacity(0.4))),
                   ),
                 ],
               ),
@@ -473,9 +478,9 @@ class _FilterSheet extends StatelessWidget {
               padding: const EdgeInsets.symmetric(horizontal: 20),
               child: Row(
                 children: [
-                  Text('동네', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Colors.black.withOpacity(0.45))),
+                  Text(l10n.feedFilterDongLabel, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Colors.black.withOpacity(0.45))),
                   const SizedBox(width: 8),
-                  Text('현재 위치 중구 남포동', style: TextStyle(fontSize: 11, color: Colors.black.withOpacity(0.32))),
+                  Text(l10n.feedFilterCurrentLocationPlaceholder, style: TextStyle(fontSize: 11, color: Colors.black.withOpacity(0.32))),
                 ],
               ),
             ),
@@ -499,7 +504,7 @@ class _FilterSheet extends StatelessWidget {
             const SizedBox(height: 16),
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 20),
-              child: Text('정렬', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Colors.black.withOpacity(0.45))),
+              child: Text(l10n.feedFilterSortLabel, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Colors.black.withOpacity(0.45))),
             ),
             const SizedBox(height: 8),
             Padding(
@@ -527,7 +532,7 @@ class _FilterSheet extends StatelessWidget {
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                 ),
                 onPressed: onApply,
-                child: Text('$resultCount개 게시물 보기', style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
+                child: Text(l10n.feedFilterApplyButton(resultCount), style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
               ),
             ),
           ],
@@ -576,15 +581,16 @@ class _EmptyState extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     return Center(
       child: Padding(
         padding: const EdgeInsets.symmetric(vertical: 80, horizontal: 24),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Text('조건에 맞는 게시물이 없어요', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: Colors.grey.shade700)),
+            Text(l10n.feedEmptyTitle, style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: Colors.grey.shade700)),
             const SizedBox(height: 6),
-            Text('필터를 바꿔서 다시 찾아보세요', style: TextStyle(fontSize: 13, color: Colors.grey.shade500)),
+            Text(l10n.feedEmptySubtitle, style: TextStyle(fontSize: 13, color: Colors.grey.shade500)),
           ],
         ),
       ),
@@ -599,6 +605,7 @@ class _ListFooter extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     if (loadingMore) {
       return Padding(
         padding: const EdgeInsets.symmetric(vertical: 16),
@@ -611,7 +618,7 @@ class _ListFooter extends StatelessWidget {
               child: CircularProgressIndicator(strokeWidth: 1.8, color: CocoTheme.primary),
             ),
             const SizedBox(width: 8),
-            Text('불러오는 중...', style: TextStyle(fontSize: 12, color: Colors.grey.shade500)),
+            Text(l10n.feedLoadingMore, style: TextStyle(fontSize: 12, color: Colors.grey.shade500)),
           ],
         ),
       );
@@ -619,7 +626,7 @@ class _ListFooter extends StatelessWidget {
     if (showEndMessage) {
       return Padding(
         padding: const EdgeInsets.symmetric(vertical: 18),
-        child: Center(child: Text('모두 확인했어요', style: TextStyle(fontSize: 12.5, color: Colors.grey.shade400))),
+        child: Center(child: Text(l10n.feedEndOfList, style: TextStyle(fontSize: 12.5, color: Colors.grey.shade400))),
       );
     }
     return const SizedBox(height: 12);
@@ -732,7 +739,7 @@ class _LocalBadge extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
       decoration: BoxDecoration(color: CocoTheme.primary.withOpacity(0.12), borderRadius: BorderRadius.circular(10)),
-      child: const Text('로컬', style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w700, color: CocoTheme.primary)),
+      child: Text(AppLocalizations.of(context)!.feedLocalBadge, style: const TextStyle(fontSize: 10.5, fontWeight: FontWeight.w700, color: CocoTheme.primary)),
     );
   }
 }
@@ -747,7 +754,7 @@ class _TrendingBadge extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
       decoration: BoxDecoration(color: const Color(0xFFFF7A33).withOpacity(0.14), borderRadius: BorderRadius.circular(10)),
-      child: const Text('인기', style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w700, color: Color(0xFFFF7A33))),
+      child: Text(AppLocalizations.of(context)!.feedTrendingBadge, style: const TextStyle(fontSize: 10.5, fontWeight: FontWeight.w700, color: Color(0xFFFF7A33))),
     );
   }
 }
@@ -796,7 +803,7 @@ class _FeedCardPhoto extends StatelessWidget {
                     padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                     decoration: BoxDecoration(color: Colors.white.withOpacity(0.92), borderRadius: BorderRadius.circular(12)),
                     child: Text(
-                      '코스 · 스팟 ${item.stopCount ?? 0}곳',
+                      AppLocalizations.of(context)!.feedRouteSpotCountBadge(item.stopCount ?? 0),
                       style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: CocoTheme.primary),
                     ),
                   ),
@@ -918,7 +925,7 @@ class _RouteRankingList extends StatelessWidget {
         Padding(
           padding: const EdgeInsets.fromLTRB(20, 14, 20, 24),
           child: Text(
-            '저장한 코스는 MY 탭 › 저장 · 좋아요에서 다시 볼 수 있어요',
+            AppLocalizations.of(context)!.feedRankingSavedHint,
             style: TextStyle(fontSize: 11, height: 1.5, color: Colors.black.withOpacity(0.35)),
           ),
         ),
@@ -935,6 +942,7 @@ class _RouteRankRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
       decoration: BoxDecoration(border: Border(bottom: BorderSide(color: Colors.black.withOpacity(0.06)))),
@@ -958,9 +966,9 @@ class _RouteRankRow extends StatelessWidget {
               children: [
                 Text(item.displayTitle, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: CocoTheme.secondary)),
                 const SizedBox(height: 3),
-                Text('@${item.author} · ${item.dong} · 스팟 ${item.stopCount ?? 0}곳', style: TextStyle(fontSize: 12, color: Colors.black.withOpacity(0.45))),
+                Text('@${item.author} · ${item.dong} · ${l10n.feedRankSpotCount(item.stopCount ?? 0)}', style: TextStyle(fontSize: 12, color: Colors.black.withOpacity(0.45))),
                 const SizedBox(height: 5),
-                Text('저장 ${item.saveCount} · 좋아요 ${item.likeCount} · 공유 ${item.shares}', style: TextStyle(fontSize: 11, color: Colors.black.withOpacity(0.4))),
+                Text(l10n.feedRankStatsLine(item.saveCount, item.likeCount, item.shares), style: TextStyle(fontSize: 11, color: Colors.black.withOpacity(0.4))),
               ],
             ),
           ),
@@ -976,7 +984,7 @@ class _RouteRankRow extends StatelessWidget {
                 border: Border.all(color: item.saved ? const Color(0xFFFF5A36) : Colors.grey.shade300),
               ),
               child: Text(
-                item.saved ? '저장됨' : '저장',
+                item.saved ? l10n.feedSaveButtonSaved : l10n.feedSaveButtonUnsaved,
                 style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: item.saved ? Colors.white : Colors.black.withOpacity(0.6)),
               ),
             ),

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../l10n/generated/app_localizations.dart';
 import '../../widgets/common/coco_mark.dart';
 
 class SplashScreen extends StatefulWidget {
@@ -16,6 +17,7 @@ class _SplashScreenState extends State<SplashScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     return Scaffold(
       backgroundColor: Colors.white,
       body: SafeArea(
@@ -41,7 +43,7 @@ class _SplashScreenState extends State<SplashScreen> {
                     Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 32),
                       child: Text(
-                        '모두가 멈춰 서는 랜드마크 너머,\n당신의 발길이 닿지 않았던 진짜 일상.',
+                        l10n.splashTagline,
                         textAlign: TextAlign.center,
                         style: TextStyle(fontSize: 14, height: 1.7, color: Colors.grey.shade600),
                       ),
@@ -63,7 +65,7 @@ class _SplashScreenState extends State<SplashScreen> {
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                       ),
                       onPressed: () => context.push('/signup'),
-                      child: const Text('시작하기', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
+                      child: Text(l10n.splashGetStartedButton, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
                     ),
                   ),
                   const SizedBox(height: 10),
@@ -77,7 +79,7 @@ class _SplashScreenState extends State<SplashScreen> {
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                       ),
                       onPressed: () => context.push('/login'),
-                      child: const Text('이미 계정이 있어요', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
+                      child: Text(l10n.splashHaveAccountButton, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
                     ),
                   ),
                   const SizedBox(height: 10),

@@ -52,6 +52,7 @@
     window.__cocoBoundsChangedHandlers = {}; // divId -> onBoundsChanged 콜백 (뷰포트 쿼리용)
     window.__cocoKakaoLoadPromise = null;
     window.__cocoKakaoCallout = {}; // divId -> 현재 열려있는 핀 정보 말풍선(CustomOverlay), 없으면 null
+    window.__cocoBoundsDebounceTimers = {}; // divId -> bounds_changed 디바운스 setTimeout id
 
     // 말풍선이 "뿅" 튀어나오는 느낌으로 뜨도록 하는 바운스 팝업 애니메이션.
     // CustomOverlay는 매번 새 DOM을 만들어 붙이므로 클래스만 한 번 정의해두면 계속 재사용된다.
@@ -224,10 +225,15 @@
       // 겹치는 쌍이 하나도 안 남을 때까지 반복해서 합친다. 합칠 때마다 중심(위경도
       // 평균)과 반지름(멤버 수 기준)을 다시 계산하므로, 합쳐져서 커진 원이 세 번째
       // 원과 또 겹치면 다음 반복에서 그것도 같이 합쳐진다.
+      // 예전엔 병합이 하나 생길 때마다 while 루프 전체를 처음부터(i=0) 다시
+      // 돌았다 — 스팟 수가 늘어나면(예: 좁은 구역→넓은 구역 전환) 병합 횟수만큼
+      // 전체 재스캔이 반복되어 수 초까지 걸리는 원인이었다. i는 그대로 두고 같은
+      // 자리(j)부터 이어서 비교하도록 바꿔서, 한 바퀴(while 1회)에 i 하나가 겹칠
+      // 수 있는 걸 다 합치고 넘어가게 했다 — 결과(겹치면 합친다)는 동일하고 속도만 개선.
       var mergedAny = true;
       while (mergedAny) {
         mergedAny = false;
-        for (var i = 0; i < nodes.length && !mergedAny; i++) {
+        for (var i = 0; i < nodes.length; i++) {
           for (var j = i + 1; j < nodes.length; j++) {
             var a = nodes[i], b = nodes[j];
             var dx = a.x - b.x, dy = a.y - b.y;
@@ -238,9 +244,9 @@
               var lng = members.reduce(function (s, m) { return s + m.lng; }, 0) / members.length;
               var p = project(lat, lng);
               nodes.splice(j, 1);
-              nodes.splice(i, 1, { lat: lat, lng: lng, x: p.x, y: p.y, members: members });
+              nodes[i] = { lat: lat, lng: lng, x: p.x, y: p.y, members: members };
               mergedAny = true;
-              break;
+              j--; // b가 없어졌으니 같은 인덱스(j)에 온 다음 노드와 계속 비교
             }
           }
         }
@@ -365,17 +371,25 @@
         cocoHideCallout(divId);
       });
 
-      // 지도가 멈출 때(드래그/줌 종료)마다: ① 클러스터를 화면 픽셀 기준으로 다시 계산하고,
-      // ② 뷰포트 쿼리용 bounds 콜백이 등록돼 있으면 현재 화면 범위를 알려준다.
-      kakao.maps.event.addListener(map, 'idle', function () {
-        cocoRenderClusters(divId);
-        var onBoundsChanged = window.__cocoBoundsChangedHandlers[divId];
-        if (onBoundsChanged) {
-          var bounds = map.getBounds();
-          var sw = bounds.getSouthWest();
-          var ne = bounds.getNorthEast();
-          onBoundsChanged(sw.getLat(), sw.getLng(), ne.getLat(), ne.getLng());
-        }
+      // 원래는 'idle'(드래그/줌이 완전히 멈췄을 때 한 번) 이벤트로 처리했는데,
+      // 트랙패드로 휠 줌을 하면 손을 뗀 뒤에도 관성(모멘텀) 휠 이벤트가 한동안 계속
+      // 들어와서 카카오맵이 "아직 움직이는 중"이라 판단해 idle이 안 오고, 커서가
+      // 지도 영역을 벗어나야(=그 순간 모멘텀 이벤트 전달이 끊겨야) 뒤늦게 idle이
+      // 발생하는 문제가 있었다. 'bounds_changed'는 이동/줌 도중에도 계속 자주
+      // 발생하므로, idle을 기다리는 대신 이 이벤트를 우리가 직접 디바운스해서
+      // "마지막 변경 후 일정 시간 조용하면" 갱신하도록 바꿨다 — 커서 위치와 무관하게 동작.
+      kakao.maps.event.addListener(map, 'bounds_changed', function () {
+        clearTimeout(window.__cocoBoundsDebounceTimers[divId]);
+        window.__cocoBoundsDebounceTimers[divId] = setTimeout(function () {
+          cocoRenderClusters(divId);
+          var onBoundsChanged = window.__cocoBoundsChangedHandlers[divId];
+          if (onBoundsChanged) {
+            var bounds = map.getBounds();
+            var sw = bounds.getSouthWest();
+            var ne = bounds.getNorthEast();
+            onBoundsChanged(sw.getLat(), sw.getLng(), ne.getLat(), ne.getLng());
+          }
+        }, 400);
       });
     };
 

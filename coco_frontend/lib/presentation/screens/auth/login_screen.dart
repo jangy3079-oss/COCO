@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 import '../../../core/network/auth_token_store.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../data/repositories/auth_repository.dart';
+import '../../../l10n/generated/app_localizations.dart';
 import '../../widgets/common/coco_mark.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -51,6 +52,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     return Scaffold(
       backgroundColor: Colors.white,
       body: SafeArea(
@@ -72,15 +74,15 @@ class _LoginScreenState extends State<LoginScreen> {
                   children: [
                     const CocoMark(width: 48, height: 42),
                     const SizedBox(height: 16),
-                    const Text(
-                      '다시 만나서 반가워요',
-                      style: TextStyle(fontSize: 26, fontWeight: FontWeight.w800, color: CocoTheme.secondary),
+                    Text(
+                      l10n.loginWelcomeBackTitle,
+                      style: const TextStyle(fontSize: 26, fontWeight: FontWeight.w800, color: CocoTheme.secondary),
                     ),
                     const SizedBox(height: 8),
-                    Text('이메일로 로그인해 주세요', style: TextStyle(fontSize: 14, color: Colors.grey.shade600)),
+                    Text(l10n.loginSubtitle, style: TextStyle(fontSize: 14, color: Colors.grey.shade600)),
                     const SizedBox(height: 32),
                     _AuthField(
-                      label: '이메일',
+                      label: l10n.emailLabel,
                       controller: _emailController,
                       hintText: 'you@example.com',
                       keyboardType: TextInputType.emailAddress,
@@ -88,7 +90,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     ),
                     const SizedBox(height: 16),
                     _AuthField(
-                      label: '비밀번호',
+                      label: l10n.passwordLabel,
                       controller: _passwordController,
                       hintText: '••••••••',
                       obscureText: !_showPassword,
@@ -96,7 +98,7 @@ class _LoginScreenState extends State<LoginScreen> {
                       suffix: TextButton(
                         onPressed: () => setState(() => _showPassword = !_showPassword),
                         child: Text(
-                          _showPassword ? '숨기기' : '보기',
+                          _showPassword ? l10n.loginPasswordHide : l10n.loginPasswordShow,
                           style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: CocoTheme.primary),
                         ),
                       ),
@@ -111,15 +113,15 @@ class _LoginScreenState extends State<LoginScreen> {
                             children: [
                               _CheckBox(checked: _keepSignedIn),
                               const SizedBox(width: 8),
-                              Text('로그인 상태 유지', style: TextStyle(fontSize: 13, color: Colors.grey.shade700)),
+                              Text(l10n.loginKeepSignedIn, style: TextStyle(fontSize: 13, color: Colors.grey.shade700)),
                             ],
                           ),
                         ),
                         InkWell(
                           onTap: () => ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(content: Text('준비 중이에요'), duration: Duration(seconds: 1)),
+                            SnackBar(content: Text(l10n.myPageComingSoon), duration: const Duration(seconds: 1)),
                           ),
-                          child: Text('비밀번호 찾기', style: TextStyle(fontSize: 13, color: Colors.grey.shade500)),
+                          child: Text(l10n.loginForgotPassword, style: TextStyle(fontSize: 13, color: Colors.grey.shade500)),
                         ),
                       ],
                     ),
@@ -140,7 +142,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                 height: 20,
                                 child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
                               )
-                            : const Text('로그인', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
+                            : Text(l10n.loginButton, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
                       ),
                     ),
                     const SizedBox(height: 20),
@@ -148,12 +150,12 @@ class _LoginScreenState extends State<LoginScreen> {
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          Text('계정이 없으신가요? ', style: TextStyle(fontSize: 13, color: Colors.grey.shade600)),
+                          Text(l10n.loginNoAccountPrompt, style: TextStyle(fontSize: 13, color: Colors.grey.shade600)),
                           InkWell(
                             onTap: () => context.push('/signup'),
-                            child: const Text(
-                              '회원가입',
-                              style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: CocoTheme.primary),
+                            child: Text(
+                              l10n.goToSignup,
+                              style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: CocoTheme.primary),
                             ),
                           ),
                         ],

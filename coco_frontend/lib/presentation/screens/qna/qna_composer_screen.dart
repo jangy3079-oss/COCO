@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../data/models/user_type.dart';
+import '../../../l10n/generated/app_localizations.dart';
 import '../map/map_mock_data.dart';
 import 'qna_mock_data.dart';
 
@@ -49,6 +50,7 @@ class _QnaComposerScreenState extends State<QnaComposerScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     return Scaffold(
       backgroundColor: Colors.white,
       body: SafeArea(
@@ -60,19 +62,19 @@ class _QnaComposerScreenState extends State<QnaComposerScreen> {
                 children: [
                   TextButton(
                     onPressed: () => context.pop(),
-                    child: Text('취소', style: TextStyle(fontSize: 14, color: Colors.grey.shade600)),
+                    child: Text(l10n.feedRouteComposeCancel, style: TextStyle(fontSize: 14, color: Colors.grey.shade600)),
                   ),
-                  const Expanded(
+                  Expanded(
                     child: Text(
-                      '질문 작성',
+                      l10n.qnaComposerTitle,
                       textAlign: TextAlign.center,
-                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: CocoTheme.secondary),
+                      style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: CocoTheme.secondary),
                     ),
                   ),
                   TextButton(
                     onPressed: _canSubmit ? _submit : null,
                     child: Text(
-                      '등록',
+                      l10n.feedPostDetailCommentSubmit,
                       style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: _canSubmit ? CocoTheme.primary : Colors.grey.shade400),
                     ),
                   ),
@@ -90,7 +92,7 @@ class _QnaComposerScreenState extends State<QnaComposerScreen> {
                       onChanged: (_) => setState(() {}),
                       style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w700, color: CocoTheme.secondary),
                       decoration: InputDecoration(
-                        hintText: '제목',
+                        hintText: l10n.qnaComposerTitleHint,
                         border: UnderlineInputBorder(borderSide: BorderSide(color: Colors.grey.shade300)),
                         enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: Colors.grey.shade300)),
                       ),
@@ -102,17 +104,17 @@ class _QnaComposerScreenState extends State<QnaComposerScreen> {
                       maxLines: 8,
                       minLines: 5,
                       style: TextStyle(fontSize: 14, height: 1.7, color: Colors.grey.shade800),
-                      decoration: const InputDecoration(
-                        hintText: '이 동네에 대해 궁금한 걸 물어보세요',
+                      decoration: InputDecoration(
+                        hintText: l10n.qnaComposerBodyHint,
                         border: InputBorder.none,
                       ),
                     ),
                     const SizedBox(height: 8),
                     Row(
                       children: [
-                        const Text('장소 태그', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: CocoTheme.secondary)),
+                        Text(l10n.qnaComposerSpotTagLabel, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: CocoTheme.secondary)),
                         const SizedBox(width: 6),
-                        Text('선택', style: TextStyle(fontSize: 12, color: Colors.grey.shade400)),
+                        Text(l10n.qnaComposerOptionalLabel, style: TextStyle(fontSize: 12, color: Colors.grey.shade400)),
                       ],
                     ),
                     const SizedBox(height: 10),
@@ -135,10 +137,10 @@ class _QnaComposerScreenState extends State<QnaComposerScreen> {
                       child: Text.rich(
                         TextSpan(
                           style: TextStyle(fontSize: 12, height: 1.6, color: Colors.grey.shade700),
-                          children: const [
-                            TextSpan(text: '이 질문은 '),
-                            TextSpan(text: '한국어', style: TextStyle(color: CocoTheme.primary, fontWeight: FontWeight.w700)),
-                            TextSpan(text: '로 게시돼요. 로컬 주민이 가능하면 같은 언어로 답변해요.'),
+                          children: [
+                            TextSpan(text: l10n.qnaComposerLanguageNoticePrefix),
+                            TextSpan(text: l10n.qnaComposerLanguageNoticeLang, style: const TextStyle(color: CocoTheme.primary, fontWeight: FontWeight.w700)),
+                            TextSpan(text: l10n.qnaComposerLanguageNoticeSuffix),
                           ],
                         ),
                       ),

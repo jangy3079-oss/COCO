@@ -8,6 +8,7 @@ import '../../../core/theme/app_theme.dart';
 import '../../../data/models/spot.dart';
 import '../../../data/repositories/feed_repository.dart';
 import '../../../data/repositories/spot_repository.dart';
+import '../../../l10n/generated/app_localizations.dart';
 
 /// 게시물 작성 3단계 위저드: 사진(선택) → 스팟 태그(실제 검색) → 한줄 설명.
 /// 제출하면 coco_backend POST /api/feed로 실제 게시물을 만든다. 사진을 고르면
@@ -95,7 +96,7 @@ class _FeedComposerScreenState extends State<FeedComposerScreen> {
         _uploadingImage = false;
       });
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('사진 업로드에 실패했어요. 다시 시도해주세요.')),
+        SnackBar(content: Text(AppLocalizations.of(context)!.feedComposerPhotoUploadFailed)),
       );
     }
   }
@@ -144,13 +145,14 @@ class _FeedComposerScreenState extends State<FeedComposerScreen> {
       if (!mounted) return;
       setState(() => _submitting = false);
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('게시물을 올리지 못했어요. 로그인 상태를 확인해주세요.')),
+        SnackBar(content: Text(AppLocalizations.of(context)!.feedComposerPostFailed)),
       );
     }
   }
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     return Scaffold(
       backgroundColor: Colors.white,
       body: SafeArea(
@@ -161,7 +163,7 @@ class _FeedComposerScreenState extends State<FeedComposerScreen> {
               child: Row(
                 children: [
                   IconButton(onPressed: _back, icon: const Icon(Icons.arrow_back_rounded)),
-                  Text('게시물 작성 ($_step/$_totalSteps)', style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: CocoTheme.secondary)),
+                  Text(l10n.feedComposerStepTitle(_step, _totalSteps), style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: CocoTheme.secondary)),
                 ],
               ),
             ),
@@ -219,7 +221,7 @@ class _FeedComposerScreenState extends State<FeedComposerScreen> {
                       ),
                       onPressed: _uploadingImage ? null : _submit,
                       child: Text(
-                        _submitting ? '게시 중...' : '게시하기',
+                        _submitting ? l10n.feedComposerSubmitting : l10n.feedComposerSubmitButton,
                         style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
                       ),
                     )
@@ -230,7 +232,7 @@ class _FeedComposerScreenState extends State<FeedComposerScreen> {
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                       ),
                       onPressed: _next,
-                      child: const Text('다음', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
+                      child: Text(l10n.feedComposerNextButton, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
                     ),
             ),
           ],
@@ -250,10 +252,11 @@ class _PhotoStep extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text('사진을 올려주세요 (선택)', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: CocoTheme.secondary)),
+        Text(l10n.feedComposerPhotoStepTitle, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: CocoTheme.secondary)),
         const SizedBox(height: 12),
         SizedBox(
           width: 120,
@@ -309,7 +312,7 @@ class _PhotoStep extends StatelessWidget {
                 ),
         ),
         const SizedBox(height: 8),
-        Text('갤러리에서 사진 한 장을 선택하세요 (선택 사항)', style: TextStyle(fontSize: 12, color: Colors.grey.shade500)),
+        Text(l10n.feedComposerPhotoStepHint, style: TextStyle(fontSize: 12, color: Colors.grey.shade500)),
       ],
     );
   }
@@ -334,15 +337,16 @@ class _LocationStep extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text('장소를 태그해주세요 (선택)', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: CocoTheme.secondary)),
+        Text(l10n.feedComposerLocationStepTitle, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: CocoTheme.secondary)),
         const SizedBox(height: 12),
         TextField(
           onChanged: onQueryChanged,
           decoration: InputDecoration(
-            hintText: '장소명 또는 주소 검색',
+            hintText: l10n.feedComposerLocationSearchHint,
             filled: true,
             fillColor: const Color(0xFFF8F8F8),
             contentPadding: const EdgeInsets.symmetric(horizontal: 14),
@@ -359,7 +363,7 @@ class _LocationStep extends StatelessWidget {
         else if (query.trim().isNotEmpty && results.isEmpty)
           Padding(
             padding: const EdgeInsets.symmetric(vertical: 16),
-            child: Text('검색 결과가 없어요', style: TextStyle(fontSize: 13, color: Colors.grey.shade500)),
+            child: Text(l10n.feedComposerLocationNoResults, style: TextStyle(fontSize: 13, color: Colors.grey.shade500)),
           )
         else
           for (final spot in results)
@@ -404,10 +408,11 @@ class _DescriptionStep extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text('한줄 설명을 남겨주세요', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: CocoTheme.secondary)),
+        Text(l10n.feedComposerDescStepTitle, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: CocoTheme.secondary)),
         const SizedBox(height: 12),
         TextField(
           controller: controller,
@@ -415,7 +420,7 @@ class _DescriptionStep extends StatelessWidget {
           maxLength: 200,
           maxLines: 5,
           decoration: InputDecoration(
-            hintText: '이 스팟에 대한 후기를 적어주세요',
+            hintText: l10n.feedComposerDescHint,
             filled: true,
             fillColor: const Color(0xFFF8F8F8),
             contentPadding: const EdgeInsets.all(14),

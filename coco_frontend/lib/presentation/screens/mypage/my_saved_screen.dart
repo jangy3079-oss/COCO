@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../l10n/generated/app_localizations.dart';
 import '../feed/feed_mock_data.dart';
 import '../map/map_mock_data.dart';
 
@@ -18,22 +19,23 @@ class MySavedScreen extends StatefulWidget {
 class _MySavedScreenState extends State<MySavedScreen> {
   late String _filter = widget.initialFilter;
 
-  static const _filters = [
-    ('spots', '찜한 스팟'),
-    ('likedFeed', '좋아요한 피드'),
-    ('savedFeed', '저장한 피드'),
-    ('routes', '저장한 코스'),
-  ];
+  List<(String, String)> _filters(AppLocalizations l10n) => [
+        ('spots', l10n.mySavedFilterSpots),
+        ('likedFeed', l10n.mySavedFilterLikedFeed),
+        ('savedFeed', l10n.mySavedFilterSavedFeed),
+        ('routes', l10n.mySavedFilterRoutes),
+      ];
 
   List<_SavedEntry> get _entries {
+    final l10n = AppLocalizations.of(context)!;
     switch (_filter) {
       case 'likedFeed':
         return mockFeedItems.where((f) => f.liked).map((f) => _SavedEntry(
               name: f.place,
-              meta: '@${f.author ?? 'COCO'} · 좋아요 ${f.likeCount}',
+              meta: l10n.mySavedMetaLiked(f.author ?? 'COCO', f.likeCount),
               color: categoryColor(f.category),
               icon: categoryIcon(f.category),
-              actionLabel: '좋아요 해제',
+              actionLabel: l10n.mySavedActionUnlike,
               onAction: () => setState(() => f.liked = false),
               onTap: () async {
                 await context.push('/feed/post', extra: f);
@@ -43,10 +45,10 @@ class _MySavedScreenState extends State<MySavedScreen> {
       case 'savedFeed':
         return mockFeedItems.where((f) => f.saved).map((f) => _SavedEntry(
               name: f.place,
-              meta: '@${f.author ?? 'COCO'} · 저장 ${f.saveCount}',
+              meta: l10n.mySavedMetaSaved(f.author ?? 'COCO', f.saveCount),
               color: categoryColor(f.category),
               icon: categoryIcon(f.category),
-              actionLabel: '저장 해제',
+              actionLabel: l10n.mySavedActionUnsave,
               onAction: () => setState(() => f.saved = false),
               onTap: () async {
                 await context.push('/feed/post', extra: f);
@@ -56,10 +58,10 @@ class _MySavedScreenState extends State<MySavedScreen> {
       case 'routes':
         return mockMyRoutes.map((r) => _SavedEntry(
               name: r.name,
-              meta: '스팟 ${r.stops.length}곳 · 내가 만든 코스',
+              meta: l10n.mySavedMetaRoute(r.stops.length),
               color: CocoTheme.primary,
               icon: Icons.map_outlined,
-              actionLabel: '삭제',
+              actionLabel: l10n.commonDeleteLabel,
               onAction: () => setState(() => mockMyRoutes.remove(r)),
               // 저장한 코스는 내가 만든 게 아니라 저장만 해둔 것이라, 코스 상세에서
               // 편집·공유는 못 하고 보기만 가능하다(isOwner: false).
@@ -94,7 +96,7 @@ class _MySavedScreenState extends State<MySavedScreen> {
             meta: s.subtitle,
             color: s.pinColor,
             icon: s.icon,
-            actionLabel: '찜 해제',
+            actionLabel: l10n.mySavedActionUnwish,
             onAction: () => setState(() => savedSpotIds.remove(id)),
             onTap: () async {
               await context.push('/map/spot/$id');
@@ -107,16 +109,17 @@ class _MySavedScreenState extends State<MySavedScreen> {
   }
 
   ({String text, String cta, VoidCallback onCta}) get _empty {
+    final l10n = AppLocalizations.of(context)!;
     switch (_filter) {
       case 'likedFeed':
-        return (text: '좋아요한 피드가 없어요', cta: '피드로 가기', onCta: () => context.go('/feed'));
+        return (text: l10n.mySavedEmptyLikedFeed, cta: l10n.myPostsGoToFeedButton, onCta: () => context.go('/feed'));
       case 'savedFeed':
-        return (text: '저장한 피드가 없어요', cta: '피드로 가기', onCta: () => context.go('/feed'));
+        return (text: l10n.mySavedEmptySavedFeed, cta: l10n.myPostsGoToFeedButton, onCta: () => context.go('/feed'));
       case 'routes':
-        return (text: '만든 코스가 없어요\n지도 탭에서 코스를 만들어보세요', cta: '지도로 가기', onCta: () => context.go('/map'));
+        return (text: l10n.mySavedEmptyRoutes, cta: l10n.myMapGoToMapButton, onCta: () => context.go('/map'));
       case 'spots':
       default:
-        return (text: '찜한 스팟이 없어요\n지도 탭에서 스팟을 찜해보세요', cta: '지도로 가기', onCta: () => context.go('/map'));
+        return (text: l10n.mySavedEmptySpots, cta: l10n.myMapGoToMapButton, onCta: () => context.go('/map'));
     }
   }
 
@@ -124,6 +127,7 @@ class _MySavedScreenState extends State<MySavedScreen> {
   Widget build(BuildContext context) {
     final entries = _entries;
     final empty = _empty;
+    final l10n = AppLocalizations.of(context)!;
 
     return Scaffold(
       backgroundColor: Colors.white,
@@ -136,7 +140,7 @@ class _MySavedScreenState extends State<MySavedScreen> {
                 children: [
                   IconButton(onPressed: () => context.pop(), icon: const Icon(Icons.arrow_back_rounded)),
                   const SizedBox(width: 6),
-                  const Text('저장 · 좋아요', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: CocoTheme.secondary)),
+                  Text(l10n.myPageMenuSaved, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: CocoTheme.secondary)),
                 ],
               ),
             ),
@@ -146,7 +150,7 @@ class _MySavedScreenState extends State<MySavedScreen> {
                 scrollDirection: Axis.horizontal,
                 child: Row(
                   children: [
-                    for (final f in _filters) ...[
+                    for (final f in _filters(l10n)) ...[
                       _FilterChip(label: f.$2, selected: _filter == f.$1, onTap: () => setState(() => _filter = f.$1)),
                       const SizedBox(width: 8),
                     ],

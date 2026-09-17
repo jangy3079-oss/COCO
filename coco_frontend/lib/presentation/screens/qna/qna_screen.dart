@@ -3,6 +3,7 @@ import 'package:flutter/rendering.dart' show ScrollDirection;
 import 'package:go_router/go_router.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../data/models/user_type.dart';
+import '../../../l10n/generated/app_localizations.dart';
 import 'qna_mock_data.dart';
 
 class QnaScreen extends StatefulWidget {
@@ -71,6 +72,7 @@ class _QnaScreenState extends State<QnaScreen> {
   @override
   Widget build(BuildContext context) {
     final posts = _filteredSorted;
+    final l10n = AppLocalizations.of(context)!;
 
     return Scaffold(
       backgroundColor: Colors.white,
@@ -91,16 +93,16 @@ class _QnaScreenState extends State<QnaScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text('커뮤니티', style: TextStyle(fontSize: 24, fontWeight: FontWeight.w800, color: CocoTheme.secondary)),
+                        Text(l10n.qnaHeaderTitle, style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w800, color: CocoTheme.secondary)),
                         const SizedBox(height: 4),
-                        Text('관광객의 질문에 동네 주민이 답해요', style: TextStyle(fontSize: 13, color: Colors.grey.shade600)),
+                        Text(l10n.qnaHeaderSubtitle, style: TextStyle(fontSize: 13, color: Colors.grey.shade600)),
                       ],
                     ),
                   ),
-                  const CircleAvatar(
+                  CircleAvatar(
                     radius: 17,
-                    backgroundColor: Color(0xFFF0ECE6),
-                    child: Text('나', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: CocoTheme.secondary)),
+                    backgroundColor: const Color(0xFFF0ECE6),
+                    child: Text(l10n.feedMeAvatarLabel, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: CocoTheme.secondary)),
                   ),
                 ],
               ),
@@ -121,11 +123,11 @@ class _QnaScreenState extends State<QnaScreen> {
                         padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
                         child: Row(
                           children: [
-                            _FilterChip(label: '전체', selected: _filter == null, onTap: () => setState(() => _filter = null)),
+                            _FilterChip(label: l10n.feedFilterAll, selected: _filter == null, onTap: () => setState(() => _filter = null)),
                             const SizedBox(width: 8),
-                            _FilterChip(label: '미답변', selected: _filter == 'unanswered', onTap: () => setState(() => _filter = 'unanswered')),
+                            _FilterChip(label: l10n.qnaFilterUnanswered, selected: _filter == 'unanswered', onTap: () => setState(() => _filter = 'unanswered')),
                             const SizedBox(width: 8),
-                            _FilterChip(label: '내 질문', selected: _filter == 'mine', onTap: () => setState(() => _filter = 'mine')),
+                            _FilterChip(label: l10n.qnaFilterMine, selected: _filter == 'mine', onTap: () => setState(() => _filter = 'mine')),
                           ],
                         ),
                       ),
@@ -139,7 +141,7 @@ class _QnaScreenState extends State<QnaScreen> {
                                 _sort = _sort == 'latest' ? 'unanswered_first' : 'latest';
                               }),
                               child: Text(
-                                '${_sort == 'latest' ? '최신순' : '미답변 우선'} ⌄',
+                                '${_sort == 'latest' ? l10n.qnaSortLatest : l10n.qnaSortUnansweredFirst} ⌄',
                                 style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
                               ),
                             ),
@@ -154,7 +156,7 @@ class _QnaScreenState extends State<QnaScreen> {
             Expanded(
               child: posts.isEmpty
                   ? Center(
-                      child: Text('조건에 맞는 질문이 없어요', style: TextStyle(fontSize: 14, color: Colors.grey.shade500)),
+                      child: Text(l10n.qnaEmptyState, style: TextStyle(fontSize: 14, color: Colors.grey.shade500)),
                     )
                   : ListView.separated(
                       controller: _scrollController,
@@ -205,8 +207,9 @@ class _QuestionCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     final isLocalAuthor = post.authorRole == UserType.local;
-    final roleLabel = isLocalAuthor ? '로컬' : '관광객';
+    final roleLabel = isLocalAuthor ? l10n.feedLocalBadge : l10n.qnaRoleTourist;
 
     return InkWell(
       onTap: onTap,
@@ -233,7 +236,7 @@ class _QuestionCard extends StatelessWidget {
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                     decoration: BoxDecoration(color: const Color(0xFFE6F1FB), borderRadius: BorderRadius.circular(10)),
-                    child: const Text('✓ 해결됨', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: CocoTheme.primary)),
+                    child: Text(l10n.qnaSolvedBadge, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: CocoTheme.primary)),
                   ),
                 ],
                 const Spacer(),
@@ -264,7 +267,7 @@ class _QuestionCard extends StatelessWidget {
                   const SizedBox(width: 10),
                 ],
                 Text(
-                  post.answers.isEmpty ? '아직 답변 없어요' : '답변 ${post.answers.length}',
+                  post.answers.isEmpty ? l10n.qnaAnswerCountZero : l10n.qnaAnswerCount(post.answers.length),
                   style: TextStyle(
                     fontSize: 12,
                     color: post.answers.isEmpty ? CocoTheme.primary : Colors.grey.shade600,

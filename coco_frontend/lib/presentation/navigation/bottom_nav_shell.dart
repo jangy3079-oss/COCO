@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../../core/theme/app_theme.dart';
+import '../../l10n/generated/app_localizations.dart';
 
 class BottomNavShell extends StatelessWidget {
   final Widget child;
@@ -9,17 +10,19 @@ class BottomNavShell extends StatelessWidget {
   // 선택되지 않은 탭 아이콘/라벨 색 — 기본 M3 회색보다 약간 어둡게
   static const _unselectedColor = Color(0xFF616161);
 
-  static const _tabs = [
-    (icon: Icons.home_rounded,   label: '피드',  path: '/feed'),
-    (icon: Icons.map_rounded,    label: '지도',  path: '/map'),
-    (icon: Icons.groups_rounded, label: '커뮤니티', path: '/qna'),
-    (icon: Icons.person_rounded, label: 'MY',   path: '/mypage'),
-  ];
-
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    // 라벨이 로케일에 따라 바뀌어야 해서, 더 이상 컴파일타임 상수가 아니라
+    // build() 안에서 매번 새로 만든다.
+    final tabs = [
+      (icon: Icons.home_rounded,   label: l10n.navFeed,      path: '/feed'),
+      (icon: Icons.map_rounded,    label: l10n.navMap,       path: '/map'),
+      (icon: Icons.groups_rounded, label: l10n.navCommunity, path: '/qna'),
+      (icon: Icons.person_rounded, label: l10n.navMy,        path: '/mypage'),
+    ];
     final location = GoRouterState.of(context).uri.toString();
-    final currentIdx = _tabs.indexWhere((t) => location.startsWith(t.path));
+    final currentIdx = tabs.indexWhere((t) => location.startsWith(t.path));
 
     return Scaffold(
       body: child,
@@ -45,8 +48,8 @@ class BottomNavShell extends StatelessWidget {
             );
           }),
           selectedIndex: currentIdx < 0 ? 0 : currentIdx,
-          onDestinationSelected: (i) => context.go(_tabs[i].path),
-          destinations: _tabs.map((t) => NavigationDestination(
+          onDestinationSelected: (i) => context.go(tabs[i].path),
+          destinations: tabs.map((t) => NavigationDestination(
             icon: Icon(t.icon, color: _unselectedColor),
             selectedIcon: Icon(t.icon, color: CocoTheme.primary),
             label: t.label,

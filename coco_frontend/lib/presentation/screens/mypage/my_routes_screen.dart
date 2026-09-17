@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:pointer_interceptor/pointer_interceptor.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../l10n/generated/app_localizations.dart';
 import '../../widgets/map/kakao_map_view.dart';
 import '../map/map_mock_data.dart';
 
@@ -59,6 +60,7 @@ class _MyRoutesScreenState extends State<MyRoutesScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     final isAlley = _tab == 'alley';
     final query = _query.trim();
 
@@ -94,7 +96,7 @@ class _MyRoutesScreenState extends State<MyRoutesScreen> {
                         padding: const EdgeInsets.only(top: 200),
                         child: Center(
                           child: Text(
-                            routes.isEmpty ? '아직 만든 코스가 없어요\n지도 탭에서 스팟을 담아 코스를 만들어보세요' : '검색 결과가 없어요',
+                            routes.isEmpty ? l10n.myRoutesEmptyCourseNone : l10n.myRoutesEmptySearchResult,
                             textAlign: TextAlign.center,
                             style: TextStyle(fontSize: 14, height: 1.7, color: Colors.grey.shade500),
                           ),
@@ -170,16 +172,16 @@ class _MyRoutesScreenState extends State<MyRoutesScreen> {
                                 children: [
                                   IconButton(onPressed: () => context.pop(), icon: const Icon(Icons.arrow_back_rounded)),
                                   const SizedBox(width: 2),
-                                  _HeaderTabLabel(label: '나의 골목지도', selected: isAlley, onTap: () => _switchTab('alley')),
+                                  _HeaderTabLabel(label: l10n.myPageMapCardTitle, selected: isAlley, onTap: () => _switchTab('alley')),
                                   const SizedBox(width: 14),
-                                  _HeaderTabLabel(label: '코스', selected: !isAlley, onTap: () => _switchTab('course')),
+                                  _HeaderTabLabel(label: l10n.myRoutesTabCourse, selected: !isAlley, onTap: () => _switchTab('course')),
                                 ],
                               ),
                               const SizedBox(height: 6),
                               Padding(
                                 padding: const EdgeInsets.only(left: 12),
                                 child: Text(
-                                  isAlley ? '찜한 스팟 ${likedSpots.length}곳을 지도에서 확인하세요' : '내가 만든 코스 ${routes.length}개',
+                                  isAlley ? l10n.myRoutesAlleySubtitle(likedSpots.length) : l10n.myRoutesCourseSubtitle(routes.length),
                                   style: TextStyle(fontSize: 13, color: Colors.grey.shade600),
                                 ),
                               ),
@@ -188,7 +190,7 @@ class _MyRoutesScreenState extends State<MyRoutesScreen> {
                                 padding: const EdgeInsets.only(left: 12),
                                 child: _RoutesSearchBar(
                                   controller: _searchController,
-                                  hintText: isAlley ? '찜한 스팟 검색...' : '코스 검색...',
+                                  hintText: isAlley ? l10n.myRoutesSearchHintSpots : l10n.myRoutesSearchHintCourse,
                                   onChanged: (v) => setState(() => _query = v),
                                   onClear: () => setState(() {
                                     _query = '';
@@ -309,6 +311,7 @@ class _RouteCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     return Container(
       decoration: BoxDecoration(
         border: Border.all(color: Colors.black.withOpacity(0.08)),
@@ -344,16 +347,16 @@ class _RouteCard extends StatelessWidget {
                         ),
                         const SizedBox(height: 4),
                         Text(
-                          '스팟 ${route.stops.length}곳 · ${route.distanceKm.toStringAsFixed(1)}km',
+                          l10n.myRoutesStopsDistance(route.stops.length, route.distanceKm.toStringAsFixed(1)),
                           style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
                         ),
                         const SizedBox(height: 3),
                         Text(
                           route.isPublic
-                              ? '좋아요 ${route.likes} · 저장 ${route.saves} · 공유 ${route.shares}'
+                              ? l10n.myRoutesStatsPublic(route.likes, route.saves, route.shares)
                               : route.isDraft
-                                  ? '나만 보기 · 작성 중'
-                                  : '나만 보기',
+                                  ? l10n.myRoutesPrivateDraft
+                                  : l10n.myRoutesPrivate,
                           style: TextStyle(fontSize: 12, color: Colors.grey.shade500),
                         ),
                       ],
@@ -413,11 +416,11 @@ class _RouteCard extends StatelessWidget {
               padding: const EdgeInsets.fromLTRB(14, 8, 14, 14),
               child: Row(
                 children: [
-                  Expanded(child: _SegmentButton(label: '편집', selected: false, onTap: onEdit)),
+                  Expanded(child: _SegmentButton(label: l10n.myRoutesEditButton, selected: false, onTap: onEdit)),
                   const SizedBox(width: 8),
                   Expanded(
                     child: _SegmentButton(
-                      label: '지도에서 보기',
+                      label: l10n.myRoutesViewOnMapButton,
                       selected: viewMode == _RouteViewMode.map,
                       onTap: () => onViewModeChanged(
                         viewMode == _RouteViewMode.map ? _RouteViewMode.list : _RouteViewMode.map,
@@ -427,7 +430,7 @@ class _RouteCard extends StatelessWidget {
                   const SizedBox(width: 8),
                   Expanded(
                     child: _SegmentButton(
-                      label: '코스 상세',
+                      label: l10n.myRoutesCourseDetailButton,
                       selected: false,
                       onTap: onViewOnMap,
                     ),
@@ -468,6 +471,7 @@ class _VisibilityBadge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
       decoration: BoxDecoration(
@@ -475,7 +479,7 @@ class _VisibilityBadge extends StatelessWidget {
         borderRadius: BorderRadius.circular(10),
       ),
       child: Text(
-        isPublic ? '전체 공유' : '나만 보기',
+        isPublic ? l10n.myRoutesVisibilityPublic : l10n.myRoutesPrivate,
         style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: isPublic ? CocoTheme.primary : Colors.grey.shade600),
       ),
     );
@@ -514,6 +518,7 @@ class _EmptyLikedMap extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     return Container(
       color: const Color(0xFFEAE8E2),
       alignment: Alignment.center,
@@ -522,14 +527,14 @@ class _EmptyLikedMap extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Text('아직 찜한 스팟이 없어요', style: TextStyle(fontSize: 14, color: Colors.grey.shade600)),
+            Text(l10n.myPageMapCardEmpty, style: TextStyle(fontSize: 14, color: Colors.grey.shade600)),
             const SizedBox(height: 6),
-            Text('지도 탭에서 스팟을 찜해보세요', style: TextStyle(fontSize: 13, color: Colors.grey.shade500)),
+            Text(l10n.myMapEmptySubtitle, style: TextStyle(fontSize: 13, color: Colors.grey.shade500)),
             const SizedBox(height: 18),
             FilledButton(
               style: FilledButton.styleFrom(backgroundColor: CocoTheme.primary),
               onPressed: onGoToMap,
-              child: const Text('지도로 가기'),
+              child: Text(l10n.myMapGoToMapButton),
             ),
           ],
         ),
@@ -544,6 +549,7 @@ class _NewRouteButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(16),
@@ -554,7 +560,7 @@ class _NewRouteButton extends StatelessWidget {
           borderRadius: BorderRadius.circular(16),
           border: Border.all(color: Colors.grey.shade300, style: BorderStyle.solid),
         ),
-        child: Text('+ 새 코스 만들기', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Colors.grey.shade600)),
+        child: Text(l10n.myRoutesNewRouteButton, style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Colors.grey.shade600)),
       ),
     );
   }

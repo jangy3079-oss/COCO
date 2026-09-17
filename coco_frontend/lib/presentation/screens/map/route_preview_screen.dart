@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../l10n/generated/app_localizations.dart';
 import 'map_mock_data.dart';
 
 /// 코스 상세 화면. "내가 만든 코스"·피드의 "코스 보기"·"저장한 코스"
@@ -33,6 +34,7 @@ class _RoutePreviewScreenState extends State<RoutePreviewScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     final stops = widget.stops;
     final distanceKm = (stops.length * 0.3).toStringAsFixed(1);
     final durationMin = stops.length * 10;
@@ -65,18 +67,18 @@ class _RoutePreviewScreenState extends State<RoutePreviewScreen> {
                   const SizedBox(height: 10),
                   Row(
                     children: [
-                      const CircleAvatar(
+                      CircleAvatar(
                         radius: 14,
-                        backgroundColor: Color(0xFFF0ECE6),
-                        child: Text('나', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: CocoTheme.secondary)),
+                        backgroundColor: const Color(0xFFF0ECE6),
+                        child: Text(l10n.feedMeAvatarLabel, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: CocoTheme.secondary)),
                       ),
                       const SizedBox(width: 8),
-                      Text('by 나 · 부산 로컬', style: TextStyle(fontSize: 13, color: Colors.grey.shade600)),
+                      Text(l10n.feedRouteSummaryAuthorLine(l10n.feedMeAvatarLabel), style: TextStyle(fontSize: 13, color: Colors.grey.shade600)),
                     ],
                   ),
                   const SizedBox(height: 6),
                   Text(
-                    '${stops.length}개 스팟 · ${distanceKm}km · 약 $durationMin분',
+                    l10n.routePreviewStats(stops.length, distanceKm, durationMin),
                     style: TextStyle(fontSize: 13, color: Colors.grey.shade500),
                   ),
                   const SizedBox(height: 16),
@@ -84,7 +86,7 @@ class _RoutePreviewScreenState extends State<RoutePreviewScreen> {
                     children: [
                       Expanded(
                         child: _CountPillButton(
-                          label: '좋아요',
+                          label: l10n.routePreviewLikeLabel,
                           count: _liked ? 1 : 0,
                           active: _liked,
                           activeColor: CocoTheme.primary,
@@ -94,7 +96,7 @@ class _RoutePreviewScreenState extends State<RoutePreviewScreen> {
                       const SizedBox(width: 10),
                       Expanded(
                         child: _CountPillButton(
-                          label: '저장',
+                          label: l10n.feedSaveButtonUnsaved,
                           count: _saved ? 1 : 0,
                           active: _saved,
                           activeColor: CocoTheme.secondary,
@@ -105,7 +107,7 @@ class _RoutePreviewScreenState extends State<RoutePreviewScreen> {
                         const SizedBox(width: 10),
                         Expanded(
                           child: _CountPillButton(
-                            label: '공유',
+                            label: l10n.routePreviewShareLabel,
                             count: null,
                             active: false,
                             activeColor: CocoTheme.secondary,
@@ -142,7 +144,7 @@ class _RoutePreviewScreenState extends State<RoutePreviewScreen> {
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
             ),
             onPressed: () => context.go('/map'),
-            child: const Text('지도에서 보기', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
+            child: Text(l10n.myRoutesViewOnMapButton, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
           ),
         ),
       ),

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../l10n/generated/app_localizations.dart';
 import '../map/map_mock_data.dart';
 import 'feed_mock_data.dart';
 
@@ -48,7 +49,7 @@ class _FeedRouteComposeScreenState extends State<FeedRouteComposeScreen> {
         FeedItem(
           id: 'u${DateTime.now().millisecondsSinceEpoch}',
           source: FeedSource.user,
-          author: '나',
+          author: AppLocalizations.of(context)!.feedMeAvatarLabel,
           category: '골목',
           place: _coverSpot!.name,
           title: widget.routeName,
@@ -75,6 +76,7 @@ class _FeedRouteComposeScreenState extends State<FeedRouteComposeScreen> {
   @override
   Widget build(BuildContext context) {
     final distanceKm = (widget.stops.length * 0.3).toStringAsFixed(1);
+    final l10n = AppLocalizations.of(context)!;
 
     return Scaffold(
       backgroundColor: Colors.white,
@@ -88,13 +90,13 @@ class _FeedRouteComposeScreenState extends State<FeedRouteComposeScreen> {
                 children: [
                   GestureDetector(
                     onTap: () => context.pop(),
-                    child: Text('취소', style: TextStyle(fontSize: 14, color: Colors.black.withOpacity(0.5))),
+                    child: Text(l10n.feedRouteComposeCancel, style: TextStyle(fontSize: 14, color: Colors.black.withOpacity(0.5))),
                   ),
-                  const Text('피드에 공유', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: CocoTheme.secondary)),
+                  Text(l10n.feedRouteComposeTitle, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: CocoTheme.secondary)),
                   GestureDetector(
                     onTap: _submit,
                     child: Text(
-                      _submitting ? '게시 중...' : '게시',
+                      _submitting ? l10n.feedRouteComposePosting : l10n.feedRouteComposePostButton,
                       style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: _canPost ? CocoTheme.primary : Colors.black.withOpacity(0.25)),
                     ),
                   ),
@@ -128,18 +130,18 @@ class _FeedRouteComposeScreenState extends State<FeedRouteComposeScreen> {
                                 Container(
                                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                                   decoration: BoxDecoration(color: CocoTheme.primary.withOpacity(0.12), borderRadius: BorderRadius.circular(10)),
-                                  child: const Text('코스 첨부', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: CocoTheme.primary)),
+                                  child: Text(l10n.feedRouteComposeAttachedBadge, style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: CocoTheme.primary)),
                                 ),
                                 const SizedBox(height: 6),
                                 Text(widget.routeName, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: CocoTheme.secondary)),
                                 const SizedBox(height: 3),
-                                Text('스팟 ${widget.stops.length}곳 · ${distanceKm}km · 동선 포함', style: TextStyle(fontSize: 11, color: Colors.black.withOpacity(0.45))),
+                                Text(l10n.feedRouteComposeStopsSummary(widget.stops.length, distanceKm), style: TextStyle(fontSize: 11, color: Colors.black.withOpacity(0.45))),
                               ],
                             ),
                           ),
                           GestureDetector(
                             onTap: () => context.pop(),
-                            child: Text('변경', style: TextStyle(fontSize: 12, color: Colors.black.withOpacity(0.35))),
+                            child: Text(l10n.feedRouteComposeChangeButton, style: TextStyle(fontSize: 12, color: Colors.black.withOpacity(0.35))),
                           ),
                         ],
                       ),
@@ -148,7 +150,7 @@ class _FeedRouteComposeScreenState extends State<FeedRouteComposeScreen> {
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        const Text('소개 글', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: CocoTheme.secondary)),
+                        Text(l10n.feedRouteComposeIntroLabel, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: CocoTheme.secondary)),
                         Text('${_textController.text.length}/$_maxLen', style: TextStyle(fontSize: 11, color: Colors.black.withOpacity(0.35))),
                       ],
                     ),
@@ -159,7 +161,7 @@ class _FeedRouteComposeScreenState extends State<FeedRouteComposeScreen> {
                       maxLines: 5,
                       onChanged: (_) => setState(() {}),
                       decoration: InputDecoration(
-                        hintText: '이 코스를 왜 만들었는지, 어떤 날 걷기 좋은지 적어보세요',
+                        hintText: l10n.feedRouteComposeIntroHint,
                         counterText: '',
                         filled: true,
                         contentPadding: const EdgeInsets.all(13),
@@ -172,9 +174,9 @@ class _FeedRouteComposeScreenState extends State<FeedRouteComposeScreen> {
                       crossAxisAlignment: CrossAxisAlignment.baseline,
                       textBaseline: TextBaseline.alphabetic,
                       children: [
-                        const Text('대표 스팟', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: CocoTheme.secondary)),
+                        Text(l10n.feedRouteComposeCoverSpotLabel, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: CocoTheme.secondary)),
                         const SizedBox(width: 6),
-                        Text('피드 썸네일로 쓰여요', style: TextStyle(fontSize: 11, color: Colors.black.withOpacity(0.4))),
+                        Text(l10n.feedRouteComposeCoverSpotHint, style: TextStyle(fontSize: 11, color: Colors.black.withOpacity(0.4))),
                       ],
                     ),
                     const SizedBox(height: 10),
@@ -236,14 +238,14 @@ class _FeedRouteComposeScreenState extends State<FeedRouteComposeScreen> {
                       ),
                     ),
                     const SizedBox(height: 22),
-                    const Text('공개 범위', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: CocoTheme.secondary)),
+                    Text(l10n.feedRouteComposeVisibilityLabel, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: CocoTheme.secondary)),
                     const SizedBox(height: 10),
                     Row(
                       children: [
                         Expanded(
                           child: _VisibilityCard(
-                            title: '나만 보기',
-                            subtitle: '피드에 올라가지 않아요',
+                            title: l10n.feedRouteComposePrivateTitle,
+                            subtitle: l10n.feedRouteComposePrivateSubtitle,
                             selected: !_public,
                             onTap: () => setState(() => _public = false),
                           ),
@@ -251,8 +253,8 @@ class _FeedRouteComposeScreenState extends State<FeedRouteComposeScreen> {
                         const SizedBox(width: 10),
                         Expanded(
                           child: _VisibilityCard(
-                            title: '전체 공유',
-                            subtitle: '인기순 랭킹에 함께 노출돼요',
+                            title: l10n.feedRouteComposePublicTitle,
+                            subtitle: l10n.feedRouteComposePublicSubtitle,
                             selected: _public,
                             onTap: () => setState(() => _public = true),
                           ),
@@ -272,7 +274,7 @@ class _FeedRouteComposeScreenState extends State<FeedRouteComposeScreen> {
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                 ),
                 onPressed: _submit,
-                child: Text(_submitting ? '게시 중...' : '게시하기', style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
+                child: Text(_submitting ? l10n.feedRouteComposePosting : l10n.feedRouteComposeSubmitButton, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
               ),
             ),
           ],

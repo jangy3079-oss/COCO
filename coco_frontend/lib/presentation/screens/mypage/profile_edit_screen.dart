@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../l10n/generated/app_localizations.dart';
 import 'mypage_mock_data.dart';
 
 /// 프로필 수정 화면. 닉네임·자기소개만 수정 가능 — 이메일과 회원 유형(로컬/관광객)은
@@ -35,6 +36,7 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     return Scaffold(
       backgroundColor: Colors.white,
       body: SafeArea(
@@ -46,14 +48,14 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
                 children: [
                   TextButton(
                     onPressed: () => context.pop(),
-                    child: Text('취소', style: TextStyle(fontSize: 14, color: Colors.grey.shade600)),
+                    child: Text(l10n.feedRouteComposeCancel, style: TextStyle(fontSize: 14, color: Colors.grey.shade600)),
                   ),
-                  const Expanded(
-                    child: Text('프로필 수정', textAlign: TextAlign.center, style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: CocoTheme.secondary)),
+                  Expanded(
+                    child: Text(l10n.myPageMenuEditProfile, textAlign: TextAlign.center, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: CocoTheme.secondary)),
                   ),
                   TextButton(
                     onPressed: _canSave ? _save : null,
-                    child: Text('저장', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: _canSave ? CocoTheme.primary : Colors.grey.shade400)),
+                    child: Text(l10n.profileEditSaveButton, style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: _canSave ? CocoTheme.primary : Colors.grey.shade400)),
                   ),
                 ],
               ),
@@ -77,15 +79,15 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
                           const SizedBox(height: 10),
                           TextButton(
                             onPressed: () => ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(content: Text('사진 변경은 준비 중이에요'), duration: Duration(seconds: 1)),
+                              SnackBar(content: Text(l10n.profileEditPhotoComingSoon), duration: const Duration(seconds: 1)),
                             ),
-                            child: const Text('사진 변경', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: CocoTheme.primary)),
+                            child: Text(l10n.profileEditChangePhotoButton, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: CocoTheme.primary)),
                           ),
                         ],
                       ),
                     ),
                     const SizedBox(height: 16),
-                    const Text('닉네임', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: Colors.black54)),
+                    Text(l10n.profileEditNicknameLabel, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: Colors.black54)),
                     const SizedBox(height: 8),
                     TextField(
                       controller: _nicknameController,
@@ -102,7 +104,7 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        const Text('자기소개', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: Colors.black54)),
+                        Text(l10n.profileEditBioLabel, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: Colors.black54)),
                         Text('${_bioController.text.length}/60', style: TextStyle(fontSize: 11, color: Colors.grey.shade400)),
                       ],
                     ),
@@ -119,7 +121,7 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
                       maxLines: 4,
                       minLines: 3,
                       decoration: InputDecoration(
-                        hintText: '자기소개를 추가해보세요',
+                        hintText: l10n.profileEditBioHint,
                         filled: true,
                         fillColor: Colors.white,
                         contentPadding: const EdgeInsets.all(14),
@@ -128,7 +130,7 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
                       ),
                     ),
                     const SizedBox(height: 20),
-                    const Text('이메일', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: Colors.black54)),
+                    Text(l10n.profileEditEmailLabel, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: Colors.black54)),
                     const SizedBox(height: 8),
                     Container(
                       height: 46,
@@ -138,9 +140,9 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
                       child: Text(myEmail, style: TextStyle(fontSize: 14, color: Colors.grey.shade600)),
                     ),
                     const SizedBox(height: 6),
-                    Text('이메일은 변경할 수 없어요', style: TextStyle(fontSize: 11, color: Colors.grey.shade400)),
+                    Text(l10n.profileEditEmailImmutableHint, style: TextStyle(fontSize: 11, color: Colors.grey.shade400)),
                     const SizedBox(height: 20),
-                    const Text('회원 유형', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: Colors.black54)),
+                    Text(l10n.profileEditUserTypeLabel, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: Colors.black54)),
                     const SizedBox(height: 8),
                     Container(
                       height: 46,
@@ -151,11 +153,11 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
                           Container(
                             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                             decoration: BoxDecoration(color: const Color(0xFFE6F1FB), borderRadius: BorderRadius.circular(10)),
-                            child: Text(myRoleLabel == '로컬 주민' ? '로컬' : '관광객', style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: CocoTheme.primary)),
+                            child: Text(myRoleLabel == '로컬 주민' ? l10n.feedLocalBadge : l10n.qnaRoleTourist, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: CocoTheme.primary)),
                           ),
                           const SizedBox(width: 8),
                           Expanded(
-                            child: Text('가입 시 선택한 유형은 변경할 수 없어요', style: TextStyle(fontSize: 13, color: Colors.grey.shade500)),
+                            child: Text(l10n.profileEditUserTypeImmutableHint, style: TextStyle(fontSize: 13, color: Colors.grey.shade500)),
                           ),
                         ],
                       ),
