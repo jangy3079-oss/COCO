@@ -43,8 +43,10 @@ public class FeedService {
     public FeedPostResponse createPost(Long userId, FeedPostRequest request) {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new IllegalArgumentException("사용자를 찾을 수 없습니다."));
-        Spot spot = spotRepository.findById(request.getSpotId())
-                .orElseThrow(() -> new IllegalArgumentException("스팟을 찾을 수 없습니다."));
+        Spot spot = request.getSpotId() != null
+                ? spotRepository.findById(request.getSpotId())
+                        .orElseThrow(() -> new IllegalArgumentException("스팟을 찾을 수 없습니다."))
+                : null;
 
         FeedPost saved = feedPostRepository.save(FeedPost.builder()
                 .user(user)
@@ -67,14 +69,20 @@ public class FeedService {
         if (posts.isEmpty()) return List.of();
 
         List<Long> postIds = posts.stream().map(FeedPost::getId).toList();
-        List<Long> spotIds = posts.stream().map(p -> p.getSpot().getId()).distinct().toList();
+        List<Long> spotIds = posts.stream()
+                .filter(p -> p.getSpot() != null)
+                .map(p -> p.getSpot().getId())
+                .distinct()
+                .toList();
 
         Map<Long, Boolean> trendingBySpotId = new HashMap<>();
-        for (Object[] row : feedPostRepository.aggregateEngagementBySpotIds(spotIds)) {
-            Long spotId = (Long) row[0];
-            long postCount = ((Number) row[1]).longValue();
-            long likeSum = ((Number) row[2]).longValue();
-            trendingBySpotId.put(spotId, SpotService.isTrending(postCount, likeSum));
+        if (!spotIds.isEmpty()) {
+            for (Object[] row : feedPostRepository.aggregateEngagementBySpotIds(spotIds)) {
+                Long spotId = (Long) row[0];
+                long postCount = ((Number) row[1]).longValue();
+                long likeSum = ((Number) row[2]).longValue();
+                trendingBySpotId.put(spotId, SpotService.isTrending(postCount, likeSum));
+            }
         }
 
         Set<Long> likedPostIds = userId == null
@@ -84,7 +92,7 @@ public class FeedService {
         return posts.stream()
                 .map(p -> toResponse(
                         p,
-                        Boolean.TRUE.equals(trendingBySpotId.get(p.getSpot().getId())),
+                        p.getSpot() != null && Boolean.TRUE.equals(trendingBySpotId.get(p.getSpot().getId())),
                         likedPostIds.contains(p.getId())))
                 .toList();
     }
@@ -140,10 +148,10 @@ public class FeedService {
                 .userNickname(p.getUser().getNickname())
                 .imageUrl(p.getImageUrl())
                 .description(p.getDescription())
-                .spotId(spot.getId())
-                .spotName(spot.getTitleKo())
-                .lat(spot.getLat())
-                .lng(spot.getLng())
+                .spotId(spot != null ? spot.getId() : null)
+                .spotName(spot != null ? spot.getTitleKo() : null)
+                .lat(spot != null ? spot.getLat() : null)
+                .lng(spot != null ? spot.getLng() : null)
                 .likeCount(p.getLikeCount())
                 .createdAt(p.getCreatedAt())
                 .trending(trending)
