@@ -14,19 +14,21 @@ import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
-import java.util.Map;
 import java.util.Set;
 
 /**
- * 한국관광공사 TourAPI에서 COCO가 다루는 몇 개 동네(법정동)의 관광지/음식점 후보만
- * 좁혀서 가져오는 서비스. COCO는 "광안리·해운대 너머 숨겨진 로컬 골목"을 큐레이션하는
- * 컨셉이라, TourAPI 데이터를 있는 그대로 다 지도에 뿌리면 오히려 컨셉과 어긋나고
- * 핀도 너무 많아진다 — 그래서 아래 3단계로 후보 자체를 좁힌 뒤에 저장한다.
+ * 한국관광공사 TourAPI에서 부산 전역의 관광지/음식점 후보를 가져오는 서비스. COCO는
+ * "광안리·해운대 너머 숨겨진 로컬 골목"을 큐레이션하는 컨셉이라, TourAPI 데이터를 있는
+ * 그대로 다 지도에 뿌리면 오히려 컨셉과 어긋나고 핀도 너무 많아진다 — 그래서 지역은
+ * 부산 전역으로 넓게 가져오되(collection), 실제로 지도 핀에 찍히는 건 아래 카테고리·
+ * 인기도 필터를 통과한 것만으로 좁힌다(display는 SpotRepository.findInBounds의
+ * category 안전장치가 한 번 더 담당).
  *
  * <ol>
- *   <li>지역 — 부산 시군구 코드로 조회한 뒤, 응답의 주소 문자열에 목표 법정동 이름이
- *       포함된 것만 남긴다. (TourAPI areaBasedList는 시군구 단위까지만 파라미터로 지원하고
- *       법정동 단위 필터는 없어서, 응답을 받은 뒤 addr1/addr2 문자열로 한 번 더 거른다.)</li>
+ *   <li>지역 — 부산(areaCode=6) 하위 모든 시군구(구/군)를 대상으로 한다. 시군구 코드를
+ *       하드코딩하면 "중구=1"처럼 틀린 코드를 넣어 조용히 0건이 되는 사고가 재발할 수
+ *       있어서(과거 실제로 있었던 버그), 매번 areaCode2로 실제 코드 목록을 조회해서
+ *       쓴다(fetchBusanSigunguCodes 참고).</li>
  *   <li>카테고리 — contentTypeId(관광지=12, 음식점=39)로 좁히고, 그 안에서도 cat3(소분류)
  *       화이트리스트에 있는 것만 통과시킨다.</li>
  *   <li>인기도 — 제목이 랜드마크 블랙리스트에 걸리거나, 관광지별 연관 관광지
@@ -36,7 +38,8 @@ import java.util.Set;
  *
  * TODO(운영 전 재확인): KOR_SERVICE_PATH(KorService1 vs KorService2)는 아직 실제 인증키로
  * 검증 전 추정값이다. CAT3_WHITELIST는 실제 서비스키로 3개 동 후보를 직접 조회한 뒤
- * categoryCode2로 이름을 대조해 확정한 값 — 아래 CAT3_WHITELIST 주석 참고.
+ * categoryCode2로 이름을 대조해 확정한 값 — 아래 CAT3_WHITELIST 주석 참고. 부산 전역으로
+ * 넓힌 뒤에도 이 화이트리스트가 실제로 충분한지는 실 서비스키로 한 번 더 확인 필요.
  */
 @Slf4j
 @Service
@@ -90,45 +93,71 @@ public class TourApiService {
             "해운대해수욕장", "광안리해수욕장", "광안대교", "감천문화마을", "태종대", "자갈치시장", "국제시장"
     );
 
-    // COCO가 다루는 법정동 → 그 동이 속한 부산 시군구 코드.
-    // (지역코드조회(areaCode2, areaCode=6) 실제 응답으로 검증한 값: 중구=15, 동구=5.
-    //  이전엔 중구=1/동구=3으로 잘못 들어가 있었는데, 실제 1번은 강서구라 완전히 다른 동네
-    //  데이터를 가져온 뒤 동 이름 필터에서 전부 걸러지고 있었음 — import 0건의 원인.)
     private static final int BUSAN_AREA_CODE = 6;
-    private static final Map<String, Integer> TARGET_DONG_TO_SIGUNGU = Map.of(
-            "남포동", 15,
-            "영주동", 15,
-            "초량동", 5
-    );
+
+    // fetchBusanSigunguCodes()의 실시간 조회가 실패했을 때만 쓰는 최소 폴백.
+    // 중구=15, 동구=5는 지역코드조회(areaCode2, areaCode=6) 실제 응답으로 검증된 값
+    // (이전엔 중구=1/동구=3으로 잘못 하드코딩돼 있었는데, 실제 1번은 강서구라 완전히
+    // 다른 동네 데이터를 가져와 동 이름 필터에서 전부 걸러지던 사고가 있었음 — import
+    // 0건의 원인이었다. 하드코딩을 늘리는 대신 실시간 조회로 바꿔서 이 사고 자체를 없앤다.)
+    private static final List<Integer> FALLBACK_SIGUNGU_CODES = List.of(15, 5);
 
     // 관광지별 연관 관광지(TarRlteTarService) 연결성 상위 몇 위까지를 "이미 유명함"으로 보고 뺄지.
     private static final int FAMOUS_RANK_CUTOFF = 10;
 
     /** 3단계 필터를 모두 통과한 후보 목록을 가져온다. */
     public List<TourApiCandidate> fetchCandidates() {
-        Set<String> famousContentIds = fetchFamousContentIds();
+        List<Integer> sigunguCodes = fetchBusanSigunguCodes();
+        Set<String> famousContentIds = fetchFamousContentIds(sigunguCodes);
         List<TourApiCandidate> result = new ArrayList<>();
 
-        for (var entry : TARGET_DONG_TO_SIGUNGU.entrySet()) {
-            String dong = entry.getKey();
-            int sigunguCode = entry.getValue();
-
+        for (int sigunguCode : sigunguCodes) {
             for (int contentTypeId : TARGET_CONTENT_TYPE_IDS) {
                 try {
                     for (JsonNode item : callAreaBasedList(sigunguCode, contentTypeId)) {
-                        TourApiCandidate candidate = toCandidate(item, dong);
-                        if (candidate == null) continue; // 주소에 목표 동 이름이 없어서 걸러짐
+                        TourApiCandidate candidate = toCandidate(item);
+                        if (candidate == null) continue; // 좌표/제목 등 필수값 누락
                         if (isBlacklisted(candidate.title())) continue;
                         if (famousContentIds.contains(candidate.tourApiId())) continue;
                         if (!CAT3_WHITELIST.contains(candidate.cat3())) continue;
                         result.add(candidate);
                     }
                 } catch (Exception e) {
-                    log.warn("TourAPI 조회 실패 (dong={}, contentTypeId={}): {}", dong, contentTypeId, e.getMessage());
+                    log.warn("TourAPI 조회 실패 (sigunguCode={}, contentTypeId={}): {}", sigunguCode, contentTypeId, e.getMessage());
                 }
             }
         }
         return result;
+    }
+
+    /**
+     * 부산(areaCode=6) 하위 시군구(구/군) 코드를 매번 areaCode2로 실시간 조회한다.
+     * 하드코딩 대신 이렇게 하는 이유는 FALLBACK_SIGUNGU_CODES 주석 참고. 조회 자체가
+     * 실패하면(네트워크 오류 등) 폴백 2개 코드만이라도 쓴다.
+     */
+    private List<Integer> fetchBusanSigunguCodes() {
+        try {
+            URI uri = URI.create(baseUrl + "/" + korServicePath + "/areaCode2"
+                    + "?serviceKey=" + serviceKey
+                    + "&MobileOS=ETC&MobileApp=" + MOBILE_APP
+                    + "&_type=json&numOfRows=50&pageNo=1"
+                    + "&areaCode=" + BUSAN_AREA_CODE);
+            String body = restClient.get().uri(uri).retrieve().body(String.class);
+            List<Integer> codes = new ArrayList<>();
+            for (JsonNode item : extractItems(body)) {
+                int code = item.path("code").asInt(-1);
+                if (code > 0) codes.add(code);
+            }
+            if (codes.isEmpty()) {
+                log.warn("부산 시군구 코드 응답이 비어있음, 폴백 사용");
+                return FALLBACK_SIGUNGU_CODES;
+            }
+            log.info("부산 시군구 코드 {}건 조회 완료: {}", codes.size(), codes);
+            return codes;
+        } catch (Exception e) {
+            log.warn("부산 시군구 코드 조회 실패, 폴백만 사용: {}", e.getMessage());
+            return FALLBACK_SIGUNGU_CODES;
+        }
     }
 
     private List<JsonNode> callAreaBasedList(int sigunguCode, int contentTypeId) {
@@ -170,12 +199,12 @@ public class TourApiService {
         }
     }
 
-    private Set<String> fetchFamousContentIds() {
+    private Set<String> fetchFamousContentIds(List<Integer> sigunguCodes) {
         Set<String> famous = new HashSet<>();
         // TarRlteTarService는 월 단위 집계라 최신 달은 아직 안 쌓였을 수 있어 2개월 전 기준으로 조회.
         String baseYm = YearMonth.now().minusMonths(2).format(DateTimeFormatter.ofPattern("yyyyMM"));
 
-        for (int sigunguCode : Set.copyOf(TARGET_DONG_TO_SIGUNGU.values())) {
+        for (int sigunguCode : sigunguCodes) {
             try {
                 URI uri = URI.create(baseUrl + "/" + tarRlteTarPath + "/areaBasedList1"
                         + "?serviceKey=" + serviceKey
@@ -215,10 +244,9 @@ public class TourApiService {
         }
     }
 
-    private TourApiCandidate toCandidate(JsonNode item, String targetDong) {
+    private TourApiCandidate toCandidate(JsonNode item) {
         String addr1 = item.path("addr1").asText("");
         String addr2 = item.path("addr2").asText("");
-        if (!addr1.contains(targetDong) && !addr2.contains(targetDong)) return null;
 
         String contentId = item.path("contentid").asText(null);
         String title = item.path("title").asText(null);

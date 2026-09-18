@@ -10,7 +10,11 @@ import org.hibernate.annotations.CreationTimestamp;
 import java.time.LocalDateTime;
 
 @Entity
-@Table(name = "spots")
+// 지도 뷰포트 조회(findInBounds)가 lat/lng BETWEEN으로 매번 걸러서 조회하므로,
+// 스팟 수가 늘어났을 때 풀스캔이 되지 않도록 인덱스를 걸어둔다.
+@Table(name = "spots", indexes = {
+        @Index(name = "idx_spots_lat_lng", columnList = "lat, lng")
+})
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class Spot {
@@ -59,6 +63,14 @@ public class Spot {
     @Column(columnDefinition = "TEXT")
     private String description;
 
+    // OpenAI LLM으로 번역된 영어/일본어 소개글.
+    // TourAPI 임포트 시 자동 번역되며, 실패하면 null을 유지하고 런타임에 description(한국어)으로 폴백.
+    @Column(name = "description_en", columnDefinition = "TEXT")
+    private String descriptionEn;
+
+    @Column(name = "description_ja", columnDefinition = "TEXT")
+    private String descriptionJa;
+
     // 팀이 직접 검증해서 심어둔 "로컬 픽" 여부. 인기도(피드 반응)와 무관하게 항상 true면
     // 지도에서 다른 색으로 표시된다 — 아직 반응이 없는 진짜 로컬 스팟이 인기도 기준
     // 핀 크기 로직에 묻히지 않도록 색과 크기를 서로 다른 신호로 분리한 것.
@@ -71,7 +83,9 @@ public class Spot {
     private LocalDateTime createdAt;
 
     @Builder
-    public Spot(String tourApiid, String kakaoPlaceId, String titleKo, String titleEn, String titleJa, Double lat, Double lng, String address, String category, String imageUrl, String description, Boolean isLocalPick) {
+    public Spot(String tourApiid, String kakaoPlaceId, String titleKo, String titleEn, String titleJa,
+                Double lat, Double lng, String address, String category, String imageUrl,
+                String description, Boolean isLocalPick) {
         this.tourApiid = tourApiid;
         this.kakaoPlaceId = kakaoPlaceId;
         this.titleKo = titleKo;
@@ -85,6 +99,19 @@ public class Spot {
         this.description = description;
         this.isLocalPick = isLocalPick != null ? isLocalPick : false;
         // createdAt은 @CreationTimestamp가 알아서 해주므로 Builder 에서 제외.
+    }
 
+    /**
+     * OpenAI 번역 결과를 한 번에 업데이트.
+     * titleEn/titleJa 는 항상 덮어쓰고, descriptionEn/descriptionJa 는 description 원본이
+     * 있을 때만 의미가 있어서 함께 갱신한다.
+     * 번역 실패 시 모두 null을 전달하면 폴백(titleKo / description)이 그대로 사용된다.
+     */
+    public void updateTranslations(String titleEn, String titleJa,
+                                   String descriptionEn, String descriptionJa) {
+        this.titleEn = titleEn;
+        this.titleJa = titleJa;
+        this.descriptionEn = descriptionEn;
+        this.descriptionJa = descriptionJa;
     }
 }
