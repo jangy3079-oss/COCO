@@ -9,14 +9,18 @@ import 'map_mock_data.dart';
 // 한국어 키)은 그대로 두고, 화면에 보여줄 라벨만 다국어로 바꾼다.
 String _categoryLabel(String category, AppLocalizations l10n) {
   switch (category) {
-    case '노포':
-      return l10n.mapCategoryOldStore;
+    case '음식점':
+      return l10n.mapCategoryFood;
     case '골목':
       return l10n.mapCategoryAlley;
     case '공원':
       return l10n.mapCategoryPark;
     case '카페':
       return l10n.mapCategoryCafe;
+    case '명소':
+      return l10n.mapCategoryAttraction;
+    case '문화시설':
+      return l10n.mapCategoryCulture;
     default:
       return category;
   }

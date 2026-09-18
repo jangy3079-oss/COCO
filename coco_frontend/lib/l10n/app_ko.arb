@@ -312,6 +312,9 @@
   "mapCategoryAlley": "골목",
   "mapCategoryPark": "공원",
   "mapCategoryCafe": "카페",
+  "mapCategoryFood": "음식점",
+  "mapCategoryAttraction": "명소",
+  "mapCategoryCulture": "문화시설",
 
   "routeBuilderEditTitle": "{name} 편집",
   "@routeBuilderEditTitle": {

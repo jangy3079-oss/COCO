@@ -312,6 +312,9 @@
   "mapCategoryAlley": "路地",
   "mapCategoryPark": "公園",
   "mapCategoryCafe": "カフェ",
+  "mapCategoryFood": "レストラン",
+  "mapCategoryAttraction": "名所",
+  "mapCategoryCulture": "文化施設",
 
   "routeBuilderEditTitle": "{name} 編集",
   "@routeBuilderEditTitle": {

@@ -312,6 +312,9 @@
   "mapCategoryAlley": "Alleys",
   "mapCategoryPark": "Parks",
   "mapCategoryCafe": "Cafes",
+  "mapCategoryFood": "Restaurants",
+  "mapCategoryAttraction": "Landmarks",
+  "mapCategoryCulture": "Culture",
 
   "routeBuilderEditTitle": "Edit {name}",
   "@routeBuilderEditTitle": {

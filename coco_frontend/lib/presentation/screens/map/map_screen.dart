@@ -19,14 +19,18 @@ String _categoryLabel(String category, AppLocalizations l10n) {
   switch (category) {
     case '전체':
       return l10n.mapCategoryAll;
-    case '노포':
-      return l10n.mapCategoryOldStore;
+    case '음식점':
+      return l10n.mapCategoryFood;
     case '골목':
       return l10n.mapCategoryAlley;
     case '공원':
       return l10n.mapCategoryPark;
     case '카페':
       return l10n.mapCategoryCafe;
+    case '명소':
+      return l10n.mapCategoryAttraction;
+    case '문화시설':
+      return l10n.mapCategoryCulture;
     default:
       return category;
   }
