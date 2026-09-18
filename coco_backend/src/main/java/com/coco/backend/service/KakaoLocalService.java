@@ -115,6 +115,13 @@ public class KakaoLocalService {
     private static final int PAGE_SIZE = 15; // 카카오 로컬 API 한 페이지 최대치
     private static final int MAX_PAGE = 3; // size 15 * 3페이지 = 45건 (카카오 키워드 검색 쿼리당 상한)
 
+    // 부산 전역을 감싸는 사각형(rect) — 좌하단 경도,좌하단 위도,우상단 경도,우상단 위도.
+    // 카카오 키워드 검색은 기본적으로 위치 제한이 없는 전국 대상 검색이라, rect 없이는
+    // 동 이름이 겹치는 타 지역(서울 가락동 등) 데이터가 그대로 섞여 들어온다 — 반드시 붙여야 함.
+    // 기장군·가덕도까지 포함하도록 여유있게 잡은 대략치라, 실제 반영 후 결과 보면서
+    // 너무 좁거나 넓으면 조정이 필요할 수 있음.
+    private static final String BUSAN_RECT = "128.74,34.87,129.32,35.41";
+
     /** 관광 관련 카테고리 + 공원 키워드로 좁힌 후보 목록을 가져온다. */
     public List<KakaoLocalCandidate> fetchCandidates() {
         List<KakaoLocalCandidate> result = new ArrayList<>();
@@ -187,6 +194,7 @@ public class KakaoLocalService {
             url.append("&category_group_code=").append(categoryGroupCode);
         }
         url.append("&page=").append(page).append("&size=").append(PAGE_SIZE);
+        url.append("&rect=").append(BUSAN_RECT);
 
         String body = restClient.get()
                 .uri(URI.create(url.toString()))
@@ -204,8 +212,10 @@ public class KakaoLocalService {
     private KakaoLocalCandidate toCandidate(JsonNode item, String targetDong, String cocoCategory) {
         // 키워드 검색은 동명이인 지역이 섞여 나올 수 있어, 지번 주소에 목표 동 이름이 실제로
         // 있는지 한 번 더 확인한다 (도로명 주소는 동 이름을 안 담는 경우가 많아 지번만 본다).
+        // "가락동"처럼 부산(강서구)과 서울(송파구)에 동시에 있는 동 이름도 있어서, rect로
+        // 걸러지지 않고 새어 들어온 경우를 대비해 "부산" 포함 여부도 함께 확인한다.
         String addressName = item.path("address_name").asText("");
-        if (!addressName.contains(targetDong)) return null;
+        if (!addressName.contains("부산") || !addressName.contains(targetDong)) return null;
 
         String placeId = item.path("id").asText(null);
         String title = item.path("place_name").asText(null);
