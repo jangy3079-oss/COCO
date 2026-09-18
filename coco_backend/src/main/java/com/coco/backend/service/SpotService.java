@@ -241,3 +241,4 @@ public class SpotService {
                     spot.getId(), spot.getTitleKo(), e.getMessage());
         }
     }
+}
