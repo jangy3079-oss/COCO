@@ -6,9 +6,7 @@ import com.coco.backend.repository.FeedPostRepository;
 import com.coco.backend.repository.SpotRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 import java.util.HashMap;
 import java.util.List;
@@ -24,7 +22,6 @@ public class SpotService {
     private final TourApiService tourApiService;
     private final KakaoLocalService kakaoLocalService;
     private final FeedPostRepository feedPostRepository;
-    private final OpenAiTranslationService openAiTranslationService;
 
     // "인기 핀"(trending) 판정 기준값. 아직 실사용 데이터가 없어 임의로 정한 값이라,
     // 실제 유저 활동이 쌓이면 데모/운영 상황에 맞게 조정 필요.
@@ -33,9 +30,8 @@ public class SpotService {
 
     /**
      * TourAPI에서 필터링된 후보를 가져와 아직 DB에 없는 것만 저장한다.
-     * (TourAPI가 현재 한국어 서비스만 연동되어 있어서 titleKo만 채우고, 저장 직후 OpenAI로 번역.)
+     * (TourAPI가 현재 한국어 서비스만 연동되어 있어서 titleKo만 채우고, titleEn/titleJa는 번역이 붙을 때까지 null로 둔다.)
      */
-    @Transactional
     public int importFromTourApi() {
         List<TourApiService.TourApiCandidate> candidates = tourApiService.fetchCandidates();
         int inserted = 0;
@@ -58,10 +54,6 @@ public class SpotService {
                     .description(description)
                     .build();
             spotRepository.save(spot);
-
-            // 저장 직후 OpenAI로 번역 수행 — 실패해도 스팟은 유지되고 해당 필드 null 유지.
-            translateAndUpdate(spot, description);
-
             inserted++;
         }
         log.info("TourAPI 스팟 임포트 완료: 후보 {}건 중 신규 {}건 저장", candidates.size(), inserted);
@@ -72,7 +64,6 @@ public class SpotService {
      * 카카오 로컬 API에서 관광 관련 카테고리로 좁힌 후보를 가져와 아직 DB에 없는 것만 저장한다.
      * TourAPI 임포트와 데이터 소스만 다를 뿐 흐름은 동일 — 중복 체크만 kakao_place_id 기준.
      */
-    @Transactional
     public int importFromKakaoLocal() {
         List<KakaoLocalService.KakaoLocalCandidate> candidates = kakaoLocalService.fetchCandidates();
         int inserted = 0;
@@ -89,26 +80,16 @@ public class SpotService {
                     .category(c.category())
                     .build();
             spotRepository.save(spot);
-
-            // 카카오 로컬은 description이 없어 null 전달 — title만 번역.
-            translateAndUpdate(spot, null);
-
             inserted++;
         }
         log.info("카카오 로컬 스팟 임포트 완료: 후보 {}건 중 신규 {}건 저장", candidates.size(), inserted);
         return inserted;
     }
 
-    // 뷰포트 조회 결과 상한. 확 줌아웃해서 부산 전역이 화면에 들어와도 쿼리가 무제한으로
-    // 응답하지 않도록 막는 안전장치 — 검색(SEARCH_RESULT_LIMIT=20)과 같은 목적, 지도 핀은
-    // 자동완성 리스트보다 많이 보여도 되니 상한만 더 넉넉하게 잡았다.
-    private static final int VIEWPORT_RESULT_LIMIT = 300;
-
     /** 지도 화면에 보이는 영역(뷰포트) 안의 스팟만 조회 — 핀 밀집 방지의 핵심. */
     public List<SpotResponse> findInViewport(double swLat, double neLat, double swLng, double neLng,
                                               String category, String locale) {
-        List<Spot> spots = spotRepository.findInBounds(
-                swLat, neLat, swLng, neLng, category, PageRequest.of(0, VIEWPORT_RESULT_LIMIT));
+        List<Spot> spots = spotRepository.findInBounds(swLat, neLat, swLng, neLng, category);
         Map<Long, long[]> engagementBySpotId = fetchEngagement(spots);
 
         return spots.stream()
@@ -137,30 +118,6 @@ public class SpotService {
         return spots.stream()
                 .map(s -> toResponse(s, engagementBySpotId.get(s.getId()), locale))
                 .toList();
-    }
-
-    /**
-     * titleEn이 null인 스팟들을 모아 OpenAI로 배치 번역.
-     * Import 실패했던 스팟, 기존에 임포트해 두었던 무번역 스팟들의 보완용.
-     *
-     * @return 실제로 번역된 스팟 수
-     */
-    @Transactional
-    public int translateUntranslated() {
-        List<Spot> untranslated = spotRepository.findByTitleEnIsNull();
-        int translated = 0;
-        for (Spot spot : untranslated) {
-            OpenAiTranslationService.TranslationResult result =
-                    openAiTranslationService.translateSpot(spot.getTitleKo(), spot.getDescription());
-            spot.updateTranslations(
-                    result.titleEn(), result.titleJa(),
-                    result.descriptionEn(), result.descriptionJa()
-            );
-            spotRepository.save(spot);
-            if (result.titleEn() != null) translated++;
-        }
-        log.info("번역 미완료 스팟 배치 완료: 대상 {}건 중 번역 성공 {}건", untranslated.size(), translated);
-        return translated;
     }
 
     /** 뷰포트 안 스팟들의 (게시물 수, 좋아요 합)을 한 번에 조회. 반환값: spotId -> [postCount, likeSum]. */
@@ -199,7 +156,7 @@ public class SpotService {
                 .category(s.getCategory())
                 .imageUrl(s.getImageUrl())
                 .address(s.getAddress())
-                .description(resolveDescription(s, locale))
+                .description(s.getDescription())
                 .isLocalPick(Boolean.TRUE.equals(s.getIsLocalPick()))
                 .trending(trending)
                 .build();
@@ -213,32 +170,5 @@ public class SpotService {
             default -> s.getTitleKo();
         };
         return title != null ? title : s.getTitleKo();
-    }
-
-    /** locale에 맞는 description을 고른다. 번역본이 없으면 한국어 description으로 폴백. */
-    private String resolveDescription(Spot s, String locale) {
-        String desc = switch (locale == null ? "" : locale) {
-            case "en" -> s.getDescriptionEn();
-            case "ja" -> s.getDescriptionJa();
-            default -> s.getDescription();
-        };
-        return desc != null ? desc : s.getDescription();
-    }
-
-    /** OpenAI 번역 후 updateTranslations 저장. 실패 시 필드 null 유지. */
-    private void translateAndUpdate(Spot spot, String description) {
-        try {
-            OpenAiTranslationService.TranslationResult result =
-                    openAiTranslationService.translateSpot(spot.getTitleKo(), description);
-            spot.updateTranslations(
-                    result.titleEn(), result.titleJa(),
-                    result.descriptionEn(), result.descriptionJa()
-            );
-            spotRepository.save(spot);
-        } catch (Exception e) {
-            // 번역 실패해도 스팟 저장은 이미 완료됐으므로 로그만 내고 진행.
-            log.warn("번역 중 예외 [spotId={}, titleKo={}]: {}",
-                    spot.getId(), spot.getTitleKo(), e.getMessage());
-        }
     }
 }
