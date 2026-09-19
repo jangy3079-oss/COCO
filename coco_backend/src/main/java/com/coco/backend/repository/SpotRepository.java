@@ -62,4 +62,14 @@ public interface SpotRepository extends JpaRepository<Spot, Long> {
                                        @Param("swLng") double swLng,
                                        @Param("neLng") double neLng,
                                        @Param("category") String category);
+
+    // tourApiid가 있는(TourAPI 출처) 스팟 중 설명이 비어있거나 사진이 하나도 없는 것만.
+    // 카카오 로컬 출처(tourApiid=null)는 애초에 overview/이미지 API 자체가 없어서 대상 아님.
+    @Query("""
+        SELECT s FROM Spot s
+        WHERE s.tourApiid IS NOT NULL
+          AND ((s.description IS NULL OR s.description = '')
+               OR s.id NOT IN (SELECT DISTINCT si.spot.id FROM SpotImage si))
+        """)
+    List<Spot> findNeedingTourApiBackfill();
 }

@@ -124,6 +124,63 @@ public class SpotService {
     private static final double DUPLICATE_COORD_TOLERANCE = 0.0003;
 
     /**
+     * TourAPI 일일 요청 한도 초과 등으로 설명/사진이 비어있는 채로 저장된 기존 스팟만 골라
+     * 그 자리에서 채워 넣는다. 새 스팟을 만들지 않고 이미 있는 row를 UPDATE하는 방식이라
+     * 몇 번을 다시 돌려도 중복 저장 걱정이 없다 — 이미 채워진 스팟은 findNeedingTourApiBackfill()
+     * 대상에서 자동으로 빠진다.
+     */
+    @Transactional
+    public Map<String, Integer> backfillMissingTourApiContent() {
+        List<Spot> targets = spotRepository.findNeedingTourApiBackfill();
+        int descriptionFilled = 0;
+        int imagesFilled = 0;
+
+        for (Spot spot : targets) {
+            boolean needsDescription = spot.getDescription() == null || spot.getDescription().isBlank();
+            boolean needsImages = spotImageRepository
+                    .findBySpot_IdOrderBySortOrderAsc(spot.getId()).isEmpty();
+
+            if (needsDescription) {
+                String overview = tourApiService.fetchOverview(spot.getTourApiid());
+                if (overview != null && !overview.isBlank()) {
+                    if (MAP_CATEGORIES.contains(spot.getCategory())) {
+                        // 6개 카테고리는 원래 로직처럼 재작성+번역까지.
+                        var localized = translationService.rewriteAndTranslate(spot.getTitleKo(), overview);
+                        spot.updateDescriptionFromBackfill(
+                                localized != null && localized.descriptionKo() != null
+                                        ? localized.descriptionKo() : overview,
+                                localized != null ? localized.descriptionEn() : null,
+                                localized != null ? localized.descriptionJa() : null
+                        );
+                    } else {
+                        // "기타" 카테고리는 원래 설계대로 번역 없이 원문만.
+                        spot.updateDescriptionFromBackfill(overview, null, null);
+                    }
+                    descriptionFilled++;
+                }
+            }
+
+            if (needsImages) {
+                List<String> images = tourApiService.fetchDetailImages(spot.getTourApiid());
+                for (int i = 0; i < images.size(); i++) {
+                    spotImageRepository.save(SpotImage.builder()
+                            .spot(spot)
+                            .imageUrl(images.get(i))
+                            .sortOrder(i)
+                            .build());
+                }
+                if (!images.isEmpty()) imagesFilled++;
+            }
+        }
+
+        return Map.of(
+                "targeted", targets.size(),
+                "descriptionFilled", descriptionFilled,
+                "imagesFilled", imagesFilled
+        );
+    }
+
+    /**
      * 카카오 로컬 API에서 관광 관련 카테고리로 좁힌 후보를 가져와 아직 DB에 없는 것만 저장한다.
      * TourAPI 임포트와 데이터 소스만 다를 뿐 흐름은 동일 — kakao_place_id 중복 체크에 더해,
      * TourAPI로 이미 저장된 동일 실제 장소도 걸러낸다(TourAPI 우선).

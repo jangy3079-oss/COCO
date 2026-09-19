@@ -115,6 +115,13 @@ public class Spot {
 
     }
 
+    // 백필 전용 — 설명 원문/영문/일문만 갱신한다. title, category 등 다른 필드는 건드리지 않음.
+    public void updateDescriptionFromBackfill(String description, String descriptionEn, String descriptionJa) {
+        this.description = description;
+        if (descriptionEn != null) this.descriptionEn = descriptionEn;
+        if (descriptionJa != null) this.descriptionJa = descriptionJa;
+    }
+
     // TourAPI 재import 시 이미 있는 스팟(contentid 동일)을 갱신(SpotService.importFromTourApi)하는
     // 전용 메서드 — 번역(title/description en·ja)은 최초 1회 값을 그대로 유지하고 여기서 건드리지 않는다.
     public void updateFromTourApi(String titleKo, String address, Double lat, Double lng, String imageUrl,

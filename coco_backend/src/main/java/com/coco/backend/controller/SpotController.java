@@ -97,6 +97,16 @@ public class SpotController {
         return ResponseEntity.ok(Map.of("inserted", inserted));
     }
 
+    /**
+     * TourAPI 일일 요청 한도 등으로 설명/사진이 비어있게 저장된 기존 스팟만 골라
+     * 재시도한다. 새 스팟을 만들지 않으므로 몇 번을 호출해도 중복 저장 안 됨 —
+     * 이미 채워진 스팟은 매번 자동으로 대상에서 빠진다.
+     */
+    @PostMapping("/backfill")
+    public ResponseEntity<Map<String, Integer>> backfillMissingTourApiContent() {
+        return ResponseEntity.ok(spotService.backfillMissingTourApiContent());
+    }
+
     /** 스팟 찜 토글 — 이미 찜했으면 취소, 아니면 새로 찜한다. */
     @PostMapping("/{id}/like")
     public ResponseEntity<?> toggleLike(@PathVariable Long id) {
