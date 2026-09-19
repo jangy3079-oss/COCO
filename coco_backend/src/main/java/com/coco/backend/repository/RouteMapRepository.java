@@ -9,5 +9,6 @@ import java.util.List;
 @Repository
 public interface RouteMapRepository extends JpaRepository<RouteMap, Long> {
 
-    List<RouteMap> findByUserId(Long userId);
+    // "내가 만든 코스" 목록 — 최신순
+    List<RouteMap> findByUser_IdOrderByCreatedAtDesc(Long userId);
 }
