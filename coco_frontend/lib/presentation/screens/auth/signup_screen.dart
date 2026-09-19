@@ -80,6 +80,7 @@ class _SignupScreenState extends State<SignupScreen> {
         role: _role.apiValue,
       );
       AuthTokenStore.setToken(result.accessToken);
+      AuthTokenStore.setUser(nickname: result.nickname, role: result.role, email: result.email);
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(AppLocalizations.of(context)!.signupCompleteSnackbar)),

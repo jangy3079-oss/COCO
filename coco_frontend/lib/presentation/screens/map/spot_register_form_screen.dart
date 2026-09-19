@@ -226,14 +226,21 @@ class _Chip extends StatelessWidget {
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(20),
-      child: Container(
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 180),
+        curve: Curves.easeOut,
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
         decoration: BoxDecoration(
           color: selected ? CocoTheme.primary : Colors.white,
           borderRadius: BorderRadius.circular(20),
           border: Border.all(color: selected ? CocoTheme.primary : Colors.grey.shade300),
         ),
-        child: Text(label, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: selected ? Colors.white : CocoTheme.secondary)),
+        child: AnimatedDefaultTextStyle(
+          duration: const Duration(milliseconds: 180),
+          curve: Curves.easeOut,
+          style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: selected ? Colors.white : CocoTheme.secondary),
+          child: Text(label),
+        ),
       ),
     );
   }
@@ -250,7 +257,9 @@ class _ToggleButton extends StatelessWidget {
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(12),
-      child: Container(
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 180),
+        curve: Curves.easeOut,
         padding: const EdgeInsets.symmetric(vertical: 11),
         alignment: Alignment.center,
         decoration: BoxDecoration(
@@ -258,7 +267,12 @@ class _ToggleButton extends StatelessWidget {
           borderRadius: BorderRadius.circular(12),
           border: Border.all(color: active ? CocoTheme.primary : Colors.grey.shade300),
         ),
-        child: Text(label, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: active ? Colors.white : Colors.black.withOpacity(0.6))),
+        child: AnimatedDefaultTextStyle(
+          duration: const Duration(milliseconds: 180),
+          curve: Curves.easeOut,
+          style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: active ? Colors.white : Colors.black.withOpacity(0.6)),
+          child: Text(label),
+        ),
       ),
     );
   }

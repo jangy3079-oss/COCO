@@ -198,6 +198,10 @@ class _MyRoutesScreenState extends State<MyRoutesScreen> {
                                   }),
                                 ),
                               ),
+                              // 블러가 서서히 사라질 여백(페이드 테일) — map_screen.dart와 동일하게,
+                              // 이 여백이 없으면 검색창 자체가 그라데이션이 투명해지는 구간에 걸쳐서
+                              // 검색창까지 반투명하게 보이는 문제가 있었다.
+                              const SizedBox(height: 44),
                             ],
                           ),
                         ),
@@ -497,7 +501,9 @@ class _SegmentButton extends StatelessWidget {
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(10),
-      child: Container(
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 180),
+        curve: Curves.easeOut,
         alignment: Alignment.center,
         padding: const EdgeInsets.symmetric(vertical: 10),
         decoration: BoxDecoration(
@@ -505,7 +511,12 @@ class _SegmentButton extends StatelessWidget {
           borderRadius: BorderRadius.circular(10),
           border: Border.all(color: selected ? CocoTheme.primary : Colors.grey.shade300),
         ),
-        child: Text(label, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: selected ? Colors.white : CocoTheme.secondary)),
+        child: AnimatedDefaultTextStyle(
+          duration: const Duration(milliseconds: 180),
+          curve: Curves.easeOut,
+          style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: selected ? Colors.white : CocoTheme.secondary),
+          child: Text(label),
+        ),
       ),
     );
   }

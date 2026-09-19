@@ -40,6 +40,7 @@ class _LoginScreenState extends State<LoginScreen> {
         password: _passwordController.text,
       );
       AuthTokenStore.setToken(result.accessToken);
+      AuthTokenStore.setUser(nickname: result.nickname, role: result.role, email: result.email);
       if (!mounted) return;
       context.go('/feed');
     } on AuthException catch (e) {

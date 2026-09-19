@@ -85,7 +85,7 @@ class _QnaScreenState extends State<QnaScreen> {
         child: Column(
           children: [
             Padding(
-              padding: const EdgeInsets.fromLTRB(20, 12, 16, 10),
+              padding: const EdgeInsets.fromLTRB(20, 14, 20, 10),
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -184,16 +184,20 @@ class _FilterChip extends StatelessWidget {
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(20),
-      child: Container(
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 180),
+        curve: Curves.easeOut,
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
         decoration: BoxDecoration(
           color: selected ? CocoTheme.primary : Colors.white,
           borderRadius: BorderRadius.circular(20),
           border: Border.all(color: selected ? CocoTheme.primary : Colors.grey.shade300),
         ),
-        child: Text(
-          label,
+        child: AnimatedDefaultTextStyle(
+          duration: const Duration(milliseconds: 180),
+          curve: Curves.easeOut,
           style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: selected ? Colors.white : CocoTheme.secondary),
+          child: Text(label),
         ),
       ),
     );

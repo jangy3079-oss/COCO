@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:provider/provider.dart';
+import '../../../core/locale/locale_controller.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../data/repositories/spot_repository.dart';
 import '../../../l10n/generated/app_localizations.dart';
@@ -66,7 +68,10 @@ class _SpotDetailScreenState extends State<SpotDetailScreen> {
     setState(() => _loading = true);
     try {
       final id = int.parse(widget.spotId.substring(3));
-      final spot = await _spotRepository.fetchById(id);
+      final spot = await _spotRepository.fetchById(
+        id,
+        locale: context.read<LocaleController>().locale.languageCode,
+      );
       if (!mounted) return;
       if (spot == null) {
         setState(() {
@@ -96,6 +101,7 @@ class _SpotDetailScreenState extends State<SpotDetailScreen> {
         neLat: spot.lat + _relatedRadiusDeg,
         swLng: spot.lng - _relatedRadiusDeg,
         neLng: spot.lng + _relatedRadiusDeg,
+        locale: context.read<LocaleController>().locale.languageCode,
       );
       if (!mounted) return;
       final related = nearby

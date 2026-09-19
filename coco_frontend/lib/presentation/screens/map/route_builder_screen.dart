@@ -2,6 +2,8 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:provider/provider.dart';
+import '../../../core/locale/locale_controller.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../data/repositories/spot_repository.dart';
 import '../../../l10n/generated/app_localizations.dart';
@@ -84,7 +86,10 @@ class _RouteBuilderScreenState extends State<RouteBuilderScreen> {
     }
     _dbSearchDebounce = Timer(const Duration(milliseconds: 300), () async {
       try {
-        final results = await _spotRepository.search(query.trim());
+        final results = await _spotRepository.search(
+          query.trim(),
+          locale: context.read<LocaleController>().locale.languageCode,
+        );
         if (!mounted) return;
         final converted = results.map(mockSpotFromDb).toList();
         // 다른 화면(스팟 상세 등)에서도 id로 다시 찾을 수 있게 공유 캐시에 채워 넣는다.

@@ -5,6 +5,8 @@ import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:go_router/go_router.dart';
 import 'package:pointer_interceptor/pointer_interceptor.dart';
+import 'package:provider/provider.dart';
+import '../../../core/locale/locale_controller.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../data/models/spot.dart' as db;
 import '../../../data/repositories/spot_repository.dart';
@@ -51,8 +53,8 @@ class MapScreen extends StatefulWidget {
 }
 
 class _MapScreenState extends State<MapScreen> {
-  // 실제 스팟 category 값(spots.category: 노포|공원|카페|골목)에 맞춘 필터
-  static const _categories = ['전체', '노포', '골목', '공원', '카페'];
+  // 실제 스팟 category 값(spots.category: 음식점|공원|카페|골목)에 맞춘 필터
+  static const _categories = ['전체', '음식점', '골목', '공원', '카페'];
   String _selectedCategory = '전체';
 
   // 지도 중심 좌표 — 진입 시 현재 위치로 재설정을 시도하고, 권한 거부/실패 시
@@ -124,6 +126,7 @@ class _MapScreenState extends State<MapScreen> {
         swLng: swLng,
         neLng: neLng,
         category: (_selectedCategory == '전체' || isAlleyFilter) ? null : _selectedCategory,
+        locale: context.read<LocaleController>().locale.languageCode,
       );
       if (!mounted) return;
       // 그 사이 더 최신 요청이 나갔다면 이 응답은 오래된 뷰포트 것이므로 버린다.
@@ -178,7 +181,10 @@ class _MapScreenState extends State<MapScreen> {
     }
     _searchDebounce = Timer(const Duration(milliseconds: 300), () async {
       try {
-        final results = await _spotRepository.search(trimmed);
+        final results = await _spotRepository.search(
+          trimmed,
+          locale: context.read<LocaleController>().locale.languageCode,
+        );
         if (!mounted) return;
         // 상세 화면으로 바로 진입할 수 있게 다른 화면들과 동일하게 미리 캐싱.
         for (final spot in results) {
@@ -709,13 +715,14 @@ class _CategoryChip extends StatelessWidget {
           ],
         ),
         alignment: Alignment.center,
-        child: Text(
-          label,
+        child: AnimatedDefaultTextStyle(
+          duration: const Duration(milliseconds: 150),
           style: TextStyle(
             color: selected ? Colors.white : CocoTheme.secondary,
             fontWeight: FontWeight.w600,
             fontSize: 13,
           ),
+          child: Text(label),
         ),
       ),
     );

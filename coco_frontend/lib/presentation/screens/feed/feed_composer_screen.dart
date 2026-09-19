@@ -4,6 +4,8 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:provider/provider.dart';
+import '../../../core/locale/locale_controller.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../data/models/spot.dart';
 import '../../../data/repositories/feed_repository.dart';
@@ -119,7 +121,10 @@ class _FeedComposerScreenState extends State<FeedComposerScreen> {
     _searchDebounce = Timer(const Duration(milliseconds: 300), () async {
       setState(() => _searching = true);
       try {
-        final results = await _spotRepository.search(q);
+        final results = await _spotRepository.search(
+          q,
+          locale: context.read<LocaleController>().locale.languageCode,
+        );
         if (!mounted) return;
         setState(() {
           _searchResults = results;
