@@ -63,6 +63,37 @@ public class RouteService {
         return toResponse(routeMap, spots, 0, 0, false, false);
     }
 
+    /** 공개 코스 전체 목록(최신순) — 로그인 없이도 조회 가능. 발행 안 된 초안(isDraft=true)은 제외. */
+    public List<RouteResponse> listPublic() {
+        List<RouteMap> routeMaps = routeMapRepository.findByVisibilityAndIsDraftFalseOrderByCreatedAtDesc("PUBLIC");
+        if (routeMaps.isEmpty()) return List.of();
+
+        List<Long> routeMapIds = routeMaps.stream().map(RouteMap::getId).toList();
+        Map<Long, List<RouteMapSpot>> spotsByRouteMapId = groupSpotsByRouteMapId(routeMapIds);
+        Map<Long, Integer> likeCountByRouteMapId = toCountMap(routeLikeRepository.countByRouteMapIds(routeMapIds));
+        Map<Long, Integer> saveCountByRouteMapId = toCountMap(routeSaveRepository.countByRouteMapIds(routeMapIds));
+
+        // 비로그인 조회라 liked/saved는 항상 false — 로그인 유저 관점이 필요하면 상세(getById)를 쓰면 된다.
+        return routeMaps.stream()
+                .map(r -> toResponse(
+                        r,
+                        spotsByRouteMapId.getOrDefault(r.getId(), List.of()),
+                        likeCountByRouteMapId.getOrDefault(r.getId(), 0),
+                        saveCountByRouteMapId.getOrDefault(r.getId(), 0),
+                        false,
+                        false))
+                .toList();
+    }
+
+    /** 코스 공유 — 좋아요/저장과 달리 토글이 아니라 호출될 때마다 shareCount를 1씩 늘린다. */
+    @Transactional
+    public int increaseShareCount(Long routeId) {
+        RouteMap routeMap = routeMapRepository.findById(routeId)
+                .orElseThrow(() -> new IllegalArgumentException("코스를 찾을 수 없습니다."));
+        routeMap.increaseShareCount();
+        return routeMap.getShareCount();
+    }
+
     /** 내가 만든 코스 목록(최신순). */
     public List<RouteResponse> listMine(Long userId) {
         List<RouteMap> routeMaps = routeMapRepository.findByUser_IdOrderByCreatedAtDesc(userId);
@@ -248,6 +279,7 @@ public class RouteService {
                 .spots(spotResponses)
                 .likeCount(likeCount)
                 .saveCount(saveCount)
+                .shareCount(routeMap.getShareCount())
                 .liked(liked)
                 .saved(saved)
                 .createdAt(routeMap.getCreatedAt())

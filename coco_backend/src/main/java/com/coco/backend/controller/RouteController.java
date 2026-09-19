@@ -15,6 +15,7 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/api/routes")
@@ -22,6 +23,15 @@ import java.util.List;
 public class RouteController {
 
     private final RouteService routeService;
+
+    /** 공개 코스 전체 목록 — owner=public일 때만 지원, 로그인 없이도 조회 가능. */
+    @GetMapping
+    public ResponseEntity<?> listPublicRoutes(@RequestParam(required = false) String owner) {
+        if (!"public".equals(owner)) {
+            return ResponseEntity.badRequest().body(new ErrorResponse("owner=public 파라미터가 필요합니다."));
+        }
+        return ResponseEntity.ok(routeService.listPublic());
+    }
 
     /** 로그인한 사용자가 스팟들을 순서대로 엮어 코스를 만든다. */
     @PostMapping
@@ -122,6 +132,17 @@ public class RouteController {
         try {
             SaveToggleResponse result = routeService.toggleSave(userId, id);
             return ResponseEntity.ok(result);
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(new ErrorResponse(e.getMessage()));
+        }
+    }
+
+    /** 코스 공유 — 좋아요/저장과 달리 토글이 아니라 누를 때마다 shareCount가 증가한다. 로그인 불필요. */
+    @PostMapping("/{id}/share")
+    public ResponseEntity<?> share(@PathVariable Long id) {
+        try {
+            int shareCount = routeService.increaseShareCount(id);
+            return ResponseEntity.ok(Map.of("shareCount", shareCount));
         } catch (IllegalArgumentException e) {
             return ResponseEntity.badRequest().body(new ErrorResponse(e.getMessage()));
         }
