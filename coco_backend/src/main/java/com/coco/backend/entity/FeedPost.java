@@ -44,19 +44,23 @@ public class FeedPost {
     @Column(name = "like_count", nullable = false)
     private Integer likeCount;
 
+    @Column(name = "save_count", nullable = false)
+    private Integer saveCount;
+
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
 
     @Builder
-    public FeedPost(User user, Spot spot, RouteMap route, String imageUrl, String description, Integer likeCount) {
+    public FeedPost(User user, Spot spot, RouteMap route, String imageUrl, String description, Integer likeCount, Integer saveCount) {
         this.user = user;
         this.spot = spot;
         this.route = route;
         this.imageUrl = imageUrl;
         this.description = description;
-        // 게시글이 처음 생성될 때 좋아요 수는 무조건 0이어야 하므로
+        // 게시글이 처음 생성될 때 좋아요/저장 수는 무조건 0이어야 하므로
         this.likeCount = likeCount != null ? likeCount : 0;
+        this.saveCount = saveCount != null ? saveCount : 0;
     }
 
     // 좋아요 토글(FeedService.toggleLike) 전용 — like_count 컬럼을 여기서만 증감시킨다.
@@ -67,6 +71,17 @@ public class FeedPost {
     public void decreaseLike() {
         if (this.likeCount > 0) {
             this.likeCount--;
+        }
+    }
+
+    // 저장 토글(FeedService.toggleSave) 전용 — save_count 컬럼을 여기서만 증감시킨다.
+    public void increaseSave() {
+        this.saveCount++;
+    }
+
+    public void decreaseSave() {
+        if (this.saveCount > 0) {
+            this.saveCount--;
         }
     }
 }

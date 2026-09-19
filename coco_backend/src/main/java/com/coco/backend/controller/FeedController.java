@@ -6,6 +6,7 @@ import com.coco.backend.dto.response.ErrorResponse;
 import com.coco.backend.dto.response.FeedCommentResponse;
 import com.coco.backend.dto.response.FeedPostResponse;
 import com.coco.backend.dto.response.LikeToggleResponse;
+import com.coco.backend.dto.response.SaveToggleResponse;
 import com.coco.backend.service.FeedService;
 import com.coco.backend.service.FileStorageService;
 import jakarta.validation.Valid;
@@ -75,6 +76,44 @@ public class FeedController {
         } catch (IllegalArgumentException e) {
             return ResponseEntity.badRequest().body(new ErrorResponse(e.getMessage()));
         }
+    }
+
+    /** 저장(북마크) 토글 — 이미 저장했으면 취소, 아니면 새로 저장한다. */
+    @PostMapping("/{id}/save")
+    public ResponseEntity<?> toggleSave(@PathVariable Long id) {
+        Long userId = currentUserId();
+        if (userId == null) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                    .body(new ErrorResponse("로그인이 필요합니다."));
+        }
+        try {
+            SaveToggleResponse result = feedService.toggleSave(userId, id);
+            return ResponseEntity.ok(result);
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(new ErrorResponse(e.getMessage()));
+        }
+    }
+
+    /** 현재 로그인한 유저가 좋아요한 피드 목록 — GET /api/feed(최신 50개 캡)와 달리 캡 없이 전체. */
+    @GetMapping("/liked")
+    public ResponseEntity<?> getLikedFeed() {
+        Long userId = currentUserId();
+        if (userId == null) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                    .body(new ErrorResponse("로그인이 필요합니다."));
+        }
+        return ResponseEntity.ok(feedService.getLikedFeed(userId));
+    }
+
+    /** 현재 로그인한 유저가 저장한 피드 목록 — getLikedFeed와 동일한 형태(캡 없이 전체). */
+    @GetMapping("/saved")
+    public ResponseEntity<?> getSavedFeed() {
+        Long userId = currentUserId();
+        if (userId == null) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                    .body(new ErrorResponse("로그인이 필요합니다."));
+        }
+        return ResponseEntity.ok(feedService.getSavedFeed(userId));
     }
 
     @GetMapping("/{id}/comments")

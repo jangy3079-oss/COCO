@@ -1,5 +1,6 @@
 package com.coco.backend.repository;
 
+import com.coco.backend.entity.FeedPost;
 import com.coco.backend.entity.FeedPostLike;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
@@ -18,4 +19,8 @@ public interface FeedPostLikeRepository extends JpaRepository<FeedPostLike, Long
     // 한 쿼리로 가져오기 위한 배치 조회(N+1 방지).
     @Query("SELECT l.feedPost.id FROM FeedPostLike l WHERE l.user.id = :userId AND l.feedPost.id IN :postIds")
     List<Long> findLikedPostIds(@Param("userId") Long userId, @Param("postIds") List<Long> postIds);
+
+    // "좋아요한 피드" 탭용 — 캡 없이 전체를 최신 좋아요 순으로 조회.
+    @Query("SELECT l.feedPost FROM FeedPostLike l WHERE l.user.id = :userId ORDER BY l.createdAt DESC")
+    List<FeedPost> findPostsByUserId(@Param("userId") Long userId);
 }

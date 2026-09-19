@@ -3,6 +3,7 @@ package com.coco.backend.controller;
 import com.coco.backend.dto.response.ErrorResponse;
 import com.coco.backend.dto.response.LikeToggleResponse;
 import com.coco.backend.dto.response.SpotResponse;
+import com.coco.backend.service.KakaoLocalService;
 import com.coco.backend.service.SpotService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -19,6 +20,7 @@ import java.util.Map;
 public class SpotController {
 
     private final SpotService spotService;
+    private final KakaoLocalService kakaoLocalService;
 
     /** 지도 뷰포트(화면에 보이는 영역) 안의 스팟만 조회 — 줌/이동 시마다 프론트에서 재호출. */
     @GetMapping
@@ -47,6 +49,17 @@ public class SpotController {
     public ResponseEntity<List<SpotResponse>> searchSpots(@RequestParam String q,
                                                            @RequestParam(defaultValue = "ko") String locale) {
         return ResponseEntity.ok(spotService.search(q, locale));
+    }
+
+    /**
+     * 스팟 등록 신청 화면의 실시간 장소 검색 — DB에 아직 없는 새 장소도 찾아야 해서
+     * (DB만 뒤지는 위 /search와 달리) 카카오 로컬에 검색어를 그대로 쏜다.
+     * 검색 자체는 로그인 없이도 가능 — 실제 "등록 신청" 제출은 SpotRegistrationController가
+     * 로그인을 요구하므로 여기서는 막지 않는다.
+     */
+    @GetMapping("/search/external")
+    public ResponseEntity<?> searchExternal(@RequestParam String q) {
+        return ResponseEntity.ok(kakaoLocalService.searchByKeyword(q));
     }
 
     /** TourAPI에서 필터링된 후보를 가져와 DB에 채워 넣는 수동 배치 트리거. */

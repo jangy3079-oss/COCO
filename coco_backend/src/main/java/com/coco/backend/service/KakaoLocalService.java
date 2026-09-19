@@ -253,4 +253,34 @@ public class KakaoLocalService {
             double lng,
             String category
     ) {}
+
+    /**
+     * 스팟 등록 신청 화면의 실시간 장소 검색용 — 사용자가 입력한 검색어를 그대로 카카오
+     * 로컬에 1페이지만 쏜다. fetchCandidates()의 callKeywordSearch()는 동×카테고리 배치
+     * 수집용(최대 3페이지, category_group_code로 관광 카테고리만 제한)이라 여기서는 재사용하지
+     * 않고 fetchPage()를 직접 호출한다 — 신규 노포·공원처럼 관광 카테고리 밖의 장소도 등록
+     * 대상이 될 수 있어서 category_group_code를 아예 안 붙인다. fetchPage()가 항상
+     * BUSAN_RECT를 붙이므로 부산 범위 제한은 그대로 적용된다.
+     */
+    public List<KakaoSearchResult> searchByKeyword(String query) {
+        try {
+            JsonNode root = fetchPage(query, null, 1);
+            List<KakaoSearchResult> results = new ArrayList<>();
+            for (JsonNode item : root.path("documents")) {
+                String name = item.path("place_name").asText(null);
+                double lng = item.path("x").asDouble(0);
+                double lat = item.path("y").asDouble(0);
+                if (name == null || lat == 0 || lng == 0) continue;
+                String roadAddress = item.path("road_address_name").asText("");
+                String address = !roadAddress.isBlank() ? roadAddress : item.path("address_name").asText("");
+                results.add(new KakaoSearchResult(name, address, lat, lng));
+            }
+            return results;
+        } catch (Exception e) {
+            log.warn("카카오 로컬 즉석 검색 실패 (query={}): {}", query, e.getMessage());
+            return List.of(); // 500 대신 빈 배열 — 프론트가 "검색 결과 없음"으로 자연스럽게 처리
+        }
+    }
+
+    public record KakaoSearchResult(String name, String address, double lat, double lng) {}
 }

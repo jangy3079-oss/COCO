@@ -58,6 +58,7 @@ CREATE TABLE feed_posts (
     image_url    TEXT,
     description  VARCHAR(500),
     like_count   INT          DEFAULT 0,
+    save_count   INT          DEFAULT 0,
     created_at   TIMESTAMP    DEFAULT NOW(),
     PRIMARY KEY (feed_post_id),
     CONSTRAINT fk_feed_user FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE,
@@ -95,6 +96,17 @@ CREATE TABLE feed_post_likes (
     CONSTRAINT fk_flike_user FOREIGN KEY (user_id)      REFERENCES users(user_id)           ON DELETE CASCADE,
     CONSTRAINT fk_flike_post FOREIGN KEY (feed_post_id) REFERENCES feed_posts(feed_post_id) ON DELETE CASCADE,
     CONSTRAINT uq_feed_like  UNIQUE (user_id, feed_post_id)
+);
+
+CREATE TABLE feed_post_saves (
+    feed_post_save_id BIGSERIAL NOT NULL,
+    user_id           BIGINT,
+    feed_post_id      BIGINT,
+    created_at        TIMESTAMP DEFAULT NOW(),
+    PRIMARY KEY (feed_post_save_id),
+    CONSTRAINT fk_fsave_user FOREIGN KEY (user_id)      REFERENCES users(user_id)           ON DELETE CASCADE,
+    CONSTRAINT fk_fsave_post FOREIGN KEY (feed_post_id) REFERENCES feed_posts(feed_post_id) ON DELETE CASCADE,
+    CONSTRAINT uq_feed_save  UNIQUE (user_id, feed_post_id)
 );
 
 CREATE TABLE route_maps (
@@ -145,6 +157,7 @@ CREATE INDEX idx_qna_user       ON qna_posts       (user_id);
 CREATE INDEX idx_ans_post       ON qna_answers     (qna_post_id);
 CREATE INDEX idx_slike_user     ON spot_likes      (user_id);
 CREATE INDEX idx_flike_user     ON feed_post_likes (user_id);
+CREATE INDEX idx_fsave_user     ON feed_post_saves (user_id);
 CREATE INDEX idx_spot_loc       ON spots           (lat, lng);
 CREATE INDEX idx_routemap_user  ON route_maps      (user_id);
 CREATE INDEX idx_rmspot_routemap ON route_map_spots (route_map_id);
