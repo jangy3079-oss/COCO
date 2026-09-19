@@ -18,6 +18,10 @@ public interface SpotRepository extends JpaRepository<Spot, Long> {
     // 카카오 로컬 수집 시 이미 가져온 장소인지 중복 체크용
     Optional<Spot> findByKakaoPlaceId(String kakaoPlaceId);
 
+    // 카카오 로컬 수집 시 TourAPI로 이미 저장된 장소와 중복인지(같은 실제 장소) 체크할 때
+    // 비교 기준으로 삼을 TourAPI 출처 스팟 전체 조회용
+    List<Spot> findByTourApiidIsNotNull();
+
     // 코스 만들기 "+ 스팟 추가" 등에서 쓰는 텍스트 검색 — 한/영/일 제목 또는 주소 중
     // 하나라도 키워드를 포함하면 매치(title이 titleKo/titleEn/titleJa로 나뉘면서
     // 파생 쿼리 메서드로는 표현이 안 돼 @Query로 직접 작성).

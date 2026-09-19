@@ -12,6 +12,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.stream.Collectors;
 
 @Slf4j
 @Service
@@ -60,16 +61,29 @@ public class SpotService {
         return inserted;
     }
 
+    // 이름 정규화 후 동일 판정을 내릴 좌표 오차 허용 범위(위도/경도 각각). 약 30m 이내.
+    private static final double DUPLICATE_COORD_TOLERANCE = 0.0003;
+
     /**
      * 카카오 로컬 API에서 관광 관련 카테고리로 좁힌 후보를 가져와 아직 DB에 없는 것만 저장한다.
-     * TourAPI 임포트와 데이터 소스만 다를 뿐 흐름은 동일 — 중복 체크만 kakao_place_id 기준.
+     * TourAPI 임포트와 데이터 소스만 다를 뿐 흐름은 동일 — kakao_place_id 중복 체크에 더해,
+     * TourAPI로 이미 저장된 동일 실제 장소도 걸러낸다(TourAPI 우선).
      */
     public int importFromKakaoLocal() {
         List<KakaoLocalService.KakaoLocalCandidate> candidates = kakaoLocalService.fetchCandidates();
+
+        // TourAPI 출처 스팟을 정규화된 제목 기준으로 그룹핑해두고, 후보를 순회하는 동안
+        // DB 재조회 없이 이 메모리 맵만으로 중복 여부를 판단한다.
+        Map<String, List<Spot>> tourApiSpotsByNormalizedTitle = spotRepository.findByTourApiidIsNotNull()
+                .stream()
+                .collect(Collectors.groupingBy(s -> normalizeTitle(s.getTitleKo())));
+
         int inserted = 0;
 
         for (var c : candidates) {
             if (spotRepository.findByKakaoPlaceId(c.kakaoPlaceId()).isPresent()) continue;
+
+            if (isDuplicateOfTourApiSpot(c, tourApiSpotsByNormalizedTitle)) continue;
 
             Spot spot = Spot.builder()
                     .kakaoPlaceId(c.kakaoPlaceId())
@@ -84,6 +98,34 @@ public class SpotService {
         }
         log.info("카카오 로컬 스팟 임포트 완료: 후보 {}건 중 신규 {}건 저장", candidates.size(), inserted);
         return inserted;
+    }
+
+    /**
+     * 카카오 후보가 TourAPI로 이미 저장된 스팟과 같은 실제 장소인지 판단한다.
+     * 판단 기준: 정규화된 제목이 같고, lat/lng 차이가 각각 DUPLICATE_COORD_TOLERANCE 이내.
+     *
+     * 한계: "낙동강집" vs "낙동강매운탕"처럼 정규화해도 서로 다른 단어가 남는 경우는 이름이
+     * 달라서 걸러내지 못한다 — 필요해지면 문자열 유사도(edit distance 등) 도입을 검토할 것.
+     */
+    private boolean isDuplicateOfTourApiSpot(KakaoLocalService.KakaoLocalCandidate candidate,
+                                              Map<String, List<Spot>> tourApiSpotsByNormalizedTitle) {
+        String normalizedTitle = normalizeTitle(candidate.title());
+        List<Spot> sameTitleSpots = tourApiSpotsByNormalizedTitle.get(normalizedTitle);
+        if (sameTitleSpots == null) return false;
+
+        return sameTitleSpots.stream().anyMatch(s ->
+                Math.abs(s.getLat() - candidate.lat()) <= DUPLICATE_COORD_TOLERANCE
+                        && Math.abs(s.getLng() - candidate.lng()) <= DUPLICATE_COORD_TOLERANCE);
+    }
+
+    /** 상호명 표기 차이(공백/괄호/"본점"·"점" 접미사)를 없애 이름 비교를 위한 정규화된 제목을 만든다. */
+    private String normalizeTitle(String title) {
+        if (title == null) return "";
+        return title
+                .replaceAll("\\s+", "")
+                .replaceAll("\\(.*?\\)", "")
+                .replaceAll("본점$|점$", "")
+                .trim();
     }
 
     /** 지도 화면에 보이는 영역(뷰포트) 안의 스팟만 조회 — 핀 밀집 방지의 핵심. */
