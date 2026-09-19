@@ -35,24 +35,28 @@ class _MypageScreenState extends State<MypageScreen> {
           padding: EdgeInsets.zero,
           children: [
             Padding(
-              padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
+              padding: const EdgeInsets.fromLTRB(20, 14, 20, 20),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(myNickname, style: const TextStyle(fontSize: 26, fontWeight: FontWeight.w800, color: CocoTheme.secondary)),
-                  const SizedBox(height: 8),
+                  Text(myNickname, style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w800, color: CocoTheme.secondary)),
+                  const SizedBox(height: 4),
                   Row(
                     children: [
                       Text(
                         myRoleLabel == '로컬 주민' ? l10n.userTypeLocal : l10n.userTypeTourist,
-                        style: TextStyle(fontSize: 14, color: Colors.grey.shade600),
+                        style: TextStyle(fontSize: 13, color: Colors.grey.shade600),
                       ),
-                      const SizedBox(width: 8),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
-                        decoration: BoxDecoration(color: const Color(0xFFE6F1FB), borderRadius: BorderRadius.circular(12)),
-                        child: const Text(myNeighborhood, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: CocoTheme.primary)),
-                      ),
+                      // TODO: 동네 정보는 아직 백엔드에 필드가 없어 값이 생길 때까지 칩을 숨김
+                      // (mypage_mock_data.dart의 myNeighborhood 주석 참고)
+                      if (myNeighborhood.isNotEmpty) ...[
+                        const SizedBox(width: 8),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+                          decoration: BoxDecoration(color: const Color(0xFFE6F1FB), borderRadius: BorderRadius.circular(12)),
+                          child: Text(myNeighborhood, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: CocoTheme.primary)),
+                        ),
+                      ],
                     ],
                   ),
                 ],

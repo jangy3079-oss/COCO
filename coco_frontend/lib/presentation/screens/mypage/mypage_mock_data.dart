@@ -1,14 +1,21 @@
+import '../../../core/network/auth_token_store.dart';
 import '../../../data/models/user_type.dart';
 
-// TODO: 로그인 연동 전까지의 "현재 로그인한 나" 목업. AUTH_API_SPEC.md 기준
-// AuthResponse(nickname/role 등)가 실제로 연동되면 이 값들을 로그인 응답으로 교체.
-// nickname/bio는 프로필 수정 화면에서 바뀌므로 top-level mutable 변수로 둔다
-// (feed_mock_data.dart의 mockFeedItems와 동일한 공유 상태 패턴).
-String myNickname = '민지';
-String myBio = '중구에서 20년 살았어요. 노포 좋아합니다.';
-const String myEmail = 'minji@example.com';
-const String myNeighborhood = '중구';
-const UserType myRole = UserType.local;
+// nickname/role은 로그인 시 AuthTokenStore에 저장된 실제 로그인 응답(AuthResult)을 읽는다.
+// 값이 없을 때(비정상 진입 등)만 아래 폴백을 쓴다.
+// bio는 아직 백엔드에 컬럼이 없어 로컬에서만 유지되는 값 — 프로필 수정 화면에서 바뀌므로
+// top-level mutable 변수로 둔다 (feed_mock_data.dart의 mockFeedItems와 동일한 패턴).
+String get myNickname => AuthTokenStore.nickname ?? '';
+set myNickname(String value) => AuthTokenStore.setNickname(value);
+String myBio = '';
+String get myEmail => AuthTokenStore.email ?? '';
+
+// TODO: 동네(예: "중구")는 아직 users 테이블/AuthResponse 어디에도 없는 필드라
+// 실제 로그인 유저 값으로 연결할 수 없음. 백엔드에 컬럼을 추가하기 전까지는
+// 빈 문자열로 비워둠 — mypage_screen.dart에서 빈 값이면 칩 자체를 숨긴다.
+const String myNeighborhood = '';
+
+UserType get myRole => AuthTokenStore.role == 'TOURIST' ? UserType.tourist : UserType.local;
 
 String get myRoleLabel => myRole == UserType.local ? '로컬 주민' : '관광객';
 

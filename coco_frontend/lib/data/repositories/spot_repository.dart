@@ -34,9 +34,12 @@ class SpotRepository {
   }
 
   /// 스팟 상세 화면용 단건 조회. 없으면 null.
-  Future<Spot?> fetchById(int id) async {
+  Future<Spot?> fetchById(int id, {String locale = 'ko'}) async {
     try {
-      final response = await _dio.get('/api/spot/$id');
+      final response = await _dio.get(
+        '/api/spot/$id',
+        queryParameters: {'locale': locale},
+      );
       return Spot.fromJson(response.data as Map<String, dynamic>);
     } on DioException catch (e) {
       if (e.response?.statusCode == 404) return null;
@@ -45,8 +48,11 @@ class SpotRepository {
   }
 
   /// 제목/주소 키워드 검색 — 코스 만들기 "+ 스팟 추가" 등에서 사용.
-  Future<List<Spot>> search(String query) async {
-    final response = await _dio.get('/api/spot/search', queryParameters: {'q': query});
+  Future<List<Spot>> search(String query, {String locale = 'ko'}) async {
+    final response = await _dio.get(
+      '/api/spot/search',
+      queryParameters: {'q': query, 'locale': locale},
+    );
     return (response.data as List)
         .map((e) => Spot.fromJson(e as Map<String, dynamic>))
         .toList();

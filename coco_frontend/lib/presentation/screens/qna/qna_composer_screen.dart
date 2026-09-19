@@ -167,16 +167,20 @@ class _SpotTagChip extends StatelessWidget {
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(18),
-      child: Container(
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 180),
+        curve: Curves.easeOut,
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
         decoration: BoxDecoration(
           color: selected ? const Color(0xFFE6F1FB) : Colors.white,
           borderRadius: BorderRadius.circular(18),
           border: Border.all(color: selected ? CocoTheme.primary : Colors.grey.shade300),
         ),
-        child: Text(
-          label,
+        child: AnimatedDefaultTextStyle(
+          duration: const Duration(milliseconds: 180),
+          curve: Curves.easeOut,
           style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: selected ? CocoTheme.primary : Colors.grey.shade700),
+          child: Text(label),
         ),
       ),
     );

@@ -148,7 +148,11 @@ final appRouter = GoRouter(
       builder: (c, s) => const ProfileEditScreen(),
     ),
     ShellRoute(
-      builder: (context, state, child) => BottomNavShell(child: child),
+      // BottomNavShell이 탭 화면 4개를 자체적으로 들고 있어서 여기서 넘어오는 child는
+      // 더 이상 쓰지 않는다 — 자세한 이유는 bottom_nav_shell.dart 주석 참고.
+      // (그래도 go_router가 /feed, /map, /qna, /mypage 라우트를 매칭/구분하고
+      // GoRouterState.of(context).uri로 현재 탭을 판단할 수 있게 라우트 등록 자체는 유지한다.)
+      builder: (context, state, child) => const BottomNavShell(),
       routes: [
         GoRoute(path: '/feed',    builder: (c, s) => const FeedScreen()),
         GoRoute(path: '/map',     builder: (c, s) => const MapScreen()),

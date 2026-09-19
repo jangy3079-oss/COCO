@@ -307,7 +307,7 @@ class _FeedHeaderBar extends StatelessWidget {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+      padding: const EdgeInsets.fromLTRB(20, 14, 20, 0),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -315,8 +315,8 @@ class _FeedHeaderBar extends StatelessWidget {
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(l10n.feedHeaderTitle, style: const TextStyle(fontSize: 28, fontWeight: FontWeight.w800, color: CocoTheme.secondary)),
-              const SizedBox(height: 6),
+              Text(l10n.feedHeaderTitle, style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w800, color: CocoTheme.secondary)),
+              const SizedBox(height: 4),
               Row(
                 children: [
                   const Icon(Icons.location_on_rounded, size: 14, color: CocoTheme.primary),
@@ -405,20 +405,24 @@ class _TypeChip extends StatelessWidget {
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(20),
-      child: Container(
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 180),
+        curve: Curves.easeOut,
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
         decoration: BoxDecoration(
           color: selected ? CocoTheme.primary : Colors.white,
           borderRadius: BorderRadius.circular(20),
           border: Border.all(color: selected ? CocoTheme.primary : Colors.grey.shade300),
         ),
-        child: Text(
-          label,
+        child: AnimatedDefaultTextStyle(
+          duration: const Duration(milliseconds: 180),
+          curve: Curves.easeOut,
           style: TextStyle(
             fontSize: 13,
             fontWeight: FontWeight.w600,
             color: selected ? Colors.white : CocoTheme.secondary,
           ),
+          child: Text(label),
         ),
       ),
     );
@@ -554,7 +558,9 @@ class _SheetChip extends StatelessWidget {
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(20),
-      child: Container(
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 180),
+        curve: Curves.easeOut,
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
         decoration: BoxDecoration(
           color: selected ? CocoTheme.primary : Colors.white,
@@ -564,10 +570,20 @@ class _SheetChip extends StatelessWidget {
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Text(label, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: selected ? Colors.white : CocoTheme.secondary)),
+            AnimatedDefaultTextStyle(
+              duration: const Duration(milliseconds: 180),
+              curve: Curves.easeOut,
+              style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: selected ? Colors.white : CocoTheme.secondary),
+              child: Text(label),
+            ),
             if (icon != null) ...[
               const SizedBox(width: 5),
-              Icon(icon, size: 12, color: selected ? Colors.white : CocoTheme.primary),
+              TweenAnimationBuilder<Color?>(
+                duration: const Duration(milliseconds: 180),
+                curve: Curves.easeOut,
+                tween: ColorTween(end: selected ? Colors.white : CocoTheme.primary),
+                builder: (context, color, _) => Icon(icon, size: 12, color: color),
+              ),
             ],
           ],
         ),
