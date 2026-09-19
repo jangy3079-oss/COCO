@@ -8,6 +8,7 @@ import com.coco.backend.dto.response.QnaPostDetailResponse;
 import com.coco.backend.dto.response.QnaPostResponse;
 import com.coco.backend.entity.QnaAnswer;
 import com.coco.backend.entity.QnaPost;
+import com.coco.backend.entity.Role;
 import com.coco.backend.entity.Spot;
 import com.coco.backend.entity.User;
 import com.coco.backend.exception.ForbiddenException;
@@ -157,6 +158,7 @@ public class QnaService {
         return QnaAnswerResponse.builder()
                 .id(a.getId())
                 .userNickname(a.getUser().getNickname())
+                .isLocal(a.getUser().getRole() == Role.LOCAL)
                 .content(a.getContent())
                 .adopted(Boolean.TRUE.equals(a.getAdopted()))
                 .createdAt(a.getCreatedAt())
