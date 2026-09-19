@@ -116,18 +116,28 @@ class _MyMapCard extends StatelessWidget {
                       child: Text(l10n.myPageMapCardEmpty, style: TextStyle(fontSize: 13, color: Colors.grey.shade500)),
                     )
                   // 미리보기는 탭만 카드 전체에서 받으면 되므로 지도 자체의 핀 탭은 막아둔다.
-                  : IgnorePointer(
-                      child: Builder(builder: (context) {
-                        final center = spotsCenter(spots);
-                        return KakaoMapView(
-                          centerLat: center.$1,
-                          centerLng: center.$2,
-                          level: 6,
-                          markers: [
-                            for (final s in spots) KakaoMapMarker(id: s.id, lat: s.lat, lng: s.lng, name: s.name),
-                          ],
-                        );
-                      }),
+                  // ⚠️ IgnorePointer만으로는 안 된다 — 카카오맵은 실제 DOM(platform view)이라
+                  // Flutter의 IgnorePointer가 못 막는 카카오 로고/저작권 링크 같은 진짜 <a> 태그가
+                  // 안에 떠 있고, 거기를 탭하면 새 크롬 탭으로 카카오맵 사이트가 열려버린다.
+                  // 투명한 Flutter 위젯을 지도 위에 완전히 덮어서 실제 클릭이 지도 DOM까지
+                  // 아예 닿지 못하게 막는다(위 InkWell은 Flutter 제스처라 이 레이어를 그대로 통과함).
+                  : Stack(
+                      children: [
+                        Positioned.fill(
+                          child: Builder(builder: (context) {
+                            final center = spotsCenter(spots);
+                            return KakaoMapView(
+                              centerLat: center.$1,
+                              centerLng: center.$2,
+                              level: 6,
+                              markers: [
+                                for (final s in spots) KakaoMapMarker(id: s.id, lat: s.lat, lng: s.lng, name: s.name),
+                              ],
+                            );
+                          }),
+                        ),
+                        const Positioned.fill(child: ColoredBox(color: Colors.transparent)),
+                      ],
                     ),
             ),
           ),

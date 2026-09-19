@@ -4,6 +4,8 @@ import '../../../core/theme/app_theme.dart';
 import '../../../core/network/dio_client.dart';
 import '../../../data/repositories/feed_repository.dart';
 import '../../../l10n/generated/app_localizations.dart';
+import '../../widgets/map/kakao_map_view.dart';
+import '../map/map_mock_data.dart' show MockSpot, spotsCenter;
 import 'feed_mock_data.dart';
 import 'feed_screen.dart' show showShareSheet;
 
@@ -174,7 +176,7 @@ class _FeedPostDetailScreenState extends State<FeedPostDetailScreen> {
                             children: [
                               Positioned.fill(
                                 child: _onMapSlide
-                                    ? const _RouteMapSlide()
+                                    ? _RouteMapSlide(stops: item.routeStops ?? const [])
                                     : item.imageUrl != null
                                         ? Image.network('${DioClient.baseUrl}${item.imageUrl}', fit: BoxFit.cover)
                                         : Container(
@@ -411,89 +413,48 @@ class _CarouselArrow extends StatelessWidget {
 
 /// 골목지도 게시물의 마지막 캐러셀 슬라이드 — 정적 경로+번호 핀 그래픽.
 /// TODO: 실제 코스 데이터(MockRoute) 연동 시 진짜 좌표 기반 스냅샷으로 교체.
+/// 실제 골목지도(코스)를 카카오맵 위에 순서 번호 핀으로 보여준다.
+/// 예전엔 고정된 위치에 점 4개만 찍어두는 정적 목업이었는데, 이제 실제 스팟
+/// 좌표/순서를 그대로 반영한다(map_screen.dart 코스 필터 화면과 동일한 스타일).
+/// 캐러셀 슬라이드라 좌우 화살표로 넘기는 용도 외에 지도 자체를 조작할 필요는
+/// 없어서, 투명 위젯을 한 겹 덮어 실제 지도 DOM(드래그/카카오 로고 링크 등)에
+/// 클릭이 닿지 않게 막는다 — IgnorePointer만으로는 platform view의 진짜 DOM
+/// 클릭(예: 카카오 로고가 새 탭을 여는 문제)을 못 막기 때문.
 class _RouteMapSlide extends StatelessWidget {
-  const _RouteMapSlide();
+  final List<MockSpot> stops;
+  const _RouteMapSlide({required this.stops});
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      color: const Color(0xFFEAE8E2),
-      child: Stack(
-        children: [
-          Positioned(left: 0, top: 44, right: 0, height: 3, child: Container(color: Colors.white)),
-          Positioned(left: 40, top: 0, bottom: 0, width: 3, child: Container(color: Colors.white)),
-          CustomPaint(size: Size.infinite, painter: _DashedPathPainter()),
-          _numberPin(left: 0.14, top: 0.24, n: 1),
-          _numberPin(left: 0.47, top: 0.17, n: 2),
-          _numberPin(left: 0.71, top: 0.50, n: 3),
-          _numberPin(left: 0.32, top: 0.68, n: 4),
-          Positioned(
-            left: 12,
-            top: 12,
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 5),
-              decoration: BoxDecoration(color: Colors.white.withOpacity(0.94), borderRadius: BorderRadius.circular(14)),
-              child: Text(AppLocalizations.of(context)!.feedRouteMapSlideBadge, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: CocoTheme.primary)),
-            ),
+    final l10n = AppLocalizations.of(context)!;
+    final center = spotsCenter(stops);
+    return Stack(
+      children: [
+        Positioned.fill(
+          child: KakaoMapView(
+            centerLat: center.$1,
+            centerLng: center.$2,
+            level: 6,
+            clusteringEnabled: false,
+            markers: [
+              for (final (i, spot) in stops.indexed)
+                KakaoMapMarker(id: spot.id, lat: spot.lat, lng: spot.lng, name: spot.name, order: i + 1),
+            ],
           ),
-        ],
-      ),
-    );
-  }
-
-  Widget _numberPin({required double left, required double top, required int n}) {
-    return FractionallySizedBox(
-      widthFactor: 1,
-      heightFactor: 1,
-      child: Align(
-        alignment: Alignment(left * 2 - 1, top * 2 - 1),
-        child: Container(
-          width: 22,
-          height: 22,
-          alignment: Alignment.center,
-          decoration: const BoxDecoration(color: CocoTheme.primary, shape: BoxShape.circle),
-          child: Text('$n', style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w700)),
         ),
-      ),
+        const Positioned.fill(child: ColoredBox(color: Colors.transparent)),
+        Positioned(
+          left: 12,
+          top: 12,
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 5),
+            decoration: BoxDecoration(color: Colors.white.withOpacity(0.94), borderRadius: BorderRadius.circular(14)),
+            child: Text(l10n.feedRouteMapSlideBadge, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: CocoTheme.primary)),
+          ),
+        ),
+      ],
     );
   }
-}
-
-class _DashedPathPainter extends CustomPainter {
-  @override
-  void paint(Canvas canvas, Size size) {
-    final points = [
-      Offset(size.width * 0.17, size.height * 0.29),
-      Offset(size.width * 0.50, size.height * 0.22),
-      Offset(size.width * 0.73, size.height * 0.54),
-      Offset(size.width * 0.35, size.height * 0.72),
-    ];
-    final paint = Paint()
-      ..color = CocoTheme.primary.withOpacity(0.85)
-      ..strokeWidth = 2.5
-      ..strokeCap = StrokeCap.round;
-    for (int i = 0; i < points.length - 1; i++) {
-      _drawDashedLine(canvas, points[i], points[i + 1], paint);
-    }
-  }
-
-  void _drawDashedLine(Canvas canvas, Offset a, Offset b, Paint paint) {
-    const dashWidth = 5.0;
-    const gapWidth = 5.0;
-    final total = (b - a).distance;
-    if (total == 0) return;
-    final direction = (b - a) / total;
-    double covered = 0;
-    while (covered < total) {
-      final start = a + direction * covered;
-      final end = a + direction * (covered + dashWidth).clamp(0.0, total).toDouble();
-      canvas.drawLine(start, end, paint);
-      covered += dashWidth + gapWidth;
-    }
-  }
-
-  @override
-  bool shouldRepaint(covariant _DashedPathPainter oldDelegate) => false;
 }
 
 /// 골목지도 마지막 슬라이드 아래에 붙는 요약 카드 — 골목지도 보기/저장.

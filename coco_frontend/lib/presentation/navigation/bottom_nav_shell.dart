@@ -70,28 +70,65 @@ class _BottomNavShellState extends State<BottomNavShell>
   // 따라오지 못하고 애니메이션이 끝나는 순간에만 재동기화되며 튀는 게 Flutter 자체의
   // 알려진 한계다(https://github.com/flutter/flutter/issues/24408 등 — opacity/clipping은
   // 적용되지만 위치 이동 트랜스폼은 플랫폼 뷰에 안정적으로 안 먹힘). 그래서 지도 화면
-  // "자신"만 Transform 없이 페이드로 두고, 지도가 아닌 화면은 그대로 슬라이드시킨다 —
-  // 지도와 짝지어지는 전환에서도 최소한 반대쪽 화면의 움직임으로 방향감은 남는다.
-  Widget _transitionFor({
-    required int index,
+  // "자신"만 Transform 없이 페이드로 두고, 지도가 아닌 화면은 그대로 슬라이드시킨다.
+  //
+  // 그런데 페이드를 써도 "뚝" 끊겨 보이는 진짜 원인은 따로 있었다: 지도 화면은 현재
+  // 탭도 전환 중도 아닌 순간엔 아래 build()의 Stack.children에서 완전히 빠져서 State가
+  // 통째로 사라진다. 그래서 지도 탭에 다시 들어올 때마다 카카오맵 JS 인스턴스 생성 +
+  // 내 위치 조회 + 스팟 API 호출을 처음부터 다시 하고, 그 초기화가 끝나는 순간에야 실제
+  // 내용이 "뚝" 나타난다 — opacity는 매끄럽게 올라가도 그 안의 실제 내용은 초기화가 끝나야
+  // 보이니 소용없다. 그래서 지도 화면만은 아래 build()에서 별도 레이어로 "항상" 트리에
+  // 살려두고(State 보존, 카카오맵 재초기화 없음) opacity만 갈아 끼운다. 지도가 아닌 3개
+  // 탭은 기존처럼 필요할 때만 마운트한다.
+  Widget _slide({
     required Offset beginOffset,
     required Offset endOffset,
-    required bool fadeIn,
     required Widget child,
   }) {
-    if (index == _mapTabIndex) {
-      return FadeTransition(
-        opacity: fadeIn
-            ? _controller
-            : Tween<double>(begin: 1, end: 0).animate(_controller),
-        child: child,
-      );
-    }
     return SlideTransition(
       position: Tween<Offset>(begin: beginOffset, end: endOffset)
           .animate(_slideCurve),
       child: child,
     );
+  }
+
+  // 지도 화면 전용 레이어. _screens[_mapTabIndex]를 매 build마다 빠짐없이 트리에 넣어서
+  // State(카카오맵 JS 인스턴스)가 절대 사라지지 않게 하고, opacity만 전환 상태에 맞춰 조절한다.
+  Widget _mapLayer() {
+    double opacity;
+    if (_currentIndex == _mapTabIndex) {
+      opacity = _controller.value; // 진입 중(0→1), idle이면 컨트롤러가 1.0에 머물러 있어 그대로 1
+    } else if (_outgoingIndex == _mapTabIndex) {
+      opacity = 1 - _controller.value; // 이탈 중(1→0)
+    } else {
+      opacity = 0; // 관여 안 함 — 안 보이지만 계속 살아있음
+    }
+    // 안 보일 때(opacity 0)는 다른 탭 위젯의 빈 공간을 통해 터치를 가로채지 않도록 막는다.
+    return IgnorePointer(
+      ignoring: opacity == 0,
+      child: Opacity(opacity: opacity, child: _screens[_mapTabIndex]),
+    );
+  }
+
+  // 지도가 아닌 3개 탭 전용 레이어. 기존과 동일하게 현재/전환 중인 화면만 마운트해서
+  // 슬라이드시킨다 — 둘 중 하나가 지도면 그쪽은 위 _mapLayer()가 이미 처리하므로 뺀다.
+  Widget _otherTabsLayer(int? outgoingIndex, double dx) {
+    final children = <Widget>[];
+    if (outgoingIndex != null && outgoingIndex != _mapTabIndex) {
+      children.add(_slide(
+        beginOffset: Offset.zero,
+        endOffset: Offset(-dx, 0),
+        child: _screens[outgoingIndex],
+      ));
+    }
+    if (_currentIndex != _mapTabIndex) {
+      children.add(_slide(
+        beginOffset: Offset(dx, 0),
+        endOffset: Offset.zero,
+        child: _screens[_currentIndex],
+      ));
+    }
+    return Stack(fit: StackFit.expand, children: children);
   }
 
   @override
@@ -138,24 +175,15 @@ class _BottomNavShellState extends State<BottomNavShell>
       body: AnimatedBuilder(
         animation: _controller,
         builder: (context, _) {
-          final incoming = _transitionFor(
-            index: _currentIndex,
-            beginOffset: Offset(dx, 0),
-            endOffset: Offset.zero,
-            fadeIn: true,
-            child: _screens[_currentIndex],
-          );
-          if (outgoingIndex == null) {
-            return Stack(fit: StackFit.expand, children: [incoming]);
-          }
-          final outgoing = _transitionFor(
-            index: outgoingIndex,
-            beginOffset: Offset.zero,
-            endOffset: Offset(-dx, 0),
-            fadeIn: false,
-            child: _screens[outgoingIndex],
-          );
-          return Stack(fit: StackFit.expand, children: [outgoing, incoming]);
+          final mapLayer = _mapLayer();
+          final otherLayer = _otherTabsLayer(outgoingIndex, dx);
+          // 지도가 들어오는 중이면 지도가 위(다른 탭이 슬라이드로 빠지며 지도를 드러냄),
+          // 지도가 나가는 중이거나 관여 안 하면 지도가 아래 — 기존 [outgoing, incoming]
+          // 순서(나중 = 위)와 동일한 쌓임 순서를 유지한다.
+          final stackChildren = _currentIndex == _mapTabIndex
+              ? [otherLayer, mapLayer]
+              : [mapLayer, otherLayer];
+          return Stack(fit: StackFit.expand, children: stackChildren);
         },
       ),
       // 배경(흰색)과 동일한 색으로 통일 — 기본 NavigationBar의 surface 틴트/그림자를

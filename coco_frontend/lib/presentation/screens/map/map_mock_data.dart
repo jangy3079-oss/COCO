@@ -232,3 +232,19 @@ const double mapDefaultCenterLng = 129.0305;
   final lng = spots.map((s) => s.lng).reduce((a, b) => a + b) / spots.length;
   return (lat, lng);
 }
+
+/// 코스 상세("지도에서 보기")에서 지도 탭으로 넘어갈 때, 지도 탭에 그 코스의
+/// 스팟만 보여달라는 요청을 담아 전달하는 공유 상태.
+///
+/// MapScreen은 bottom_nav_shell.dart에서 static으로 딱 한 번만 만들어져 탭을
+/// 옮겨 다녀도 계속 살아있는 구조라(카카오맵 재초기화 방지), go_router의
+/// extra 파라미터로는 값을 전달할 통로가 없다 — 그래서 다른 화면(찜 상태 등)과
+/// 동일하게 공유 상태로 승격하되, MapScreen이 안 보이는 동안에도 값이 바뀐 걸
+/// 알아채야 해서 ValueNotifier로 만들어 리스너로 반영한다.
+class CourseMapFilter {
+  final String routeName;
+  final List<MockSpot> spots;
+  const CourseMapFilter({required this.routeName, required this.spots});
+}
+
+final ValueNotifier<CourseMapFilter?> courseMapFilter = ValueNotifier(null);

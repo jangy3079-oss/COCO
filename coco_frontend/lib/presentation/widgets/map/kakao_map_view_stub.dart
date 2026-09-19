@@ -11,6 +11,7 @@ class KakaoMapMarker {
   final String? subtitle; // 핀 탭 시 뜨는 말풍선의 보조 정보(카테고리 등)
   final bool isLocalPick;
   final bool trending;
+  final int? order;
   const KakaoMapMarker({
     required this.id,
     required this.lat,
@@ -19,6 +20,7 @@ class KakaoMapMarker {
     this.subtitle,
     this.isLocalPick = false,
     this.trending = false,
+    this.order,
   });
 }
 
@@ -29,6 +31,11 @@ class MapFocusTarget {
   final String? name;
   final String? subtitle;
   const MapFocusTarget({required this.id, required this.lat, required this.lng, this.name, this.subtitle});
+}
+
+class MapBoundsTarget {
+  final List<(double lat, double lng)> points;
+  const MapBoundsTarget({required this.points});
 }
 
 class KakaoMapView extends StatelessWidget {
@@ -42,6 +49,8 @@ class KakaoMapView extends StatelessWidget {
   final void Function(double lat, double lng)? onMapTap;
   final void Function(double swLat, double swLng, double neLat, double neLng)? onBoundsChanged;
   final MapFocusTarget? focusTarget;
+  final MapBoundsTarget? boundsTarget;
+  final bool clusteringEnabled;
 
   const KakaoMapView({
     super.key,
@@ -55,6 +64,8 @@ class KakaoMapView extends StatelessWidget {
     this.onMapTap,
     this.onBoundsChanged,
     this.focusTarget,
+    this.clusteringEnabled = true,
+    this.boundsTarget,
   });
 
   @override

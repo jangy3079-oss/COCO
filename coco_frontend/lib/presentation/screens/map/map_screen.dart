@@ -53,8 +53,8 @@ class MapScreen extends StatefulWidget {
 }
 
 class _MapScreenState extends State<MapScreen> {
-  // 실제 스팟 category 값(spots.category: 음식점|공원|카페|골목)에 맞춘 필터
-  static const _categories = ['전체', '음식점', '골목', '공원', '카페'];
+  // 실제 스팟 category 값(spots.category: 음식점|공원|카페|골목|명소|문화시설)에 맞춘 필터
+  static const _categories = ['전체', '음식점', '골목', '공원', '카페', '명소', '문화시설'];
   String _selectedCategory = '전체';
 
   // 지도 중심 좌표 — 진입 시 현재 위치로 재설정을 시도하고, 권한 거부/실패 시
@@ -71,6 +71,9 @@ class _MapScreenState extends State<MapScreen> {
   // 검색 결과 탭 등으로 특정 스팟에 확대+이동+말풍선을 한 번에 요청할 때 쓴다.
   // _openSearchResult에서 매번 새 인스턴스를 만들어 넣는다.
   MapFocusTarget? _focusTarget;
+  // 코스 필터 진입 시, 그 코스의 스팟들이 전부 화면에 들어오도록 카메라를 맞추는 요청.
+  // _onCourseFilterChanged에서 매번 새 인스턴스를 만들어 넣는다.
+  MapBoundsTarget? _boundsTarget;
 
   // 지도 화면(뷰포트) 범위 — 드래그/줌이 끝날 때마다 갱신되며, 이 범위 안에 있는
   // 스팟만 지도/하단 시트에 표시한다(핀 밀집 방지). null이면 아직 한 번도 idle
@@ -160,15 +163,39 @@ class _MapScreenState extends State<MapScreen> {
   @override
   void initState() {
     super.initState();
-    _loadCurrentLocation();
+    _loadCurrentLocation(auto: true);
+    courseMapFilter.addListener(_onCourseFilterChanged);
+    // 이미 코스 필터가 걸린 채로 들어온 경우(예: 코스 상세에서 막 넘어온 직후)
+    // 바로 그 코스 중심으로 카메라를 맞춘다.
+    if (courseMapFilter.value != null) _onCourseFilterChanged();
   }
 
   @override
   void dispose() {
+    courseMapFilter.removeListener(_onCourseFilterChanged);
     _sheetExtent.dispose();
     _searchController.dispose();
     _searchDebounce?.cancel();
     super.dispose();
+  }
+
+  // "코스에서 지도로 보기"로 넘어왔을 때 — 그 코스의 스팟들이 다 보이도록
+  // 카메라를 스팟들의 평균 좌표로 옮긴다(마커 자체는 _visibleSpots가 걸러준다).
+  void _onCourseFilterChanged() {
+    if (!mounted) return;
+    final filter = courseMapFilter.value;
+    if (filter == null) {
+      setState(() {});
+      return;
+    }
+    final center = spotsCenter(filter.spots);
+    setState(() {
+      _centerLat = center.$1;
+      _centerLng = center.$2;
+      _boundsTarget = MapBoundsTarget(
+        points: [for (final s in filter.spots) (s.lat, s.lng)],
+      );
+    });
   }
 
   void _onSearchChanged(String query) {
@@ -239,7 +266,11 @@ class _MapScreenState extends State<MapScreen> {
         ..._searchDbResults.map(mockSpotFromDb),
       ];
 
-  Future<void> _loadCurrentLocation() async {
+  // auto=true: 화면 진입 시 자동으로 한 번 호출되는 경우 — 코스 필터를 보러 막
+  // 들어온 직후라면(코스 중심으로 카메라를 이미 맞춰둔 상태) GPS 조회가 뒤늦게 끝나면서
+  // 그 카메라를 다시 내 위치로 되돌려버리지 않게 막는다. "내 위치로" 버튼(auto=false)은
+  // 사용자가 명시적으로 누른 것이므로 코스 필터와 무관하게 항상 그대로 이동한다.
+  Future<void> _loadCurrentLocation({bool auto = false}) async {
     try {
       final serviceEnabled = await Geolocator.isLocationServiceEnabled();
       if (!serviceEnabled) return;
@@ -257,8 +288,10 @@ class _MapScreenState extends State<MapScreen> {
       );
       if (!mounted) return;
       setState(() {
-        _centerLat = position.latitude;
-        _centerLng = position.longitude;
+        if (!auto || courseMapFilter.value == null) {
+          _centerLat = position.latitude;
+          _centerLng = position.longitude;
+        }
         _myLat = position.latitude;
         _myLng = position.longitude;
         _locationAvailable = true;
@@ -285,13 +318,16 @@ class _MapScreenState extends State<MapScreen> {
         .toList();
   }
 
-  // 하단 "주변 스팟" 시트용 — 지도 마커와 동일하게 목업 + 실제 DB 스팟을 합쳐서 보여준다.
-  // (마커는 이미 _filteredSpots + _dbSpots를 합쳐서 그리고 있었는데, 시트만 목업만 보고 있던
-  // 게 버그였음 — 데이터 소스는 같으니 마커 쪽과 동일하게 합친다.)
-  List<MockSpot> get _nearbySheetSpots => [
-        ..._filteredSpots,
-        ..._dbSpots.map(mockSpotFromDb),
-      ];
+  // 지금 지도에 실제로 그릴 스팟 — 코스 필터가 걸려 있으면 카테고리/뷰포트 필터를
+  // 전부 건너뛰고 그 코스의 스팟만, 아니면 기존처럼 목업+DB를 합쳐서 보여준다.
+  List<MockSpot> get _visibleSpots {
+    final course = courseMapFilter.value;
+    if (course != null) return course.spots;
+    return [..._filteredSpots, ..._dbSpots.map(mockSpotFromDb)];
+  }
+
+  // 하단 "주변 스팟" 시트용 — 지도 마커와 동일한 기준으로 보여준다.
+  List<MockSpot> get _nearbySheetSpots => _visibleSpots;
 
   // 찜(저장) 상태는 map_mock_data.dart의 공유 savedSpotIds를 그대로 사용한다
   // (스팟 상세 화면·MY탭과 동일한 상태를 공유해야 하므로 화면 로컬 State가 아님).
@@ -354,26 +390,42 @@ class _MapScreenState extends State<MapScreen> {
                   centerLat: _centerLat,
                   centerLng: _centerLng,
                   markers: [
-                    for (final spot in _filteredSpots)
-                      KakaoMapMarker(
-                        id: spot.id,
-                        lat: spot.lat,
-                        lng: spot.lng,
-                        name: spot.name,
-                        subtitle: _categoryLabel(spot.category, l10n),
-                      ),
-                    // 실제 DB 스팟은 "db-" 접두어로 구분해서, 탭했을 때 목업 상세 화면이 아니라
-                    // 별도 미리보기 시트로 보내준다 (mockSpotById가 실제 id를 못 찾아 터지는 것 방지).
-                    for (final spot in _dbSpots)
-                      KakaoMapMarker(
-                        id: 'db-${spot.id}',
-                        lat: spot.lat,
-                        lng: spot.lng,
-                        name: spot.title,
-                        subtitle: _categoryLabel(spot.category, l10n),
-                        isLocalPick: spot.isLocalPick,
-                        trending: spot.trending,
-                      ),
+                    if (courseMapFilter.value != null)
+                      // 코스 필터가 걸려 있으면 카테고리/뷰포트와 무관하게 그 코스의
+                      // 스팟만 마커로 그린다(이미 MockSpot이라 db-/일반 id 구분 없이 그대로).
+                      // 이 화면에서만 로컬픽(2단계) 크기/색으로 통일하고, 핀 안에 방문
+                      // 순서(1,2,3...)를 적는다(order).
+                      for (final (i, spot) in courseMapFilter.value!.spots.indexed)
+                        KakaoMapMarker(
+                          id: spot.id,
+                          lat: spot.lat,
+                          lng: spot.lng,
+                          name: spot.name,
+                          subtitle: _categoryLabel(spot.category, l10n),
+                          order: i + 1,
+                        )
+                    else ...[
+                      for (final spot in _filteredSpots)
+                        KakaoMapMarker(
+                          id: spot.id,
+                          lat: spot.lat,
+                          lng: spot.lng,
+                          name: spot.name,
+                          subtitle: _categoryLabel(spot.category, l10n),
+                        ),
+                      // 실제 DB 스팟은 "db-" 접두어로 구분해서, 탭했을 때 목업 상세 화면이 아니라
+                      // 별도 미리보기 시트로 보내준다 (mockSpotById가 실제 id를 못 찾아 터지는 것 방지).
+                      for (final spot in _dbSpots)
+                        KakaoMapMarker(
+                          id: 'db-${spot.id}',
+                          lat: spot.lat,
+                          lng: spot.lng,
+                          name: spot.title,
+                          subtitle: _categoryLabel(spot.category, l10n),
+                          isLocalPick: spot.isLocalPick,
+                          trending: spot.trending,
+                        ),
+                    ],
                   ],
                   onMarkerTap: (spotId) => spotId.startsWith('db-')
                       ? context.push('/map/spot/$spotId')
@@ -382,6 +434,7 @@ class _MapScreenState extends State<MapScreen> {
                   myLocationLng: _locationAvailable ? _myLng : null,
                   onBoundsChanged: _onBoundsChanged,
                   focusTarget: _focusTarget,
+                  boundsTarget: _boundsTarget,
                 ),
               ),
               // 타이틀 + 검색창 + 카테고리 필터 (지도 위에 블러 그라데이션과 함께 떠 있는 형태.
@@ -460,14 +513,21 @@ class _MapScreenState extends State<MapScreen> {
                                     ),
                                   ),
                                 const SizedBox(height: 10),
-                                _CategoryChipsRow(
-                                  categories: _categories,
-                                  selected: _selectedCategory,
-                                  onSelected: (c) {
-                                    setState(() => _selectedCategory = c);
-                                    _fetchDbSpots(); // 카테고리는 뷰포트 변경이 아니라서 따로 다시 조회
-                                  },
-                                ),
+                                if (courseMapFilter.value != null)
+                                  _CourseFilterBanner(
+                                    routeName: courseMapFilter.value!.routeName,
+                                    count: courseMapFilter.value!.spots.length,
+                                    onClear: () => setState(() => courseMapFilter.value = null),
+                                  )
+                                else
+                                  _CategoryChipsRow(
+                                    categories: _categories,
+                                    selected: _selectedCategory,
+                                    onSelected: (c) {
+                                      setState(() => _selectedCategory = c);
+                                      _fetchDbSpots(); // 카테고리는 뷰포트 변경이 아니라서 따로 다시 조회
+                                    },
+                                  ),
                                 // 블러가 서서히 사라질 여백(페이드 테일) — 이 구간에서
                                 // ShaderMask 알파가 1→0으로 떨어지며 블러도 함께 옅어진다.
                                 const SizedBox(height: 44),
@@ -649,7 +709,58 @@ class _SearchResultsDropdown extends StatelessWidget {
   }
 }
 
-class _CategoryChipsRow extends StatelessWidget {
+/// 코스 상세에서 "지도에서 보기"로 넘어왔을 때, 카테고리 칩 대신 보여주는 배너.
+/// 코스 이름과 스팟 수를 보여주고, ✕를 누르면 필터를 풀고 원래 카테고리 칩으로 돌아간다.
+/// TODO: 다국어 미대응 — 임시 기능이라 우선 한국어 문구만 넣었다.
+class _CourseFilterBanner extends StatelessWidget {
+  final String routeName;
+  final int count;
+  final VoidCallback onClear;
+
+  const _CourseFilterBanner({
+    required this.routeName,
+    required this.count,
+    required this.onClear,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(14, 8, 8, 8),
+      decoration: BoxDecoration(
+        color: CocoTheme.primary,
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(color: Colors.black.withOpacity(0.06), blurRadius: 6, offset: const Offset(0, 2)),
+        ],
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Icon(Icons.route_rounded, size: 16, color: Colors.white),
+          const SizedBox(width: 6),
+          Flexible(
+            child: Text(
+              '$routeName · $count곳 보는 중',
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 13),
+            ),
+          ),
+          InkWell(
+            onTap: onClear,
+            borderRadius: BorderRadius.circular(14),
+            child: const Padding(
+              padding: EdgeInsets.all(6),
+              child: Icon(Icons.close_rounded, size: 16, color: Colors.white),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _CategoryChipsRow extends StatefulWidget {
   final List<String> categories;
   final String selected;
   final ValueChanged<String> onSelected;
@@ -661,21 +772,88 @@ class _CategoryChipsRow extends StatelessWidget {
   });
 
   @override
+  State<_CategoryChipsRow> createState() => _CategoryChipsRowState();
+}
+
+class _CategoryChipsRowState extends State<_CategoryChipsRow> {
+  static const _fadeWidth = 36.0; // 가장자리 페이드 폭(px)
+  final _scrollController = ScrollController();
+
+  @override
+  void initState() {
+    super.initState();
+    _scrollController.addListener(_onScroll);
+    // 첫 프레임에는 아직 maxScrollExtent를 몰라서(컨트롤러 미부착) 오른쪽 페이드가
+    // 한 프레임 빠질 수 있다 — 레이아웃 확정 직후 한 번 더 그려서 바로잡는다.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) setState(() {});
+    });
+  }
+
+  @override
+  void dispose() {
+    _scrollController.removeListener(_onScroll);
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  void _onScroll() => setState(() {});
+
+  @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
-    return SingleChildScrollView(
-      scrollDirection: Axis.horizontal,
-      child: Row(
-        children: [
-          for (final category in categories) ...[
-            _CategoryChip(
-              label: _categoryLabel(category, l10n),
-              selected: category == selected,
-              onTap: () => onSelected(category),
-            ),
-            const SizedBox(width: 8),
+    final position = _scrollController.hasClients ? _scrollController.position : null;
+    final offset = position?.pixels ?? 0.0;
+    final maxExtent = position?.maxScrollExtent ?? 0.0;
+    // 왼쪽/오른쪽으로 "아직 스크롤할 수 있는 만큼"에 비례해 0→1로 서서히 자라는 세기.
+    // 맨 처음(offset 0)엔 왼쪽 세기가 0이라 왼쪽은 전혀 안 지워지고, 1px씩 넘길 때마다
+    // 그만큼만 서서히 옅어진다 — 갑자기 확 생기는 문턱값이 없다.
+    final leftStrength = (offset / _fadeWidth).clamp(0.0, 1.0);
+    final rightStrength = ((maxExtent - offset) / _fadeWidth).clamp(0.0, 1.0);
+
+    // 칩 위에서 좌우로 드래그해 스크롤할 때, 그 드래그가 바로 아래 깔린 카카오맵
+    // (HtmlElementView) DOM으로 새어나가 지도가 같이 팬 되는 걸 막는다 — 검색바
+    // 드롭다운/하단 시트와 동일한 PointerInterceptor 처리.
+    return PointerInterceptor(
+      child: _shaderMaskedChips(l10n, leftStrength, rightStrength),
+    );
+  }
+
+  Widget _shaderMaskedChips(AppLocalizations l10n, double leftStrength, double rightStrength) {
+    // 흰 배경을 덧대는 게 아니라, ShaderMask로 칩 위젯 자신의 알파를 가장자리에서
+    // 실제로 낮춘다 — 그래서 뒤에 뭐가 있든(지도든 뭐든) 그냥 투명하게 사라진다.
+    return ShaderMask(
+      blendMode: BlendMode.dstIn,
+      shaderCallback: (rect) {
+        final fadeFrac = (_fadeWidth / rect.width).clamp(0.0, 0.5);
+        return LinearGradient(
+          begin: Alignment.centerLeft,
+          end: Alignment.centerRight,
+          colors: [
+            Colors.white.withOpacity(1 - leftStrength),
+            Colors.white,
+            Colors.white,
+            Colors.white.withOpacity(1 - rightStrength),
           ],
-        ],
+          stops: [0.0, fadeFrac, 1 - fadeFrac, 1.0],
+        ).createShader(rect);
+      },
+      child: SingleChildScrollView(
+        controller: _scrollController,
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.only(right: 24),
+        child: Row(
+          children: [
+            for (final category in widget.categories) ...[
+              _CategoryChip(
+                label: _categoryLabel(category, l10n),
+                selected: category == widget.selected,
+                onTap: () => widget.onSelected(category),
+              ),
+              const SizedBox(width: 8),
+            ],
+          ],
+        ),
       ),
     );
   }

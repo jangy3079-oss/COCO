@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../l10n/generated/app_localizations.dart';
+import '../../widgets/map/kakao_map_view.dart';
 import 'map_mock_data.dart';
 
 /// 코스 상세 화면. "내가 만든 코스"·피드의 "코스 보기"·"저장한 코스"
@@ -46,6 +47,7 @@ class _RoutePreviewScreenState extends State<RoutePreviewScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             _CoverHeader(
+              stops: stops,
               onBack: () => context.pop(),
               onEdit: widget.isOwner && widget.routeId != null
                   ? () => context.push('/map/route/new', extra: {
@@ -143,7 +145,14 @@ class _RoutePreviewScreenState extends State<RoutePreviewScreen> {
               minimumSize: const Size.fromHeight(52),
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
             ),
-            onPressed: () => context.go('/map'),
+            onPressed: () {
+              // 지도 탭에 이 코스의 스팟만 보여달라고 알려준 뒤 이동한다.
+              courseMapFilter.value = CourseMapFilter(
+                routeName: widget.routeName,
+                spots: widget.stops,
+              );
+              context.go('/map');
+            },
             child: Text(l10n.myRoutesViewOnMapButton, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
           ),
         ),
@@ -153,9 +162,10 @@ class _RoutePreviewScreenState extends State<RoutePreviewScreen> {
 }
 
 class _CoverHeader extends StatelessWidget {
+  final List<MockSpot> stops;
   final VoidCallback onBack;
   final VoidCallback? onEdit; // null이면(=작성자가 아니면) 편집 버튼 자체를 숨긴다
-  const _CoverHeader({required this.onBack, this.onEdit});
+  const _CoverHeader({required this.stops, required this.onBack, this.onEdit});
 
   @override
   Widget build(BuildContext context) {
@@ -163,13 +173,37 @@ class _CoverHeader extends StatelessWidget {
       height: 200,
       child: Stack(
         children: [
-          // TODO: 코스 대표 사진(첫 스팟 사진 등) 연동 전까지의 플레이스홀더
+          // 코스 대표 "사진" 대신, 이 코스의 스팟들을 순서 번호 핀으로 보여주는
+          // 실제 지도로 채운다(map_screen.dart 코스 필터 화면과 동일한 스타일).
+          // 캐러셀이 아니라 그냥 배경이라 조작할 필요가 없어서, 투명 위젯을 한 겹
+          // 덮어 실제 지도 DOM 클릭(드래그·카카오 로고 링크 등)을 막는다.
           Positioned.fill(
-            child: Container(
-              color: CocoTheme.primary.withOpacity(0.10),
-              alignment: Alignment.center,
-              child: Icon(Icons.photo_camera_outlined, size: 40, color: CocoTheme.primary.withOpacity(0.4)),
-            ),
+            child: stops.isEmpty
+                ? Container(
+                    color: CocoTheme.primary.withOpacity(0.10),
+                    alignment: Alignment.center,
+                    child: Icon(Icons.photo_camera_outlined, size: 40, color: CocoTheme.primary.withOpacity(0.4)),
+                  )
+                : Builder(builder: (context) {
+                    final center = spotsCenter(stops);
+                    return Stack(
+                      children: [
+                        Positioned.fill(
+                          child: KakaoMapView(
+                            centerLat: center.$1,
+                            centerLng: center.$2,
+                            level: 6,
+                            clusteringEnabled: false,
+                            markers: [
+                              for (final (i, spot) in stops.indexed)
+                                KakaoMapMarker(id: spot.id, lat: spot.lat, lng: spot.lng, name: spot.name, order: i + 1),
+                            ],
+                          ),
+                        ),
+                        const Positioned.fill(child: ColoredBox(color: Colors.transparent)),
+                      ],
+                    );
+                  }),
           ),
           Positioned(
             left: 16,

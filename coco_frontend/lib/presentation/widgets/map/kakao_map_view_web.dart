@@ -24,6 +24,9 @@ class KakaoMapMarker {
   final String? subtitle; // 핀 탭 시 뜨는 말풍선의 보조 정보(카테고리 등)
   final bool isLocalPick; // true면 핀 색을 강조색(주황)으로
   final bool trending; // true면 핀을 더 크게
+  // 코스("지도에서 보기")처럼 방문 순서를 핀 안에 숫자로 보여줘야 할 때만 값이 있다.
+  // 값이 있으면 로컬픽(2단계)과 동일한 크기/색으로 통일되고, 그 안에 이 번호가 찍힌다.
+  final int? order;
   const KakaoMapMarker({
     required this.id,
     required this.lat,
@@ -32,6 +35,7 @@ class KakaoMapMarker {
     this.subtitle,
     this.isLocalPick = false,
     this.trending = false,
+    this.order,
   });
 }
 
@@ -64,6 +68,12 @@ external void _cocoSetBoundsChangedHandler(JSString divId, JSFunction onBoundsCh
 @JS('cocoFocusSpot')
 external void _cocoFocusSpot(JSString divId, JSString markerJson);
 
+@JS('cocoFitKakaoBounds')
+external void _cocoFitKakaoBounds(JSString divId, JSString pointsJson);
+
+@JS('cocoSetClusteringEnabled')
+external void _cocoSetClusteringEnabled(JSString divId, JSBoolean enabled);
+
 // 검색 결과 탭처럼 "특정 스팟으로 살짝 확대해서 이동 + 도착하면 핀 탭과 동일한
 // 말풍선(뿅 애니메이션)을 띄운다"를 요청할 때 쓰는 값. centerLat/centerLng(단순
 // 재중심, 콜아웃 없음)와는 별개 경로 — 매번 새 인스턴스를 만들어서 넘기면 동일
@@ -75,6 +85,15 @@ class MapFocusTarget {
   final String? name;
   final String? subtitle;
   const MapFocusTarget({required this.id, required this.lat, required this.lng, this.name, this.subtitle});
+}
+
+// 코스의 "지도에서 보기"처럼, 특정 스팟들이 전부 화면에 들어오도록 카메라를
+// 맞출 때 쓰는 값. focusTarget(스팟 하나 확대+말풍선)과 달리 콜아웃 없이
+// 여러 좌표를 감싸는 bounds로 중심/줌을 한 번에 맞춘다. focusTarget과 동일하게
+// 매번 새 인스턴스로 넘겨야(identity 비교) 같은 코스를 다시 봐도 반영된다.
+class MapBoundsTarget {
+  final List<(double lat, double lng)> points;
+  const MapBoundsTarget({required this.points});
 }
 
 class KakaoMapView extends StatefulWidget {
@@ -90,6 +109,10 @@ class KakaoMapView extends StatefulWidget {
   // 서버에 다시 요청해서 핀 밀집을 막고 싶을 때 사용(뷰포트 쿼리).
   final void Function(double swLat, double swLng, double neLat, double neLng)? onBoundsChanged;
   final MapFocusTarget? focusTarget;
+  final MapBoundsTarget? boundsTarget;
+  // false면 핀끼리 겹쳐도 클러스터 버블로 뭉치지 않고 각자 그대로 그린다.
+  // 코스 순서 핀(order)처럼 개수가 적고 번호가 꼭 다 보여야 하는 미리보기용 지도에서 쓴다.
+  final bool clusteringEnabled;
 
   const KakaoMapView({
     super.key,
@@ -103,6 +126,8 @@ class KakaoMapView extends StatefulWidget {
     this.onMapTap,
     this.onBoundsChanged,
     this.focusTarget,
+    this.boundsTarget,
+    this.clusteringEnabled = true,
   });
 
   @override
@@ -204,6 +229,15 @@ class _KakaoMapViewState extends State<KakaoMapView> {
       });
       _cocoFocusSpot(_divId.toJS, json.toJS);
     }
+    // boundsTarget도 focusTarget과 동일하게 매번 새 인스턴스로 오는 일회성 요청이라
+    // identity(!=)로 "새 요청인지" 판단한다.
+    final boundsTarget = widget.boundsTarget;
+    if (boundsTarget != null && boundsTarget != oldWidget.boundsTarget) {
+      final pointsJson = jsonEncode(
+        boundsTarget.points.map((p) => {'lat': p.$1, 'lng': p.$2}).toList(),
+      );
+      _cocoFitKakaoBounds(_divId.toJS, pointsJson.toJS);
+    }
     if (oldWidget.myLocationLat != widget.myLocationLat || oldWidget.myLocationLng != widget.myLocationLng) {
       _updateMyLocation();
     }
@@ -211,6 +245,9 @@ class _KakaoMapViewState extends State<KakaoMapView> {
 
   void _updateMarkers() {
     if (!_mapReady) return;
+    // 마커를 새로 그릴 때마다 매번 같이 반영 — 값 자체는 거의 안 바뀌지만,
+    // didUpdateWidget에서 별도로 변경 여부를 추적하지 않아도 항상 최신 상태로 맞는다.
+    _cocoSetClusteringEnabled(_divId.toJS, widget.clusteringEnabled.toJS);
     final markersJson = jsonEncode(
       widget.markers
           .map((m) => {
@@ -221,6 +258,7 @@ class _KakaoMapViewState extends State<KakaoMapView> {
                 'subtitle': m.subtitle,
                 'isLocalPick': m.isLocalPick,
                 'trending': m.trending,
+                'order': m.order,
               })
           .toList(),
     );

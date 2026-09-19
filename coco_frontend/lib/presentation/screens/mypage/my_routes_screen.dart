@@ -380,18 +380,28 @@ class _RouteCard extends StatelessWidget {
                       borderRadius: BorderRadius.circular(12),
                       child: SizedBox(
                         height: 140,
-                        child: IgnorePointer(
-                          child: Builder(builder: (context) {
-                            final center = spotsCenter(route.stops);
-                            return KakaoMapView(
-                              centerLat: center.$1,
-                              centerLng: center.$2,
-                              level: 6,
-                              markers: [
-                                for (final s in route.stops) KakaoMapMarker(id: s.id, lat: s.lat, lng: s.lng, name: s.name),
-                              ],
-                            );
-                          }),
+                        // ⚠️ IgnorePointer만으로는 안 된다 — 카카오맵은 실제 DOM(platform view)이라
+                        // Flutter의 IgnorePointer가 못 막는 카카오 로고/저작권 링크 같은 진짜 <a>
+                        // 태그가 안에 떠 있고, 거기를 탭하면 새 크롬 탭으로 카카오맵 사이트가
+                        // 열려버린다. 투명한 Flutter 위젯을 지도 위에 덮어서 실제 클릭이 지도
+                        // DOM까지 아예 닿지 못하게 막는다.
+                        child: Stack(
+                          children: [
+                            Positioned.fill(
+                              child: Builder(builder: (context) {
+                                final center = spotsCenter(route.stops);
+                                return KakaoMapView(
+                                  centerLat: center.$1,
+                                  centerLng: center.$2,
+                                  level: 6,
+                                  markers: [
+                                    for (final s in route.stops) KakaoMapMarker(id: s.id, lat: s.lat, lng: s.lng, name: s.name),
+                                  ],
+                                );
+                              }),
+                            ),
+                            const Positioned.fill(child: ColoredBox(color: Colors.transparent)),
+                          ],
                         ),
                       ),
                     )

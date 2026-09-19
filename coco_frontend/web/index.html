@@ -48,6 +48,7 @@
     window.__cocoKakaoMarkers = {}; // divId -> kakao.maps.CustomOverlay[] 배열 (핀 또는 클러스터 버블)
     window.__cocoKakaoOverlays = {}; // divId -> kakao.maps.CustomOverlay[] 배열 (마커 위 이름 태그)
     window.__cocoKakaoMarkersRaw = {}; // divId -> 마지막으로 받은 원본 마커 데이터(재클러스터링용)
+    window.__cocoClusteringDisabled = {}; // divId -> true면 핀이 겹쳐도 뭉치지 않고 각자 그대로 그린다
     window.__cocoMarkerClickHandlers = {}; // divId -> onMarkerClick 콜백
     window.__cocoBoundsChangedHandlers = {}; // divId -> onBoundsChanged 콜백 (뷰포트 쿼리용)
     window.__cocoKakaoLoadPromise = null;
@@ -184,7 +185,8 @@
     var COCO_OVERLAP_SLACK_PX = 4; // 테두리(2~3px)까지 감안해 이 정도 겹치면 "겹친다"로 간주
 
     function cocoPinRadiusPx(m) {
-      return (m.trending || m.isLocalPick ? COCO_BIG_PIN_PX : COCO_SMALL_PIN_PX) / 2;
+      var hasOrder = m.order !== null && m.order !== undefined;
+      return (hasOrder || m.trending || m.isLocalPick ? COCO_BIG_PIN_PX : COCO_SMALL_PIN_PX) / 2;
     }
 
     function cocoClusterSizePx(count) {
@@ -230,7 +232,10 @@
       // 전체 재스캔이 반복되어 수 초까지 걸리는 원인이었다. i는 그대로 두고 같은
       // 자리(j)부터 이어서 비교하도록 바꿔서, 한 바퀴(while 1회)에 i 하나가 겹칠
       // 수 있는 걸 다 합치고 넘어가게 했다 — 결과(겹치면 합친다)는 동일하고 속도만 개선.
-      var mergedAny = true;
+      // 코스 순서 핀(order)처럼 개수가 적고 각 핀 번호가 꼭 보여야 하는 경우엔
+      // __cocoClusteringDisabled로 이 병합 자체를 건너뛴다.
+      var clusteringDisabled = !!window.__cocoClusteringDisabled[divId];
+      var mergedAny = !clusteringDisabled;
       while (mergedAny) {
         mergedAny = false;
         for (var i = 0; i < nodes.length; i++) {
@@ -265,17 +270,25 @@
 
       function renderSinglePin(m) {
         var position = new kakao.maps.LatLng(m.lat, m.lng);
+        // 코스("지도에서 보기")로 들어온 스팟은 순서 번호(order)가 있다 — 이 경우
+        // 로컬 픽(2단계)과 동일한 크기/색으로 통일하고, 안에 그 번호를 적는다.
+        var hasOrder = m.order !== null && m.order !== undefined;
         // 로컬 픽이거나 인기(trending)이면 큰 점, 둘 다 아니면 작은 점.
-        // 색은 로컬 픽일 때만 강조색(주황) — 로컬 픽은 항상 "큰 강조된 점"이 되고,
-        // trending만 있는 건 "큰 점"(색은 기본), 둘 다 없으면 "작은 점".
-        var isBig = m.trending || m.isLocalPick;
+        // 색은 로컬 픽/코스 순서 핀일 때만 강조색(주황) — trending만 있는 건
+        // "큰 점"(색은 기본), 아무것도 없으면 "작은 점".
+        var isBig = hasOrder || m.trending || m.isLocalPick;
         var size = isBig ? COCO_BIG_PIN_PX : COCO_SMALL_PIN_PX;
         var borderWidth = isBig ? 3 : 2; // 점이 워낙 작아져서 두꺼운 테두리는 비율이 안 맞음
-        var color = m.isLocalPick ? '#FF7A33' : '#2F8FE0';
+        var color = (hasOrder || m.isLocalPick) ? '#FF7A33' : '#2F8FE0';
         var pin = document.createElement('div');
         pin.style.cssText =
           'width:' + size + 'px;height:' + size + 'px;border-radius:50%;background:' + color + ';' +
-          'border:' + borderWidth + 'px solid #fff;box-shadow:0 2px 6px rgba(0,0,0,0.35);cursor:pointer;';
+          'border:' + borderWidth + 'px solid #fff;box-shadow:0 2px 6px rgba(0,0,0,0.35);cursor:pointer;' +
+          (hasOrder
+            ? 'display:flex;align-items:center;justify-content:center;color:#fff;' +
+              'font-family:NotoSansKR,sans-serif;font-weight:800;font-size:11px;line-height:1;'
+            : '');
+        if (hasOrder) pin.textContent = String(m.order);
         // 바로 이동하지 않고, 지도를 이 핀 중심으로 부드럽게 옮긴 뒤 이름/카테고리
         // 말풍선을 띄운다 — "자세히 보기"를 한 번 더 눌러야 실제 onMarkerClick(상세
         // 화면 이동)이 호출된다.
@@ -401,6 +414,12 @@
       cocoRenderClusters(divId);
     };
 
+    // 코스 순서 핀처럼 개수가 적고 겹쳐도 절대 뭉쳐 보이면 안 되는 지도에서 끈다.
+    window.cocoSetClusteringEnabled = function (divId, enabled) {
+      window.__cocoClusteringDisabled[divId] = !enabled;
+      if (window.__cocoKakaoMaps[divId]) cocoRenderClusters(divId);
+    };
+
     // 지도 화면(뷰포트)이 바뀔 때마다 그 범위를 Dart로 알려준다 — 화면에 보이는
     // 영역만큼만 서버에 다시 요청해서 표시하고 싶을 때(핀 밀집 방지) 사용.
     window.cocoSetBoundsChangedHandler = function (divId, onBoundsChanged) {
@@ -410,6 +429,24 @@
     window.cocoSetKakaoCenter = function (divId, lat, lng) {
       var map = window.__cocoKakaoMaps[divId];
       if (map) map.setCenter(new kakao.maps.LatLng(lat, lng));
+    };
+
+    // 코스에서 "지도에서 보기"처럼, 여러 스팟이 한 화면에 다 들어오게 맞출 때 쓴다.
+    // 점이 하나뿐이면 bounds로는 과하게 확대되므로 그냥 중심 이동만 한다.
+    window.cocoFitKakaoBounds = function (divId, pointsJson) {
+      var map = window.__cocoKakaoMaps[divId];
+      if (!map) return;
+      var points = JSON.parse(pointsJson);
+      if (!points.length) return;
+      if (points.length === 1) {
+        map.setCenter(new kakao.maps.LatLng(points[0].lat, points[0].lng));
+        return;
+      }
+      var bounds = new kakao.maps.LatLngBounds();
+      points.forEach(function (p) {
+        bounds.extend(new kakao.maps.LatLng(p.lat, p.lng));
+      });
+      map.setBounds(bounds);
     };
 
     // 검색 결과 탭 전용 — 단순 재중심(cocoSetKakaoCenter)과 달리 살짝 확대까지

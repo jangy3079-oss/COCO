@@ -55,10 +55,16 @@ class _RouteBuilderScreenState extends State<RouteBuilderScreen> {
     super.dispose();
   }
 
-  void _openSearch() => setState(() {
-        _searchOpen = true;
-        _addedDuringSearch.clear();
-      });
+  void _openSearch() {
+    setState(() {
+      _searchOpen = true;
+      _addedDuringSearch.clear();
+    });
+    // 검색어를 아직 안 쳐도 실제로 등록된 스팟들이 바로 보이게, 빈 검색어로 한 번
+    // 조회해둔다 — 백엔드 검색(LIKE '%q%')이 빈 문자열이면 전체(최대 20개)를
+    // 돌려주므로 이미 있는 API 그대로 재사용할 수 있다(백엔드 수정 없음).
+    _fetchDbResults('');
+  }
 
   // 취소 — 이번 검색 세션에서 새로 담은 스팟만 되돌리고 닫는다.
   void _cancelSearch() => setState(() {
@@ -80,27 +86,29 @@ class _RouteBuilderScreenState extends State<RouteBuilderScreen> {
   void _onSearchQueryChanged(String query) {
     setState(() => _searchQuery = query);
     _dbSearchDebounce?.cancel();
-    if (query.trim().isEmpty) {
-      setState(() => _dbSearchResults = []);
-      return;
-    }
-    _dbSearchDebounce = Timer(const Duration(milliseconds: 300), () async {
-      try {
-        final results = await _spotRepository.search(
-          query.trim(),
-          locale: context.read<LocaleController>().locale.languageCode,
-        );
-        if (!mounted) return;
-        final converted = results.map(mockSpotFromDb).toList();
-        // 다른 화면(스팟 상세 등)에서도 id로 다시 찾을 수 있게 공유 캐시에 채워 넣는다.
-        for (final s in converted) {
-          dbSpotCache[s.id] = s;
-        }
-        setState(() => _dbSearchResults = converted);
-      } catch (e) {
-        debugPrint('[RouteBuilderScreen] 스팟 검색 실패: $e');
+    // 검색어가 비어도 _fetchDbResults('')를 그대로 호출한다 — 빈 검색어는 전체
+    // 목록을 보여주는 용도로 쓴다(아래 _fetchDbResults 주석 참고).
+    _dbSearchDebounce = Timer(const Duration(milliseconds: 300), () => _fetchDbResults(query));
+  }
+
+  // 실제 DB 스팟 검색 — query가 빈 문자열이면 백엔드 LIKE 검색('%q%')이 전체를
+  // 돌려주는 걸 그대로 이용해 "검색어 없을 때 기본 목록"으로도 재사용한다.
+  Future<void> _fetchDbResults(String query) async {
+    try {
+      final results = await _spotRepository.search(
+        query.trim(),
+        locale: context.read<LocaleController>().locale.languageCode,
+      );
+      if (!mounted) return;
+      final converted = results.map(mockSpotFromDb).toList();
+      // 다른 화면(스팟 상세 등)에서도 id로 다시 찾을 수 있게 공유 캐시에 채워 넣는다.
+      for (final s in converted) {
+        dbSpotCache[s.id] = s;
       }
-    });
+      setState(() => _dbSearchResults = converted);
+    } catch (e) {
+      debugPrint('[RouteBuilderScreen] 스팟 검색 실패: $e');
+    }
   }
 
   void _addStopFromSearch(MockSpot spot) {
