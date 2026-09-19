@@ -1,9 +1,13 @@
 package com.coco.backend.controller;
 
+import com.coco.backend.dto.response.ErrorResponse;
+import com.coco.backend.dto.response.LikeToggleResponse;
 import com.coco.backend.dto.response.SpotResponse;
 import com.coco.backend.service.SpotService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -57,5 +61,42 @@ public class SpotController {
     public ResponseEntity<Map<String, Integer>> importFromKakaoLocal() {
         int inserted = spotService.importFromKakaoLocal();
         return ResponseEntity.ok(Map.of("inserted", inserted));
+    }
+
+    /** 스팟 찜 토글 — 이미 찜했으면 취소, 아니면 새로 찜한다. */
+    @PostMapping("/{id}/like")
+    public ResponseEntity<?> toggleLike(@PathVariable Long id) {
+        Long userId = currentUserId();
+        if (userId == null) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                    .body(new ErrorResponse("로그인이 필요합니다."));
+        }
+        try {
+            LikeToggleResponse result = spotService.toggleLike(userId, id);
+            return ResponseEntity.ok(result);
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(new ErrorResponse(e.getMessage()));
+        }
+    }
+
+    /** 현재 로그인한 유저가 찜한 스팟 목록. */
+    @GetMapping("/liked")
+    public ResponseEntity<?> getLikedSpots(@RequestParam(defaultValue = "ko") String locale) {
+        Long userId = currentUserId();
+        if (userId == null) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                    .body(new ErrorResponse("로그인이 필요합니다."));
+        }
+        return ResponseEntity.ok(spotService.getLikedSpots(userId, locale));
+    }
+
+    // JwtAuthenticationFilter가 유효한 토큰이 있을 때만 SecurityContext에 principal(userId)을
+    // 심어두므로, 로그인 안 한 요청은 여기서 null로 나온다.
+    private Long currentUserId() {
+        var authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (authentication == null || !(authentication.getPrincipal() instanceof Long userId)) {
+            return null;
+        }
+        return userId;
     }
 }
