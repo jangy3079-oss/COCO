@@ -31,8 +31,8 @@ public class FeedController {
     private final FileStorageService fileStorageService;
 
     @GetMapping
-    public List<FeedPostResponse> list() {
-        return feedService.listFeed(currentUserId());
+    public List<FeedPostResponse> list(@RequestParam(defaultValue = "ko") String locale) {
+        return feedService.listFeed(currentUserId(), locale);
     }
 
     @PostMapping
@@ -117,8 +117,9 @@ public class FeedController {
     }
 
     @GetMapping("/{id}/comments")
-    public List<FeedCommentResponse> listComments(@PathVariable Long id) {
-        return feedService.listComments(id);
+    public List<FeedCommentResponse> listComments(@PathVariable Long id,
+                                                   @RequestParam(defaultValue = "ko") String locale) {
+        return feedService.listComments(id, locale);
     }
 
     @PostMapping("/{id}/comments")

@@ -28,6 +28,7 @@ public class SpotService {
     private final SpotRepository spotRepository;
     private final TourApiService tourApiService;
     private final KakaoLocalService kakaoLocalService;
+    private final TranslationService translationService;
     private final FeedPostRepository feedPostRepository;
     private final SpotLikeRepository spotLikeRepository;
     private final UserRepository userRepository;
@@ -39,7 +40,8 @@ public class SpotService {
 
     /**
      * TourAPI에서 필터링된 후보를 가져와 아직 DB에 없는 것만 저장한다.
-     * (TourAPI가 현재 한국어 서비스만 연동되어 있어서 titleKo만 채우고, titleEn/titleJa는 번역이 붙을 때까지 null로 둔다.)
+     * (TourAPI가 현재 한국어 서비스만 연동되어 있어서 titleKo/description은 원문 그대로 받고,
+     * en/ja 및 재작성된 description은 TranslationService로 신규 스팟당 1회만 채운다.)
      */
     public int importFromTourApi() {
         List<TourApiService.TourApiCandidate> candidates = tourApiService.fetchCandidates();
@@ -52,15 +54,24 @@ public class SpotService {
             // 때마다 쓸데없이 API 호출이 늘어난다(dedupe 체크를 통과한 것만 호출하도록 여기 배치).
             String description = tourApiService.fetchOverview(c.tourApiId());
 
+            // title 번역 + description 재작성/번역도 신규 스팟당 1회만 호출한다(읽기 시점 호출 금지).
+            // 실패하면 null이 오고, 아래 description은 raw 원문으로, title/en/ja는 null로 폴백한다.
+            var localized = translationService.rewriteAndTranslate(c.title(), description);
+
             Spot spot = Spot.builder()
                     .tourApiid(c.tourApiId())
                     .titleKo(c.title())
+                    .titleEn(localized != null ? localized.titleEn() : null)
+                    .titleJa(localized != null ? localized.titleJa() : null)
                     .lat(c.lat())
                     .lng(c.lng())
                     .address(c.address())
                     .category(c.category())
                     .imageUrl(c.imageUrl())
-                    .description(description)
+                    .description(localized != null && localized.descriptionKo() != null
+                            ? localized.descriptionKo() : description)
+                    .descriptionEn(localized != null ? localized.descriptionEn() : null)
+                    .descriptionJa(localized != null ? localized.descriptionJa() : null)
                     .build();
             spotRepository.save(spot);
             inserted++;
@@ -93,9 +104,15 @@ public class SpotService {
 
             if (isDuplicateOfTourApiSpot(c, tourApiSpotsByNormalizedTitle)) continue;
 
+            // 카카오 로컬 소스는 description 자체가 없으니 title 번역만 받는다(rewriteAndTranslate에
+            // description=null을 넘기면 프롬프트가 description 관련 필드를 전부 null로 응답한다).
+            var localized = translationService.rewriteAndTranslate(c.title(), null);
+
             Spot spot = Spot.builder()
                     .kakaoPlaceId(c.kakaoPlaceId())
                     .titleKo(c.title())
+                    .titleEn(localized != null ? localized.titleEn() : null)
+                    .titleJa(localized != null ? localized.titleJa() : null)
                     .lat(c.lat())
                     .lng(c.lng())
                     .address(c.address())
@@ -236,7 +253,7 @@ public class SpotService {
                 .category(s.getCategory())
                 .imageUrl(s.getImageUrl())
                 .address(s.getAddress())
-                .description(s.getDescription())
+                .description(resolveDescription(s, locale))
                 .isLocalPick(Boolean.TRUE.equals(s.getIsLocalPick()))
                 .trending(trending)
                 .build();
@@ -250,5 +267,15 @@ public class SpotService {
             default -> s.getTitleKo();
         };
         return title != null ? title : s.getTitleKo();
+    }
+
+    /** locale(ko/en/ja)에 맞는 description을 고른다. en/ja가 아직 번역되지 않았으면 한국어로 폴백한다. */
+    private String resolveDescription(Spot s, String locale) {
+        String desc = switch (locale == null ? "" : locale) {
+            case "en" -> s.getDescriptionEn();
+            case "ja" -> s.getDescriptionJa();
+            default -> s.getDescription();
+        };
+        return desc != null ? desc : s.getDescription();
     }
 }

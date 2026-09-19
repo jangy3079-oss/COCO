@@ -41,3 +41,8 @@ tour-api:
 kakao:
   # 지도(JavaScript) 키와는 다른, 카카오 디벨로퍼스 [앱 키] 탭의 REST API 키.
   rest-api-key: ${KAKAO_REST_API_KEY:}
+
+openai:
+  # 스팟/피드 다국어 처리(TranslationService)에 쓰는 OpenAI API 키.
+  api-key: ${OPENAI_API_KEY:}
+  model: ${OPENAI_MODEL:gpt-4o-mini}

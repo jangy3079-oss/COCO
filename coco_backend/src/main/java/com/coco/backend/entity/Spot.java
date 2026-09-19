@@ -59,6 +59,12 @@ public class Spot {
     @Column(columnDefinition = "TEXT")
     private String description;
 
+    @Column(name = "description_en", columnDefinition = "TEXT")
+    private String descriptionEn;
+
+    @Column(name = "description_ja", columnDefinition = "TEXT")
+    private String descriptionJa;
+
     // 팀이 직접 검증해서 심어둔 "로컬 픽" 여부. 인기도(피드 반응)와 무관하게 항상 true면
     // 지도에서 다른 색으로 표시된다 — 아직 반응이 없는 진짜 로컬 스팟이 인기도 기준
     // 핀 크기 로직에 묻히지 않도록 색과 크기를 서로 다른 신호로 분리한 것.
@@ -71,7 +77,7 @@ public class Spot {
     private LocalDateTime createdAt;
 
     @Builder
-    public Spot(String tourApiid, String kakaoPlaceId, String titleKo, String titleEn, String titleJa, Double lat, Double lng, String address, String category, String imageUrl, String description, Boolean isLocalPick) {
+    public Spot(String tourApiid, String kakaoPlaceId, String titleKo, String titleEn, String titleJa, Double lat, Double lng, String address, String category, String imageUrl, String description, String descriptionEn, String descriptionJa, Boolean isLocalPick) {
         this.tourApiid = tourApiid;
         this.kakaoPlaceId = kakaoPlaceId;
         this.titleKo = titleKo;
@@ -83,6 +89,8 @@ public class Spot {
         this.category = category;
         this.imageUrl = imageUrl;
         this.description = description;
+        this.descriptionEn = descriptionEn;
+        this.descriptionJa = descriptionJa;
         this.isLocalPick = isLocalPick != null ? isLocalPick : false;
         // createdAt은 @CreationTimestamp가 알아서 해주므로 Builder 에서 제외.
 

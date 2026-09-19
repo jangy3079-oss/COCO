@@ -45,6 +45,7 @@ public class FeedService {
     private final SpotRepository spotRepository;
     private final UserRepository userRepository;
     private final RouteMapRepository routeMapRepository;
+    private final TranslationService translationService;
 
     /** 로그인한 사용자(userId)가 특정 스팟을 태그해서(또는 코스를 공유해서) 글을 쓴다. */
     public FeedPostResponse createPost(Long userId, FeedPostRequest request) {
@@ -59,24 +60,33 @@ public class FeedService {
                         .orElseThrow(() -> new IllegalArgumentException("코스를 찾을 수 없습니다."))
                 : null;
 
+        // description이 있을 때만 번역 호출 — 글 작성 시점에 1회만, 원문 언어는 그대로 두고
+        // 나머지 두 언어로만 번역된다(재작성 없음). 실패하면 null이 오고 원문만 저장된다.
+        String description = request.getDescription();
+        var translated = (description != null && !description.isBlank())
+                ? translationService.translate(description)
+                : null;
+
         FeedPost saved = feedPostRepository.save(FeedPost.builder()
                 .user(user)
                 .spot(spot)
                 .route(route)
                 .imageUrl(request.getImageUrl())
-                .description(request.getDescription())
+                .description(translated != null && translated.ko() != null ? translated.ko() : description)
+                .descriptionEn(translated != null ? translated.en() : null)
+                .descriptionJa(translated != null ? translated.ja() : null)
                 .build());
 
         // 방금 쓴 글은 당연히 아직 인기(trending)일 수 없고 내가 좋아요/저장을 누른 상태도
-        // 아니므로 별도 조회 없이 false로 바로 응답.
-        return toResponse(saved, false, false, false);
+        // 아니므로 별도 조회 없이 false로 바로 응답. locale도 없으니(요청 바디에 없음) 기본 ko.
+        return toResponse(saved, false, false, false, "ko");
     }
 
     /**
      * 최신순 목록. 스팟별 인기 판정과, 로그인한 유저(userId, 비로그인이면 null)가 좋아요/저장을
      * 누른 게시물 집합을 각각 한 번에 묶어서 조회해 N+1을 피한다.
      */
-    public List<FeedPostResponse> listFeed(Long userId) {
+    public List<FeedPostResponse> listFeed(Long userId, String locale) {
         List<FeedPost> posts = feedPostRepository.findTop50ByOrderByCreatedAtDesc();
         if (posts.isEmpty()) return List.of();
 
@@ -95,7 +105,8 @@ public class FeedService {
                         p,
                         p.getSpot() != null && Boolean.TRUE.equals(trendingBySpotId.get(p.getSpot().getId())),
                         likedPostIds.contains(p.getId()),
-                        savedPostIds.contains(p.getId())))
+                        savedPostIds.contains(p.getId()),
+                        locale))
                 .toList();
     }
 
@@ -112,12 +123,14 @@ public class FeedService {
         Map<Long, Boolean> trendingBySpotId = trendingBySpotId(posts);
         Set<Long> savedPostIds = new HashSet<>(feedPostSaveRepository.findSavedPostIds(userId, postIds));
 
+        // 이 두 엔드포인트는 아직 locale 파라미터를 안 받으니(이번 범위 밖) 기본 ko로 응답한다.
         return posts.stream()
                 .map(p -> toResponse(
                         p,
                         p.getSpot() != null && Boolean.TRUE.equals(trendingBySpotId.get(p.getSpot().getId())),
                         true,
-                        savedPostIds.contains(p.getId())))
+                        savedPostIds.contains(p.getId()),
+                        "ko"))
                 .toList();
     }
 
@@ -133,12 +146,14 @@ public class FeedService {
         Map<Long, Boolean> trendingBySpotId = trendingBySpotId(posts);
         Set<Long> likedPostIds = new HashSet<>(feedPostLikeRepository.findLikedPostIds(userId, postIds));
 
+        // 이 두 엔드포인트는 아직 locale 파라미터를 안 받으니(이번 범위 밖) 기본 ko로 응답한다.
         return posts.stream()
                 .map(p -> toResponse(
                         p,
                         p.getSpot() != null && Boolean.TRUE.equals(trendingBySpotId.get(p.getSpot().getId())),
                         likedPostIds.contains(p.getId()),
-                        true))
+                        true,
+                        "ko"))
                 .toList();
     }
 
@@ -207,9 +222,9 @@ public class FeedService {
     }
 
     /** 특정 게시물의 댓글 목록(오래된 순). */
-    public List<FeedCommentResponse> listComments(Long postId) {
+    public List<FeedCommentResponse> listComments(Long postId, String locale) {
         return feedCommentRepository.findByFeedPost_IdOrderByCreatedAtAsc(postId).stream()
-                .map(this::toCommentResponse)
+                .map(c -> toCommentResponse(c, locale))
                 .toList();
     }
 
@@ -220,21 +235,28 @@ public class FeedService {
         FeedPost post = feedPostRepository.findById(postId)
                 .orElseThrow(() -> new IllegalArgumentException("게시물을 찾을 수 없습니다."));
 
+        // 댓글 작성 시점에 1회만 번역 — 원문 언어는 그대로 두고 나머지 두 언어로만 번역된다.
+        String content = request.getContent();
+        var translated = translationService.translate(content);
+
         FeedComment saved = feedCommentRepository.save(FeedComment.builder()
                 .feedPost(post)
                 .user(user)
-                .content(request.getContent())
+                .content(translated != null && translated.ko() != null ? translated.ko() : content)
+                .contentEn(translated != null ? translated.en() : null)
+                .contentJa(translated != null ? translated.ja() : null)
                 .build());
-        return toCommentResponse(saved);
+        // 방금 쓴 댓글이니 locale도 없이(요청 바디에 없음) 기본 ko로 바로 응답.
+        return toCommentResponse(saved, "ko");
     }
 
-    private FeedPostResponse toResponse(FeedPost p, boolean trending, boolean liked, boolean saved) {
+    private FeedPostResponse toResponse(FeedPost p, boolean trending, boolean liked, boolean saved, String locale) {
         Spot spot = p.getSpot();
         return FeedPostResponse.builder()
                 .id(p.getId())
                 .userNickname(p.getUser().getNickname())
                 .imageUrl(p.getImageUrl())
-                .description(p.getDescription())
+                .description(resolveDescription(p, locale))
                 .spotId(spot != null ? spot.getId() : null)
                 .spotName(spot != null ? spot.getTitleKo() : null)
                 .lat(spot != null ? spot.getLat() : null)
@@ -249,11 +271,31 @@ public class FeedService {
                 .build();
     }
 
-    private FeedCommentResponse toCommentResponse(FeedComment c) {
+    /** locale(ko/en/ja)에 맞는 description을 고른다. 해당 언어 번역이 없으면 한국어로 폴백한다. */
+    private String resolveDescription(FeedPost p, String locale) {
+        String desc = switch (locale == null ? "" : locale) {
+            case "en" -> p.getDescriptionEn();
+            case "ja" -> p.getDescriptionJa();
+            default -> p.getDescription();
+        };
+        return desc != null ? desc : p.getDescription();
+    }
+
+    /** locale(ko/en/ja)에 맞는 content를 고른다. 해당 언어 번역이 없으면 한국어로 폴백한다. */
+    private String resolveContent(FeedComment c, String locale) {
+        String content = switch (locale == null ? "" : locale) {
+            case "en" -> c.getContentEn();
+            case "ja" -> c.getContentJa();
+            default -> c.getContent();
+        };
+        return content != null ? content : c.getContent();
+    }
+
+    private FeedCommentResponse toCommentResponse(FeedComment c, String locale) {
         return FeedCommentResponse.builder()
                 .id(c.getId())
                 .userNickname(c.getUser().getNickname())
-                .content(c.getContent())
+                .content(resolveContent(c, locale))
                 .createdAt(c.getCreatedAt())
                 .build();
     }

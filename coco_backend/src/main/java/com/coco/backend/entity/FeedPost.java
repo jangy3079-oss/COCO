@@ -40,11 +40,18 @@ public class FeedPost {
     @Column(length = 500)
     private String description;
 
+    // 원문 언어가 ko가 아니면 번역, ko면 재작성 없이 그대로 원문. 실패 시 null(원문 폴백).
+    @Column(name = "description_en", length = 500)
+    private String descriptionEn;
+
+    @Column(name = "description_ja", length = 500)
+    private String descriptionJa;
+
 
     @Column(name = "like_count", nullable = false)
     private Integer likeCount;
 
-    @Column(name = "save_count", nullable = false)
+    @Column(name = "save_count", nullable = false, columnDefinition = "integer default 0")
     private Integer saveCount;
 
     @CreationTimestamp
@@ -52,12 +59,14 @@ public class FeedPost {
     private LocalDateTime createdAt;
 
     @Builder
-    public FeedPost(User user, Spot spot, RouteMap route, String imageUrl, String description, Integer likeCount, Integer saveCount) {
+    public FeedPost(User user, Spot spot, RouteMap route, String imageUrl, String description, String descriptionEn, String descriptionJa, Integer likeCount, Integer saveCount) {
         this.user = user;
         this.spot = spot;
         this.route = route;
         this.imageUrl = imageUrl;
         this.description = description;
+        this.descriptionEn = descriptionEn;
+        this.descriptionJa = descriptionJa;
         // 게시글이 처음 생성될 때 좋아요/저장 수는 무조건 0이어야 하므로
         this.likeCount = likeCount != null ? likeCount : 0;
         this.saveCount = saveCount != null ? saveCount : 0;
