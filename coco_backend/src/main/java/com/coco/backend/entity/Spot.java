@@ -50,6 +50,21 @@ public class Spot {
     @Column(length = 20)
     private String category;
 
+    // TourAPI 원본 분류값 — COCO 카테고리로 매핑하기 전 원본을 그대로 보존해둔다
+    // (나중에 매핑 규칙을 바꾸거나 재분류할 때 원본 없이는 되돌릴 수 없어서).
+    // 카카오 로컬 소스는 이 값들이 없어 전부 null.
+    @Column(name = "tour_content_type_id", length = 10)
+    private String tourContentTypeId;
+
+    @Column(length = 10)
+    private String cat1;
+
+    @Column(length = 10)
+    private String cat2;
+
+    @Column(length = 10)
+    private String cat3;
+
 
     @Column(name = "image_url", columnDefinition = "TEXT")
     private String imageUrl;
@@ -77,7 +92,7 @@ public class Spot {
     private LocalDateTime createdAt;
 
     @Builder
-    public Spot(String tourApiid, String kakaoPlaceId, String titleKo, String titleEn, String titleJa, Double lat, Double lng, String address, String category, String imageUrl, String description, String descriptionEn, String descriptionJa, Boolean isLocalPick) {
+    public Spot(String tourApiid, String kakaoPlaceId, String titleKo, String titleEn, String titleJa, Double lat, Double lng, String address, String category, String tourContentTypeId, String cat1, String cat2, String cat3, String imageUrl, String description, String descriptionEn, String descriptionJa, Boolean isLocalPick) {
         this.tourApiid = tourApiid;
         this.kakaoPlaceId = kakaoPlaceId;
         this.titleKo = titleKo;
@@ -87,6 +102,10 @@ public class Spot {
         this.lng = lng;
         this.address = address;
         this.category = category;
+        this.tourContentTypeId = tourContentTypeId;
+        this.cat1 = cat1;
+        this.cat2 = cat2;
+        this.cat3 = cat3;
         this.imageUrl = imageUrl;
         this.description = description;
         this.descriptionEn = descriptionEn;
@@ -94,5 +113,23 @@ public class Spot {
         this.isLocalPick = isLocalPick != null ? isLocalPick : false;
         // createdAt은 @CreationTimestamp가 알아서 해주므로 Builder 에서 제외.
 
+    }
+
+    // TourAPI 재import 시 이미 있는 스팟(contentid 동일)을 갱신(SpotService.importFromTourApi)하는
+    // 전용 메서드 — 번역(title/description en·ja)은 최초 1회 값을 그대로 유지하고 여기서 건드리지 않는다.
+    public void updateFromTourApi(String titleKo, String address, Double lat, Double lng, String imageUrl,
+                                   String category, String tourContentTypeId, String cat1, String cat2, String cat3,
+                                   String description) {
+        this.titleKo = titleKo;
+        this.address = address;
+        this.lat = lat;
+        this.lng = lng;
+        this.imageUrl = imageUrl;
+        this.category = category;
+        this.tourContentTypeId = tourContentTypeId;
+        this.cat1 = cat1;
+        this.cat2 = cat2;
+        this.cat3 = cat3;
+        this.description = description;
     }
 }

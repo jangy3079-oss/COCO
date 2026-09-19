@@ -35,6 +35,27 @@ public class SpotController {
         return ResponseEntity.ok(spotService.findInViewport(swLat, neLat, swLng, neLng, category, locale));
     }
 
+    /**
+     * 지도 탭 전용 조회 — 6개 지도 카테고리(음식점/골목/공원/카페/명소/문화시설) 중 하나로만
+     * 호출 가능. category가 "전체"거나 없으면 빈 배열, 6개 밖의 값이면 400.
+     * 기존 GET /api/spot(연관 스팟 조회 등에서 category 없이도 호출됨)은 건드리지 않는다.
+     */
+    @GetMapping("/map")
+    public ResponseEntity<?> getMapSpots(
+            @RequestParam double swLat,
+            @RequestParam double neLat,
+            @RequestParam double swLng,
+            @RequestParam double neLng,
+            @RequestParam(required = false) String category,
+            @RequestParam(defaultValue = "ko") String locale
+    ) {
+        try {
+            return ResponseEntity.ok(spotService.findMapSpots(swLat, neLat, swLng, neLng, category, locale));
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(new ErrorResponse(e.getMessage()));
+        }
+    }
+
     /** 스팟 상세 화면용 단건 조회. */
     @GetMapping("/{id}")
     public ResponseEntity<SpotResponse> getSpotById(@PathVariable Long id,

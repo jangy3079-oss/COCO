@@ -3,9 +3,11 @@ package com.coco.backend.service;
 import com.coco.backend.dto.response.LikeToggleResponse;
 import com.coco.backend.dto.response.SpotResponse;
 import com.coco.backend.entity.Spot;
+import com.coco.backend.entity.SpotImage;
 import com.coco.backend.entity.SpotLike;
 import com.coco.backend.entity.User;
 import com.coco.backend.repository.FeedPostRepository;
+import com.coco.backend.repository.SpotImageRepository;
 import com.coco.backend.repository.SpotLikeRepository;
 import com.coco.backend.repository.SpotRepository;
 import com.coco.backend.repository.UserRepository;
@@ -18,6 +20,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 @Slf4j
@@ -26,6 +29,7 @@ import java.util.stream.Collectors;
 public class SpotService {
 
     private final SpotRepository spotRepository;
+    private final SpotImageRepository spotImageRepository;
     private final TourApiService tourApiService;
     private final KakaoLocalService kakaoLocalService;
     private final TranslationService translationService;
@@ -38,25 +42,46 @@ public class SpotService {
     private static final int TRENDING_POST_COUNT_THRESHOLD = 3;
     private static final long TRENDING_LIKE_COUNT_THRESHOLD = 20;
 
+    // 지도에 노출되는 6개 카테고리 — 번역(TranslationService) 호출 대상도 이걸로 제한한다.
+    // "기타"로 분류된 신규 스팟은 원문만 저장하고 번역 API를 아예 호출하지 않는다(비용 절감).
+    private static final Set<String> MAP_CATEGORIES = Set.of(
+            "음식점", "골목", "공원", "카페", "명소", "문화시설"
+    );
+
     /**
-     * TourAPI에서 필터링된 후보를 가져와 아직 DB에 없는 것만 저장한다.
+     * TourAPI 후보를 가져와 신규면 저장하고, 이미 있으면(contentid 동일) 최신 정보로 갱신한다.
      * (TourAPI가 현재 한국어 서비스만 연동되어 있어서 titleKo/description은 원문 그대로 받고,
-     * en/ja 및 재작성된 description은 TranslationService로 신규 스팟당 1회만 채운다.)
+     * en/ja 및 재작성된 description은 TranslationService로 신규 스팟당 1회만 채운다 — 기존
+     * 스팟을 갱신할 때는 번역을 다시 돌리지 않고 최초 값을 그대로 유지한다.)
      */
     public int importFromTourApi() {
         List<TourApiService.TourApiCandidate> candidates = tourApiService.fetchCandidates();
         int inserted = 0;
 
         for (var c : candidates) {
-            if (spotRepository.findByTourApiid(c.tourApiId()).isPresent()) continue;
+            Optional<Spot> existing = spotRepository.findByTourApiid(c.tourApiId());
+            if (existing.isPresent()) {
+                // 이미 있는 스팟은 번역을 다시 돌리지 않고 원문 필드만 최신화한다.
+                // findByTourApiid()가 리포지토리 메서드 단위 트랜잭션이라 반환된 엔티티는 이미
+                // detached 상태 — 필드를 바꾼 뒤 명시적으로 save()해야 DB에 반영된다.
+                String description = tourApiService.fetchOverview(c.tourApiId());
+                Spot spot = existing.get();
+                spot.updateFromTourApi(c.title(), c.address(), c.lat(), c.lng(), c.imageUrl(),
+                        c.category(), c.contentTypeId(), c.cat1(), c.cat2(), c.cat3(), description);
+                spotRepository.save(spot);
+                continue;
+            }
 
             // 신규 스팟만 소개글을 조회한다 — 이미 있는 스팟까지 매번 다시 부르면 재import할
             // 때마다 쓸데없이 API 호출이 늘어난다(dedupe 체크를 통과한 것만 호출하도록 여기 배치).
             String description = tourApiService.fetchOverview(c.tourApiId());
 
-            // title 번역 + description 재작성/번역도 신규 스팟당 1회만 호출한다(읽기 시점 호출 금지).
+            // 번역도 신규 스팟당 1회만 호출하되, 지도 6개 카테고리에 속할 때만 호출한다 —
+            // "기타"로 분류되는 신규 스팟(숙박/쇼핑/레포츠 등)은 원문만 저장하고 번역은 생략.
             // 실패하면 null이 오고, 아래 description은 raw 원문으로, title/en/ja는 null로 폴백한다.
-            var localized = translationService.rewriteAndTranslate(c.title(), description);
+            var localized = MAP_CATEGORIES.contains(c.category())
+                    ? translationService.rewriteAndTranslate(c.title(), description)
+                    : null;
 
             Spot spot = Spot.builder()
                     .tourApiid(c.tourApiId())
@@ -67,13 +92,28 @@ public class SpotService {
                     .lng(c.lng())
                     .address(c.address())
                     .category(c.category())
+                    .tourContentTypeId(c.contentTypeId())
+                    .cat1(c.cat1())
+                    .cat2(c.cat2())
+                    .cat3(c.cat3())
                     .imageUrl(c.imageUrl())
                     .description(localized != null && localized.descriptionKo() != null
                             ? localized.descriptionKo() : description)
                     .descriptionEn(localized != null ? localized.descriptionEn() : null)
                     .descriptionJa(localized != null ? localized.descriptionJa() : null)
                     .build();
-            spotRepository.save(spot);
+            Spot saved = spotRepository.save(spot);
+
+            // 사진 갤러리도 신규 스팟당 1회만 조회한다 — 재import 때 이미 있는 스팟을
+            // 다시 부르지 않도록 신규 분기 안에서만 호출한다.
+            List<String> images = tourApiService.fetchDetailImages(c.tourApiId());
+            for (int i = 0; i < images.size(); i++) {
+                spotImageRepository.save(SpotImage.builder()
+                        .spot(saved)
+                        .imageUrl(images.get(i))
+                        .sortOrder(i)
+                        .build());
+            }
             inserted++;
         }
         log.info("TourAPI 스팟 임포트 완료: 후보 {}건 중 신규 {}건 저장", candidates.size(), inserted);
@@ -164,10 +204,43 @@ public class SpotService {
                 .toList();
     }
 
-    /** 스팟 상세 화면용 단건 조회. 존재하지 않으면 빈 Optional. */
+    /**
+     * 지도 전용 조회 — 6개 지도 카테고리(음식점/골목/공원/카페/명소/문화시설) 중 하나로만 호출
+     * 가능하다. "전체"나 카테고리 누락은 빈 배열, 6개 밖의 값은 400(IllegalArgumentException)으로
+     * 막는다. 기존 findInViewport()(카테고리 없이도 호출되는 GET /api/spot)는 그대로 두고
+     * 별도로 추가한 엔드포인트용 메서드다.
+     */
+    public List<SpotResponse> findMapSpots(double swLat, double neLat, double swLng, double neLng,
+                                            String category, String locale) {
+        if (category == null || category.isBlank() || "전체".equals(category)) {
+            return List.of();
+        }
+        if (!MAP_CATEGORIES.contains(category)) {
+            throw new IllegalArgumentException("허용되지 않는 카테고리입니다: " + category);
+        }
+        List<Spot> spots = spotRepository.findInBoundsByCategory(swLat, neLat, swLng, neLng, category);
+        Map<Long, long[]> engagementBySpotId = fetchEngagement(spots);
+        return spots.stream()
+                .map(s -> toResponse(s, engagementBySpotId.get(s.getId()), locale))
+                .toList();
+    }
+
+    /**
+     * 스팟 상세 화면용 단건 조회. 존재하지 않으면 빈 Optional.
+     * 사진 갤러리(images)는 단건 조회에서만 채운다 — 목록형 API(findInViewport/findMapSpots/
+     * search/getLikedSpots)에서까지 스팟마다 갤러리를 조회하면 N+1이 생겨서 자주 호출되는
+     * 지도 뷰포트 조회 등이 느려진다.
+     */
     public Optional<SpotResponse> getById(Long id, String locale) {
         return spotRepository.findById(id)
-                .map(spot -> toResponse(spot, fetchEngagement(List.of(spot)).get(spot.getId()), locale));
+                .map(spot -> {
+                    List<String> images = spotImageRepository
+                            .findBySpot_IdOrderBySortOrderAsc(spot.getId())
+                            .stream()
+                            .map(SpotImage::getImageUrl)
+                            .toList();
+                    return toResponse(spot, fetchEngagement(List.of(spot)).get(spot.getId()), locale, images);
+                });
     }
 
     /** 스팟 찜 토글 — 이미 찜했으면 취소, 아니면 새로 찜한다. */
@@ -241,6 +314,10 @@ public class SpotService {
     }
 
     private SpotResponse toResponse(Spot s, long[] engagement, String locale) {
+        return toResponse(s, engagement, locale, List.of());
+    }
+
+    private SpotResponse toResponse(Spot s, long[] engagement, String locale, List<String> images) {
         long postCount = engagement != null ? engagement[0] : 0;
         long likeSum = engagement != null ? engagement[1] : 0;
         boolean trending = isTrending(postCount, likeSum);
@@ -252,6 +329,7 @@ public class SpotService {
                 .lng(s.getLng())
                 .category(s.getCategory())
                 .imageUrl(s.getImageUrl())
+                .images(images)
                 .address(s.getAddress())
                 .description(resolveDescription(s, locale))
                 .isLocalPick(Boolean.TRUE.equals(s.getIsLocalPick()))

@@ -24,6 +24,10 @@ CREATE TABLE spots (
     lng        DOUBLE PRECISION,
     address    VARCHAR(200),
     category   VARCHAR(20),
+    tour_content_type_id VARCHAR(10),
+    cat1       VARCHAR(10),
+    cat2       VARCHAR(10),
+    cat3       VARCHAR(10),
     image_url  TEXT,
     description    TEXT,
     description_en TEXT,
@@ -31,6 +35,17 @@ CREATE TABLE spots (
     created_at TIMESTAMP    DEFAULT NOW(),
     PRIMARY KEY (spot_id)
 );
+
+CREATE TABLE spot_images (
+    spot_image_id BIGSERIAL     NOT NULL,
+    spot_id       BIGINT        NOT NULL,
+    image_url     TEXT          NOT NULL,
+    sort_order    INT           NOT NULL,
+    PRIMARY KEY (spot_image_id),
+    CONSTRAINT fk_spotimg_spot FOREIGN KEY (spot_id) REFERENCES spots(spot_id) ON DELETE CASCADE
+);
+
+CREATE INDEX idx_spotimg_spot ON spot_images (spot_id);
 
 CREATE TABLE qna_posts (
     qna_post_id BIGSERIAL    NOT NULL,

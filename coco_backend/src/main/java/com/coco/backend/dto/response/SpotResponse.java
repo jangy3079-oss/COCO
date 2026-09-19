@@ -4,6 +4,8 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.Builder;
 import lombok.Getter;
 
+import java.util.List;
+
 @Getter @Builder
 public class SpotResponse {
     private Long id;
@@ -11,7 +13,10 @@ public class SpotResponse {
     private Double lat;
     private Double lng;
     private String category;
-    private String imageUrl;
+    private String imageUrl;    // 대표 이미지(TourAPI firstimage) — 목록/지도 마커 썸네일용
+    // 사진 갤러리 — 상세 화면(getById)에서만 채워짐. 목록형 API는 항상 빈 배열(N+1 방지).
+    @Builder.Default
+    private List<String> images = List.of();
     private String address;
     private String description; // 카카오 로컬 소스는 소개글이 없어 null일 수 있음
 

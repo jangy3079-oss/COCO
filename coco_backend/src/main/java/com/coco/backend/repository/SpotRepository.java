@@ -47,4 +47,19 @@ public interface SpotRepository extends JpaRepository<Spot, Long> {
                             @Param("swLng") double swLng,
                             @Param("neLng") double neLng,
                             @Param("category") String category);
+
+    // 지도 전용 조회(GET /api/spot/map) — category가 항상 6개 지도 카테고리 중 하나로
+    // 확정된 뒤에만 호출되므로(SpotService.findMapSpots), 위 findInBounds와 달리
+    // category IS NULL 분기 없이 단순 일치 조건만 쓴다.
+    @Query("""
+        SELECT s FROM Spot s
+        WHERE s.lat BETWEEN :swLat AND :neLat
+          AND s.lng BETWEEN :swLng AND :neLng
+          AND s.category = :category
+        """)
+    List<Spot> findInBoundsByCategory(@Param("swLat") double swLat,
+                                       @Param("neLat") double neLat,
+                                       @Param("swLng") double swLng,
+                                       @Param("neLng") double neLng,
+                                       @Param("category") String category);
 }
