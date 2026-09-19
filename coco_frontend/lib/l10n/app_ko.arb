@@ -85,6 +85,13 @@
   "feedSaveButtonSaved": "저장됨",
   "feedSaveButtonUnsaved": "저장",
 
+  "feedCreateChoiceTitle": "어떤 피드를 올릴까요?",
+  "feedCreateChoiceSubtitle": "공유하고 싶은 내용을 선택해주세요",
+  "feedCreateDailyTitle": "일반 피드",
+  "feedCreateDailySubtitle": "사진과 장소, 이야기를 가볍게 공유해요",
+  "feedCreateRouteTitle": "코스와 함께 올리기",
+  "feedCreateRouteSubtitle": "내가 만든 코스와 사진을 함께 소개해요",
+
   "feedComposerStepTitle": "게시물 작성 ({step}/{total})",
   "@feedComposerStepTitle": {
     "placeholders": { "step": { "type": "int" }, "total": { "type": "int" } }
@@ -94,13 +101,18 @@
   "feedComposerNextButton": "다음",
   "feedComposerSubmitting": "게시 중...",
   "feedComposerSubmitButton": "게시하기",
+  "feedComposerPageTitle": "새 피드 올리기",
+  "feedComposerOptional": "선택",
+  "feedComposerCourseLabel": "코스",
+  "feedComposerCoursePlaceholder": "코스 추가하기",
+  "feedComposerCourseHint": "내가 만든 코스를 이 피드에 함께 보여줘요",
   "feedComposerPhotoStepTitle": "사진을 올려주세요 (선택)",
-  "feedComposerPhotoStepHint": "갤러리에서 사진 한 장을 선택하세요 (선택 사항)",
+  "feedComposerPhotoStepHint": "최대 10장까지 선택할 수 있어요 · 첫 사진이 대표 사진이 됩니다",
   "feedComposerLocationStepTitle": "장소를 태그해주세요 (선택)",
   "feedComposerLocationSearchHint": "장소명 또는 주소 검색",
   "feedComposerLocationNoResults": "검색 결과가 없어요",
   "feedComposerDescStepTitle": "한줄 설명을 남겨주세요",
-  "feedComposerDescHint": "이 스팟에 대한 후기를 적어주세요",
+  "feedComposerDescHint": "사진이나 코스에 얽힌 이야기를 자유롭게 적어주세요",
 
   "feedPostDetailPageTitle": "게시물",
   "feedPostDetailCommentFailed": "댓글을 올리지 못했어요. 로그인 상태를 확인해주세요.",
@@ -147,6 +159,13 @@
   "feedRouteComposePublicTitle": "전체 공유",
   "feedRouteComposePublicSubtitle": "인기순 랭킹에 함께 노출돼요",
   "feedRouteComposeSubmitButton": "게시하기",
+  "feedRoutePickerTitle": "코스를 선택해주세요",
+  "feedRoutePickerSubtitle": "피드에 함께 소개할 내 코스를 먼저 골라주세요",
+  "feedRoutePickerEmpty": "아직 만든 코스가 없어요",
+  "feedRoutePickerEmptyHint": "지도 탭에서 코스를 만든 뒤 다시 와주세요",
+  "feedRoutePickerNext": "이 코스로 계속하기",
+  "feedRoutePhotoTitle": "코스에 맞는 사진을 골라주세요",
+  "feedRoutePhotoHint": "코스에 포함된 스팟 중 대표 사진을 선택해주세요",
 
   "qnaHeaderTitle": "커뮤니티",
   "qnaHeaderSubtitle": "관광객의 질문에 동네 주민이 답해요",

@@ -1,7 +1,7 @@
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/network/auth_token_store.dart';
-import '../../../core/network/dio_client.dart';
 import '../../../core/network/login_guard.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../data/models/qna_post.dart';

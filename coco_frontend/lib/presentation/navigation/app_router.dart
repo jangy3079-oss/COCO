@@ -15,7 +15,6 @@ import '../screens/feed/feed_screen.dart';
 import '../screens/feed/feed_mock_data.dart';
 import '../screens/feed/feed_post_detail_screen.dart';
 import '../screens/feed/feed_composer_screen.dart';
-import '../screens/feed/feed_route_compose_screen.dart';
 import '../screens/qna/qna_screen.dart';
 import '../screens/qna/qna_post_detail_screen.dart';
 import '../screens/qna/qna_composer_screen.dart';
@@ -31,7 +30,7 @@ final appRouter = GoRouter(
   initialLocation: '/splash',
   routes: [
     GoRoute(path: '/splash', builder: (c, s) => const SplashScreen()),
-    GoRoute(path: '/login',  builder: (c, s) => const LoginScreen()),
+    GoRoute(path: '/login', builder: (c, s) => const LoginScreen()),
     GoRoute(path: '/signup', builder: (c, s) => const SignupScreen()),
     // 스팟 상세 / 골목지도 만들기 / 골목지도 미리보기는 하단 탭 없이 전체 화면으로
     // 뜨는 흐름이라 ShellRoute 바깥의 최상위 라우트로 둔다.
@@ -53,7 +52,8 @@ final appRouter = GoRouter(
             initialName: extra['initialName'] as String? ?? '',
           );
         }
-        return RouteBuilderScreen(initialStops: (extra as List<MockSpot>?) ?? const []);
+        return RouteBuilderScreen(
+            initialStops: (extra as List<MockSpot>?) ?? const []);
       },
     ),
     GoRoute(
@@ -76,7 +76,8 @@ final appRouter = GoRouter(
     ),
     GoRoute(
       path: '/map/register/form',
-      builder: (c, s) => SpotRegisterFormScreen(picked: s.extra as SpotSearchCandidate),
+      builder: (c, s) =>
+          SpotRegisterFormScreen(picked: s.extra as SpotSearchCandidate),
     ),
     GoRoute(
       path: '/map/register/pending',
@@ -100,15 +101,17 @@ final appRouter = GoRouter(
       path: '/feed/compose',
       builder: (c, s) => const FeedComposerScreen(),
     ),
-    // 골목지도 미리보기 화면의 "공유" 버튼에서 진입 — 코스를 피드에 공유하는 전용 작성 화면.
+    // 코스 상세의 공유 버튼에서도 같은 한 페이지 작성 화면을 열고 코스만 미리 선택한다.
     GoRoute(
       path: '/feed/compose-route',
       builder: (c, s) {
         final data = s.extra as Map<String, dynamic>;
-        return FeedRouteComposeScreen(
-          routeName: data['name'] as String,
-          stops: data['stops'] as List<MockSpot>,
-          routeId: data['routeId'] as String?,
+        return FeedComposerScreen(
+          initialRoute: MockRoute(
+            id: data['routeId'] as String? ?? '',
+            name: data['name'] as String,
+            stops: data['stops'] as List<MockSpot>,
+          ),
         );
       },
     ),
@@ -128,15 +131,18 @@ final appRouter = GoRouter(
     // 지도 탭으로 통합되었다. my_map_screen.dart 파일 자체는 남겨두되 라우트는 제거.)
     GoRoute(
       path: '/mypage/posts',
-      builder: (c, s) => MyPostsScreen(initialFilter: (s.extra as String?) ?? 'all'),
+      builder: (c, s) =>
+          MyPostsScreen(initialFilter: (s.extra as String?) ?? 'all'),
     ),
     GoRoute(
       path: '/mypage/saved',
-      builder: (c, s) => MySavedScreen(initialFilter: (s.extra as String?) ?? 'spots'),
+      builder: (c, s) =>
+          MySavedScreen(initialFilter: (s.extra as String?) ?? 'spots'),
     ),
     GoRoute(
       path: '/mypage/routes',
-      builder: (c, s) => MyRoutesScreen(initialTab: (s.extra as String?) ?? 'alley'),
+      builder: (c, s) =>
+          MyRoutesScreen(initialTab: (s.extra as String?) ?? 'alley'),
     ),
     GoRoute(
       path: '/mypage/settings',
@@ -153,10 +159,10 @@ final appRouter = GoRouter(
       // GoRouterState.of(context).uri로 현재 탭을 판단할 수 있게 라우트 등록 자체는 유지한다.)
       builder: (context, state, child) => const BottomNavShell(),
       routes: [
-        GoRoute(path: '/feed',    builder: (c, s) => const FeedScreen()),
-        GoRoute(path: '/map',     builder: (c, s) => const MapScreen()),
-        GoRoute(path: '/qna',     builder: (c, s) => const QnaScreen()),
-        GoRoute(path: '/mypage',  builder: (c, s) => const MypageScreen()),
+        GoRoute(path: '/feed', builder: (c, s) => const FeedScreen()),
+        GoRoute(path: '/map', builder: (c, s) => const MapScreen()),
+        GoRoute(path: '/qna', builder: (c, s) => const QnaScreen()),
+        GoRoute(path: '/mypage', builder: (c, s) => const MypageScreen()),
       ],
     ),
   ],

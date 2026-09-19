@@ -23,9 +23,9 @@ class _SpotRegisterSearchScreenState extends State<SpotRegisterSearchScreen> {
   SpotSearchCandidate? _picked;
 
   // 실시간 장소 검색(카카오 로컬 키워드 검색 프록시) — 다른 검색 화면들(지도 탭,
-  // 코스 만들기)과 동일하게 300ms 디바운스 후 호출한다. 백엔드에 아직 이 엔드포인트가
-  // 없어서(요청서 전달됨) 지금은 항상 빈 목록으로 떨어지고, 그동안은 지도를 직접
-  // 눌러 위치를 찍는 방식으로 등록을 계속할 수 있다.
+  // 코스 만들기)과 동일하게 300ms 디바운스 후 GET /api/spot/search/external을 호출한다.
+  // 검색 결과가 없거나 실패하면 지도를 직접 눌러 위치를 찍는 방식으로도 등록할 수 있다.
+
   final _spotRegistrationRepository = SpotRegistrationRepository();
   Timer? _searchDebounce;
   List<SpotSearchCandidate> _results = [];

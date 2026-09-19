@@ -38,11 +38,36 @@ class FeedRepository {
     return response.data['imageUrl'] as String;
   }
 
+  /// 로그인한 사용자가 좋아요한 피드만 가져온다 — GET /api/feed/liked.
+  /// my_saved_screen.dart의 "좋아요한 피드" 탭 전용.
+  Future<List<FeedPost>> fetchLikedFeed() async {
+    final response = await _dio.get('/api/feed/liked');
+    return (response.data as List)
+        .map((e) => FeedPost.fromJson(e as Map<String, dynamic>))
+        .toList();
+  }
+
   /// 좋아요 토글 — 이미 눌렀으면 취소, 아니면 새로 누른다. {liked, likeCount} 반환.
   Future<({bool liked, int likeCount})> toggleLike(int postId) async {
     final response = await _dio.post('/api/feed/$postId/like');
     final data = response.data as Map<String, dynamic>;
     return (liked: data['liked'] as bool, likeCount: data['likeCount'] as int);
+  }
+
+  /// 저장(북마크) 토글 — 이미 저장했으면 취소, 아니면 새로 저장한다. {saved, saveCount} 반환.
+  Future<({bool saved, int saveCount})> toggleSave(int postId) async {
+    final response = await _dio.post('/api/feed/$postId/save');
+    final data = response.data as Map<String, dynamic>;
+    return (saved: data['saved'] as bool, saveCount: data['saveCount'] as int);
+  }
+
+  /// 로그인한 사용자가 저장한 피드 목록 — GET /api/feed/saved.
+  /// my_saved_screen.dart의 "저장한 피드" 탭 전용.
+  Future<List<FeedPost>> fetchSavedFeed() async {
+    final response = await _dio.get('/api/feed/saved');
+    return (response.data as List)
+        .map((e) => FeedPost.fromJson(e as Map<String, dynamic>))
+        .toList();
   }
 
   Future<List<FeedCommentDto>> fetchComments(int postId) async {

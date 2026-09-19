@@ -29,7 +29,8 @@ class FeedDongOption {
   final String id;
   final String label;
   final bool near;
-  const FeedDongOption({required this.id, required this.label, this.near = false});
+  const FeedDongOption(
+      {required this.id, required this.label, this.near = false});
 }
 
 const feedDongOptions = [
@@ -39,11 +40,16 @@ const feedDongOptions = [
   FeedDongOption(id: 'all', label: '전체 동네'),
 ];
 
-String feedDongLabel(String id) =>
-    feedDongOptions.firstWhere((d) => d.id == id, orElse: () => feedDongOptions.last).label;
+String feedDongLabel(String id) => feedDongOptions
+    .firstWhere((d) => d.id == id, orElse: () => feedDongOptions.last)
+    .label;
 
 /// 정렬 옵션 — 최신순 / 좋아요 많은 순 / 저장 많은 순 (레퍼런스 기준, 예전 "거리순"은 제외됨).
-const feedSortLabels = {'latest': '최신순', 'likes': '좋아요 많은 순', 'saves': '저장 많은 순'};
+const feedSortLabels = {
+  'latest': '최신순',
+  'likes': '좋아요 많은 순',
+  'saves': '저장 많은 순'
+};
 
 class FeedItem {
   final String id;
@@ -116,14 +122,20 @@ class FeedItem {
   int get likeCount => likes + (liked ? 1 : 0);
   int get saveCount => saves + (saved ? 1 : 0);
   String get dong => feedDongLabel(dongId);
-  String get authorInitial => (author != null && author!.isNotEmpty) ? author!.substring(0, 1) : '';
+  String get authorInitial =>
+      (author != null && author!.isNotEmpty) ? author!.substring(0, 1) : '';
   String get displayTitle => title.isNotEmpty ? title : place;
   double get distanceKm => (stopCount ?? 0) * 0.3;
   int get durationMin => (stopCount ?? 0) * 10;
+  List<String> get imageUrls => decodeFeedImageUrls(imageUrl);
+  String? get currentImageUrl => imageUrls.isEmpty
+      ? null
+      : imageUrls[imgIndex.clamp(0, imageUrls.length - 1)];
 
   // id가 'real-{n}' 형태면 실제 백엔드 게시물이라는 뜻 — 좋아요/댓글을 실제 API로
   // 쏴야 할지(실제 게시물) 로컬에서만 토글할지(목업 시드 데이터) 이 값으로 구분한다.
-  int? get realPostId => id.startsWith('real-') ? int.tryParse(id.substring(5)) : null;
+  int? get realPostId =>
+      id.startsWith('real-') ? int.tryParse(id.substring(5)) : null;
 }
 
 /// 실제 백엔드 게시물(FeedPost)을 목업 기반 FeedItem 리스트에 합쳐서 보여주기 위한 변환.
@@ -146,14 +158,17 @@ FeedItem feedItemFromPost(FeedPost p) {
     neighborhood: '',
     dongId: 'all',
     distanceMin: 0,
+    // likeCount 중복 계산 방지: 백엔드 likeCount는 내 좋아요 포함 총합 — liked=true면 1 빼서 넣는다.
     likes: p.likeCount - (p.liked ? 1 : 0),
-    saves: 0,
-    imgCount: 1,
+    // saveCount 중복 계산 방지: 백엔드 saveCount는 내 저장 포함 총합 — saved=true면 1 빼서 넣는다.
+    saves: p.saveCount - (p.saved ? 1 : 0),
+    imgCount: p.imageUrls.isEmpty ? 1 : p.imageUrls.length,
     ts: p.createdAt.millisecondsSinceEpoch,
     timeLabel: _relativeTimeLabel(p.createdAt),
     trending: p.trending,
     imageUrl: p.imageUrl,
     liked: p.liked,
+    saved: p.saved,
     // 코스 공유로 만들어진 게시물이면(routeId 있음) 골목지도 카드로 표시한다.
     // routeStops는 여기서 채우지 않는다 — FeedPostResponse가 스팟 목록까지 안 내려줘서,
     // 실제 코스 상세는 상세 화면에서 routeId로 RouteRepository.getById를 불러 보여준다.
@@ -189,4 +204,3 @@ IconData categoryIcon(String category) => switch (category) {
       '카페' => Icons.local_cafe_rounded,
       _ => Icons.place_rounded,
     };
-

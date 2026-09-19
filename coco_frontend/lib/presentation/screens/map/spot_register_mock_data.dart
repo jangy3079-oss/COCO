@@ -30,13 +30,10 @@ class SpotSearchCandidate {
       );
 }
 
-const spotRegisterCandidates = [
-  SpotSearchCandidate(id: 'reg-1', name: '젼골목', address: '부산 중구 젼길 12', lat: 35.1005, lng: 129.0296),
-  SpotSearchCandidate(id: 'reg-2', name: '젼골목 인쇄소거리', address: '부산 중구 젼길 20-3', lat: 35.1013, lng: 129.0284),
-  SpotSearchCandidate(id: 'reg-3', name: '젼골목 팝업 스페이스', address: '부산 중구 젼길 8, 2층', lat: 35.0999, lng: 129.0301),
-  SpotSearchCandidate(id: 'reg-4', name: '영주동 계단길', address: '부산 중구 영주동 산복도로', lat: 35.0975, lng: 129.0305),
-  SpotSearchCandidate(id: 'reg-5', name: '깡통시장', address: '부산 중구 부평1길 48', lat: 35.0995, lng: 129.0308),
-];
+// searchExternal()로 실시간 카카오 로컬 검색이 연동됐으므로
+// 하드코딩 더미 목록(spotRegisterCandidates)은 삭제. spot_register_search_screen.dart 참고.
+
+
 
 /// 등록 폼의 카테고리 옵션. code는 기존 MockSpot.category 체계(노포/골목/공원/카페)에
 /// "팝업"을 더한 저장용 값이고, label은 등록 폼에 보여줄 레퍼런스 원문 라벨이다.

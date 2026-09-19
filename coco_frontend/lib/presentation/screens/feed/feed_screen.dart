@@ -57,7 +57,9 @@ class _FeedScreenState extends State<FeedScreen> {
     // 실제 DB 게시물(_realItems)은 동네 정보가 아직 백엔드에서 안 내려와서
     // dongId가 'all'로 세팅돼 있다 — 동네 필터와 무관하게 항상 포함시킨다.
     // 타입 필터만 적용(코스 필터 시엔 spot 타입 게시물이 제외됨).
-    var list = _realItems.where((it) => _typeFilter == null || it.type == _typeFilter).toList();
+    var list = _realItems
+        .where((it) => _typeFilter == null || it.type == _typeFilter)
+        .toList();
 
     switch (_sortBy) {
       case 'likes':
@@ -98,7 +100,8 @@ class _FeedScreenState extends State<FeedScreen> {
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.white,
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
       builder: (_) => StatefulBuilder(
         builder: (sheetContext, setSheetState) => _FilterSheet(
           dongId: _dongId,
@@ -141,6 +144,23 @@ class _FeedScreenState extends State<FeedScreen> {
     } catch (e) {
       debugPrint('[FeedScreen] 좋아요 실패: $e');
       if (mounted) setState(() => item.liked = !item.liked);
+    }
+  }
+
+  // 피드 저장(북마크) 토글 — toggleLike와 동일한 낙관적 업데이트 패턴.
+  // 실제 게시물은 서버에 반영하고, 목업 시드 데이터는 로컬에서만 토글한다.
+  Future<void> _toggleSave(FeedItem item) async {
+    final postId = item.realPostId;
+    if (postId == null) {
+      setState(() => item.saved = !item.saved);
+      return;
+    }
+    setState(() => item.saved = !item.saved);
+    try {
+      await _feedRepository.toggleSave(postId);
+    } catch (e) {
+      debugPrint('[FeedScreen] 저장 실패: $e');
+      if (mounted) setState(() => item.saved = !item.saved);
     }
   }
 
@@ -187,7 +207,8 @@ class _FeedScreenState extends State<FeedScreen> {
                 alignment: Alignment.centerLeft,
                 child: Text(
                   '${feedDongLabel(_dongId)} · ${feedSortLabels[_sortBy]}',
-                  style: TextStyle(fontSize: 12, color: Colors.black.withOpacity(0.4)),
+                  style: TextStyle(
+                      fontSize: 12, color: Colors.black.withOpacity(0.4)),
                 ),
               ),
             ),
@@ -197,7 +218,7 @@ class _FeedScreenState extends State<FeedScreen> {
                   : _isRankingView
                       ? _RouteRankingList(
                           items: visibleItems,
-                          onToggleSave: (item) => setState(() => item.saved = !item.saved),
+                          onToggleSave: (item) => _toggleSave(item),
                         )
                       : ListView.builder(
                           controller: _scrollController,
@@ -213,11 +234,13 @@ class _FeedScreenState extends State<FeedScreen> {
                             return _FeedCard(
                               item: item,
                               onToggleLike: () => _toggleLike(item),
-                              onToggleSave: () => setState(() => item.saved = !item.saved),
+                              onToggleSave: () => _toggleSave(item),
                               onShare: () => _share(item),
-                              onPrevImg: () =>
-                                  setState(() => item.imgIndex = (item.imgIndex - 1 + item.imgCount) % item.imgCount),
-                              onNextImg: () => setState(() => item.imgIndex = (item.imgIndex + 1) % item.imgCount),
+                              onPrevImg: () => setState(() => item.imgIndex =
+                                  (item.imgIndex - 1 + item.imgCount) %
+                                      item.imgCount),
+                              onNextImg: () => setState(() => item.imgIndex =
+                                  (item.imgIndex + 1) % item.imgCount),
                               onOpenDetail: () => _openDetail(item),
                             );
                           },
@@ -240,7 +263,8 @@ Future<bool> showShareSheet(BuildContext context) async {
   final shared = await showModalBottomSheet<bool>(
     context: context,
     backgroundColor: Colors.white,
-    shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+    shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
     builder: (context) => SafeArea(
       child: Padding(
         padding: const EdgeInsets.fromLTRB(20, 20, 20, 24),
@@ -248,15 +272,31 @@ Future<bool> showShareSheet(BuildContext context) async {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(l10n.feedShareTitle, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: CocoTheme.secondary)),
+            Text(l10n.feedShareTitle,
+                style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w700,
+                    color: CocoTheme.secondary)),
             const SizedBox(height: 18),
             Row(
               children: [
-                _ShareTile(icon: Icons.chat_bubble_rounded, color: const Color(0xFFFEE500), label: l10n.feedShareKakao, onTap: () => Navigator.of(context).pop(true)),
+                _ShareTile(
+                    icon: Icons.chat_bubble_rounded,
+                    color: const Color(0xFFFEE500),
+                    label: l10n.feedShareKakao,
+                    onTap: () => Navigator.of(context).pop(true)),
                 const SizedBox(width: 16),
-                _ShareTile(icon: Icons.camera_alt_rounded, color: const Color(0xFFE1306C), label: l10n.feedShareInstagram, onTap: () => Navigator.of(context).pop(true)),
+                _ShareTile(
+                    icon: Icons.camera_alt_rounded,
+                    color: const Color(0xFFE1306C),
+                    label: l10n.feedShareInstagram,
+                    onTap: () => Navigator.of(context).pop(true)),
                 const SizedBox(width: 16),
-                _ShareTile(icon: Icons.sms_rounded, color: Colors.grey.shade600, label: l10n.feedShareMessage, onTap: () => Navigator.of(context).pop(true)),
+                _ShareTile(
+                    icon: Icons.sms_rounded,
+                    color: Colors.grey.shade600,
+                    label: l10n.feedShareMessage,
+                    onTap: () => Navigator.of(context).pop(true)),
               ],
             ),
           ],
@@ -272,7 +312,11 @@ class _ShareTile extends StatelessWidget {
   final Color color;
   final String label;
   final VoidCallback onTap;
-  const _ShareTile({required this.icon, required this.color, required this.label, required this.onTap});
+  const _ShareTile(
+      {required this.icon,
+      required this.color,
+      required this.label,
+      required this.onTap});
 
   @override
   Widget build(BuildContext context) {
@@ -282,9 +326,13 @@ class _ShareTile extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          CircleAvatar(radius: 26, backgroundColor: color, child: Icon(icon, color: Colors.white, size: 22)),
+          CircleAvatar(
+              radius: 26,
+              backgroundColor: color,
+              child: Icon(icon, color: Colors.white, size: 22)),
           const SizedBox(height: 8),
-          Text(label, style: const TextStyle(fontSize: 12, color: CocoTheme.secondary)),
+          Text(label,
+              style: const TextStyle(fontSize: 12, color: CocoTheme.secondary)),
         ],
       ),
     );
@@ -307,15 +355,26 @@ class _FeedHeaderBar extends StatelessWidget {
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(l10n.feedHeaderTitle, style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w800, color: CocoTheme.secondary)),
+              Text(l10n.feedHeaderTitle,
+                  style: const TextStyle(
+                      fontSize: 24,
+                      fontWeight: FontWeight.w800,
+                      color: CocoTheme.secondary)),
               const SizedBox(height: 4),
               Row(
                 children: [
-                  const Icon(Icons.location_on_rounded, size: 14, color: CocoTheme.primary),
+                  const Icon(Icons.location_on_rounded,
+                      size: 14, color: CocoTheme.primary),
                   const SizedBox(width: 4),
-                  Text(dongLabel, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: CocoTheme.primary)),
+                  Text(dongLabel,
+                      style: const TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                          color: CocoTheme.primary)),
                   const SizedBox(width: 4),
-                  Text(l10n.feedBasisSuffix, style: TextStyle(fontSize: 13, color: Colors.black.withOpacity(0.35))),
+                  Text(l10n.feedBasisSuffix,
+                      style: TextStyle(
+                          fontSize: 13, color: Colors.black.withOpacity(0.35))),
                 ],
               ),
             ],
@@ -323,7 +382,11 @@ class _FeedHeaderBar extends StatelessWidget {
           CircleAvatar(
             radius: 17,
             backgroundColor: const Color(0xFFF0ECE6),
-            child: Text(l10n.feedMeAvatarLabel, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: CocoTheme.secondary)),
+            child: Text(l10n.feedMeAvatarLabel,
+                style: const TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: CocoTheme.secondary)),
           ),
         ],
       ),
@@ -358,10 +421,19 @@ class _FilterRow extends StatelessWidget {
             alignment: Alignment.center,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
-              color: isDefaultFilter ? Colors.white : CocoTheme.primary.withOpacity(0.12),
-              border: Border.all(color: isDefaultFilter ? Colors.grey.shade300 : CocoTheme.primary),
+              color: isDefaultFilter
+                  ? Colors.white
+                  : CocoTheme.primary.withOpacity(0.12),
+              border: Border.all(
+                  color: isDefaultFilter
+                      ? Colors.grey.shade300
+                      : CocoTheme.primary),
             ),
-            child: Icon(Icons.tune_rounded, size: 18, color: isDefaultFilter ? Colors.black.withOpacity(0.45) : CocoTheme.primary),
+            child: Icon(Icons.tune_rounded,
+                size: 18,
+                color: isDefaultFilter
+                    ? Colors.black.withOpacity(0.45)
+                    : CocoTheme.primary),
           ),
         ),
         const SizedBox(width: 8),
@@ -372,11 +444,20 @@ class _FilterRow extends StatelessWidget {
             scrollDirection: Axis.horizontal,
             child: Row(
               children: [
-                _TypeChip(label: l10n.feedFilterAll, selected: typeFilter == null, onTap: () => onTypeSelected(null)),
+                _TypeChip(
+                    label: l10n.feedFilterAll,
+                    selected: typeFilter == null,
+                    onTap: () => onTypeSelected(null)),
                 const SizedBox(width: 8),
-                _TypeChip(label: l10n.feedFilterDaily, selected: typeFilter == FeedPostType.spot, onTap: () => onTypeSelected(FeedPostType.spot)),
+                _TypeChip(
+                    label: l10n.feedFilterDaily,
+                    selected: typeFilter == FeedPostType.spot,
+                    onTap: () => onTypeSelected(FeedPostType.spot)),
                 const SizedBox(width: 8),
-                _TypeChip(label: l10n.feedFilterRoute, selected: typeFilter == FeedPostType.route, onTap: () => onTypeSelected(FeedPostType.route)),
+                _TypeChip(
+                    label: l10n.feedFilterRoute,
+                    selected: typeFilter == FeedPostType.route,
+                    onTap: () => onTypeSelected(FeedPostType.route)),
               ],
             ),
           ),
@@ -390,7 +471,8 @@ class _TypeChip extends StatelessWidget {
   final String label;
   final bool selected;
   final VoidCallback onTap;
-  const _TypeChip({required this.label, required this.selected, required this.onTap});
+  const _TypeChip(
+      {required this.label, required this.selected, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
@@ -404,7 +486,8 @@ class _TypeChip extends StatelessWidget {
         decoration: BoxDecoration(
           color: selected ? CocoTheme.primary : Colors.white,
           borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: selected ? CocoTheme.primary : Colors.grey.shade300),
+          border: Border.all(
+              color: selected ? CocoTheme.primary : Colors.grey.shade300),
         ),
         child: AnimatedDefaultTextStyle(
           duration: const Duration(milliseconds: 180),
@@ -452,7 +535,12 @@ class _FilterSheet extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Center(
-              child: Container(width: 36, height: 4, decoration: BoxDecoration(color: Colors.black.withOpacity(0.15), borderRadius: BorderRadius.circular(2))),
+              child: Container(
+                  width: 36,
+                  height: 4,
+                  decoration: BoxDecoration(
+                      color: Colors.black.withOpacity(0.15),
+                      borderRadius: BorderRadius.circular(2))),
             ),
             const SizedBox(height: 14),
             Padding(
@@ -460,11 +548,20 @@ class _FilterSheet extends StatelessWidget {
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Text(l10n.feedFilterSheetTitle, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: CocoTheme.secondary)),
+                  Text(l10n.feedFilterSheetTitle,
+                      style: const TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w700,
+                          color: CocoTheme.secondary)),
                   TextButton(
                     onPressed: onReset,
-                    style: TextButton.styleFrom(padding: EdgeInsets.zero, minimumSize: Size.zero),
-                    child: Text(l10n.feedFilterReset, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: Colors.black.withOpacity(0.4))),
+                    style: TextButton.styleFrom(
+                        padding: EdgeInsets.zero, minimumSize: Size.zero),
+                    child: Text(l10n.feedFilterReset,
+                        style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w500,
+                            color: Colors.black.withOpacity(0.4))),
                   ),
                 ],
               ),
@@ -474,9 +571,15 @@ class _FilterSheet extends StatelessWidget {
               padding: const EdgeInsets.symmetric(horizontal: 20),
               child: Row(
                 children: [
-                  Text(l10n.feedFilterDongLabel, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Colors.black.withOpacity(0.45))),
+                  Text(l10n.feedFilterDongLabel,
+                      style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: Colors.black.withOpacity(0.45))),
                   const SizedBox(width: 8),
-                  Text(l10n.feedFilterCurrentLocationPlaceholder, style: TextStyle(fontSize: 11, color: Colors.black.withOpacity(0.32))),
+                  Text(l10n.feedFilterCurrentLocationPlaceholder,
+                      style: TextStyle(
+                          fontSize: 11, color: Colors.black.withOpacity(0.32))),
                 ],
               ),
             ),
@@ -500,7 +603,11 @@ class _FilterSheet extends StatelessWidget {
             const SizedBox(height: 16),
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 20),
-              child: Text(l10n.feedFilterSortLabel, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Colors.black.withOpacity(0.45))),
+              child: Text(l10n.feedFilterSortLabel,
+                  style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.black.withOpacity(0.45))),
             ),
             const SizedBox(height: 8),
             Padding(
@@ -525,10 +632,13 @@ class _FilterSheet extends StatelessWidget {
                 style: FilledButton.styleFrom(
                   backgroundColor: CocoTheme.primary,
                   minimumSize: const Size.fromHeight(50),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14)),
                 ),
                 onPressed: onApply,
-                child: Text(l10n.feedFilterApplyButton(resultCount), style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
+                child: Text(l10n.feedFilterApplyButton(resultCount),
+                    style: const TextStyle(
+                        fontSize: 15, fontWeight: FontWeight.w700)),
               ),
             ),
           ],
@@ -543,7 +653,11 @@ class _SheetChip extends StatelessWidget {
   final bool selected;
   final IconData? icon;
   final VoidCallback onTap;
-  const _SheetChip({required this.label, required this.selected, this.icon, required this.onTap});
+  const _SheetChip(
+      {required this.label,
+      required this.selected,
+      this.icon,
+      required this.onTap});
 
   @override
   Widget build(BuildContext context) {
@@ -557,7 +671,8 @@ class _SheetChip extends StatelessWidget {
         decoration: BoxDecoration(
           color: selected ? CocoTheme.primary : Colors.white,
           borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: selected ? CocoTheme.primary : Colors.grey.shade300),
+          border: Border.all(
+              color: selected ? CocoTheme.primary : Colors.grey.shade300),
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
@@ -565,7 +680,10 @@ class _SheetChip extends StatelessWidget {
             AnimatedDefaultTextStyle(
               duration: const Duration(milliseconds: 180),
               curve: Curves.easeOut,
-              style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: selected ? Colors.white : CocoTheme.secondary),
+              style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  color: selected ? Colors.white : CocoTheme.secondary),
               child: Text(label),
             ),
             if (icon != null) ...[
@@ -573,8 +691,10 @@ class _SheetChip extends StatelessWidget {
               TweenAnimationBuilder<Color?>(
                 duration: const Duration(milliseconds: 180),
                 curve: Curves.easeOut,
-                tween: ColorTween(end: selected ? Colors.white : CocoTheme.primary),
-                builder: (context, color, _) => Icon(icon, size: 12, color: color),
+                tween: ColorTween(
+                    end: selected ? Colors.white : CocoTheme.primary),
+                builder: (context, color, _) =>
+                    Icon(icon, size: 12, color: color),
               ),
             ],
           ],
@@ -596,9 +716,14 @@ class _EmptyState extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Text(l10n.feedEmptyTitle, style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: Colors.grey.shade700)),
+            Text(l10n.feedEmptyTitle,
+                style: TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.grey.shade700)),
             const SizedBox(height: 6),
-            Text(l10n.feedEmptySubtitle, style: TextStyle(fontSize: 13, color: Colors.grey.shade500)),
+            Text(l10n.feedEmptySubtitle,
+                style: TextStyle(fontSize: 13, color: Colors.grey.shade500)),
           ],
         ),
       ),
@@ -623,10 +748,12 @@ class _ListFooter extends StatelessWidget {
             SizedBox(
               width: 14,
               height: 14,
-              child: CircularProgressIndicator(strokeWidth: 1.8, color: CocoTheme.primary),
+              child: CircularProgressIndicator(
+                  strokeWidth: 1.8, color: CocoTheme.primary),
             ),
             const SizedBox(width: 8),
-            Text(l10n.feedLoadingMore, style: TextStyle(fontSize: 12, color: Colors.grey.shade500)),
+            Text(l10n.feedLoadingMore,
+                style: TextStyle(fontSize: 12, color: Colors.grey.shade500)),
           ],
         ),
       );
@@ -634,7 +761,9 @@ class _ListFooter extends StatelessWidget {
     if (showEndMessage) {
       return Padding(
         padding: const EdgeInsets.symmetric(vertical: 18),
-        child: Center(child: Text(l10n.feedEndOfList, style: TextStyle(fontSize: 12.5, color: Colors.grey.shade400))),
+        child: Center(
+            child: Text(l10n.feedEndOfList,
+                style: TextStyle(fontSize: 12.5, color: Colors.grey.shade400))),
       );
     }
     return const SizedBox(height: 12);
@@ -664,7 +793,9 @@ class _FeedCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-      decoration: BoxDecoration(border: Border(bottom: BorderSide(color: Colors.black.withOpacity(0.05)))),
+      decoration: BoxDecoration(
+          border: Border(
+              bottom: BorderSide(color: Colors.black.withOpacity(0.05)))),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -673,10 +804,18 @@ class _FeedCard extends StatelessWidget {
               CircleAvatar(
                 radius: 14,
                 backgroundColor: const Color(0xFFF0ECE6),
-                child: Text(item.authorInitial, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: CocoTheme.secondary)),
+                child: Text(item.authorInitial,
+                    style: const TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: CocoTheme.secondary)),
               ),
               const SizedBox(width: 8),
-              Text(item.author ?? '', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: CocoTheme.secondary)),
+              Text(item.author ?? '',
+                  style: const TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                      color: CocoTheme.secondary)),
               const SizedBox(width: 6),
               const _LocalBadge(),
               if (item.trending) ...[
@@ -684,29 +823,42 @@ class _FeedCard extends StatelessWidget {
                 const _TrendingBadge(),
               ],
               const Spacer(),
-              Text(item.timeLabel, style: TextStyle(fontSize: 12, color: Colors.grey.shade500)),
+              Text(item.timeLabel,
+                  style: TextStyle(fontSize: 12, color: Colors.grey.shade500)),
             ],
           ),
           const SizedBox(height: 10),
-          _FeedCardPhoto(item: item, onTap: onOpenDetail, onPrevImg: onPrevImg, onNextImg: onNextImg),
+          _FeedCardPhoto(
+              item: item,
+              onTap: onOpenDetail,
+              onPrevImg: onPrevImg,
+              onNextImg: onNextImg),
           const SizedBox(height: 12),
           InkWell(
             onTap: onOpenDetail,
-            child: Text(item.displayTitle, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: CocoTheme.secondary)),
+            child: Text(item.displayTitle,
+                style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w700,
+                    color: CocoTheme.secondary)),
           ),
           const SizedBox(height: 4),
           Text(
             item.desc,
             maxLines: 2,
             overflow: TextOverflow.ellipsis,
-            style: TextStyle(fontSize: 14, height: 1.4, color: Colors.grey.shade700),
+            style: TextStyle(
+                fontSize: 14, height: 1.4, color: Colors.grey.shade700),
           ),
           const SizedBox(height: 10),
           Row(
             children: [
               _ActionIcon(
-                icon: item.liked ? Icons.favorite_rounded : Icons.favorite_border_rounded,
-                iconColor: item.liked ? CocoTheme.primary : Colors.grey.shade600,
+                icon: item.liked
+                    ? Icons.favorite_rounded
+                    : Icons.favorite_border_rounded,
+                iconColor:
+                    item.liked ? CocoTheme.primary : Colors.grey.shade600,
                 label: '${item.likeCount}',
                 onTap: onToggleLike,
               ),
@@ -726,8 +878,11 @@ class _FeedCard extends StatelessWidget {
               ),
               const Spacer(),
               _ActionIcon(
-                icon: item.saved ? Icons.bookmark_rounded : Icons.bookmark_border_rounded,
-                iconColor: item.saved ? CocoTheme.secondary : Colors.grey.shade600,
+                icon: item.saved
+                    ? Icons.bookmark_rounded
+                    : Icons.bookmark_border_rounded,
+                iconColor:
+                    item.saved ? CocoTheme.secondary : Colors.grey.shade600,
                 label: '${item.saveCount}',
                 onTap: onToggleSave,
               ),
@@ -746,8 +901,14 @@ class _LocalBadge extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-      decoration: BoxDecoration(color: CocoTheme.primary.withOpacity(0.12), borderRadius: BorderRadius.circular(10)),
-      child: Text(AppLocalizations.of(context)!.feedLocalBadge, style: const TextStyle(fontSize: 10.5, fontWeight: FontWeight.w700, color: CocoTheme.primary)),
+      decoration: BoxDecoration(
+          color: CocoTheme.primary.withOpacity(0.12),
+          borderRadius: BorderRadius.circular(10)),
+      child: Text(AppLocalizations.of(context)!.feedLocalBadge,
+          style: const TextStyle(
+              fontSize: 10.5,
+              fontWeight: FontWeight.w700,
+              color: CocoTheme.primary)),
     );
   }
 }
@@ -761,8 +922,14 @@ class _TrendingBadge extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-      decoration: BoxDecoration(color: const Color(0xFFFF7A33).withOpacity(0.14), borderRadius: BorderRadius.circular(10)),
-      child: Text(AppLocalizations.of(context)!.feedTrendingBadge, style: const TextStyle(fontSize: 10.5, fontWeight: FontWeight.w700, color: Color(0xFFFF7A33))),
+      decoration: BoxDecoration(
+          color: const Color(0xFFFF7A33).withOpacity(0.14),
+          borderRadius: BorderRadius.circular(10)),
+      child: Text(AppLocalizations.of(context)!.feedTrendingBadge,
+          style: const TextStyle(
+              fontSize: 10.5,
+              fontWeight: FontWeight.w700,
+              color: Color(0xFFFF7A33))),
     );
   }
 }
@@ -773,7 +940,11 @@ class _FeedCardPhoto extends StatelessWidget {
   final VoidCallback onPrevImg;
   final VoidCallback onNextImg;
 
-  const _FeedCardPhoto({required this.item, required this.onTap, required this.onPrevImg, required this.onNextImg});
+  const _FeedCardPhoto(
+      {required this.item,
+      required this.onTap,
+      required this.onPrevImg,
+      required this.onNextImg});
 
   @override
   Widget build(BuildContext context) {
@@ -791,13 +962,17 @@ class _FeedCardPhoto extends StatelessWidget {
               // 실제 업로드된 사진이 있으면 그걸 보여주고, 없으면(목업/코스/사진 미첨부)
               // 카테고리 색상 플레이스홀더를 그대로 쓴다.
               Positioned.fill(
-                child: item.imageUrl != null
-                    ? Image.network('${DioClient.baseUrl}${item.imageUrl}', fit: BoxFit.cover)
+                child: item.currentImageUrl != null
+                    ? Image.network(
+                        '${DioClient.baseUrl}${item.currentImageUrl}',
+                        fit: BoxFit.cover)
                     : Container(
                         color: color.withOpacity(0.12),
                         alignment: Alignment.center,
                         child: Icon(
-                          isRoute ? Icons.signpost_rounded : categoryIcon(item.category),
+                          isRoute
+                              ? Icons.signpost_rounded
+                              : categoryIcon(item.category),
                           size: 36,
                           color: color.withOpacity(0.4),
                         ),
@@ -808,11 +983,18 @@ class _FeedCardPhoto extends StatelessWidget {
                   left: 10,
                   top: 10,
                   child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                    decoration: BoxDecoration(color: Colors.white.withOpacity(0.92), borderRadius: BorderRadius.circular(12)),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                    decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.92),
+                        borderRadius: BorderRadius.circular(12)),
                     child: Text(
-                      AppLocalizations.of(context)!.feedRouteSpotCountBadge(item.stopCount ?? 0),
-                      style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: CocoTheme.primary),
+                      AppLocalizations.of(context)!
+                          .feedRouteSpotCountBadge(item.stopCount ?? 0),
+                      style: const TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                          color: CocoTheme.primary),
                     ),
                   ),
                 )
@@ -822,14 +1004,25 @@ class _FeedCardPhoto extends StatelessWidget {
                   left: 10,
                   bottom: 10,
                   child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                    decoration: BoxDecoration(color: Colors.white.withOpacity(0.92), borderRadius: BorderRadius.circular(12)),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                    decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.92),
+                        borderRadius: BorderRadius.circular(12)),
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Text(item.dong, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: CocoTheme.primary)),
+                        Text(item.dong,
+                            style: const TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w700,
+                                color: CocoTheme.primary)),
                         const SizedBox(width: 6),
-                        Text(item.place, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: CocoTheme.secondary)),
+                        Text(item.place,
+                            style: const TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w600,
+                                color: CocoTheme.secondary)),
                       ],
                     ),
                   ),
@@ -839,13 +1032,17 @@ class _FeedCardPhoto extends StatelessWidget {
                   left: 8,
                   top: 0,
                   bottom: 0,
-                  child: Center(child: _CarouselArrow(icon: Icons.chevron_left_rounded, onTap: onPrevImg)),
+                  child: Center(
+                      child: _CarouselArrow(
+                          icon: Icons.chevron_left_rounded, onTap: onPrevImg)),
                 ),
                 Positioned(
                   right: 8,
                   top: 0,
                   bottom: 0,
-                  child: Center(child: _CarouselArrow(icon: Icons.chevron_right_rounded, onTap: onNextImg)),
+                  child: Center(
+                      child: _CarouselArrow(
+                          icon: Icons.chevron_right_rounded, onTap: onNextImg)),
                 ),
                 Positioned(
                   left: 0,
@@ -861,7 +1058,9 @@ class _FeedCardPhoto extends StatelessWidget {
                           height: 6,
                           decoration: BoxDecoration(
                             shape: BoxShape.circle,
-                            color: i == item.imgIndex ? Colors.white : Colors.white.withOpacity(0.5),
+                            color: i == item.imgIndex
+                                ? Colors.white
+                                : Colors.white.withOpacity(0.5),
                           ),
                         ),
                     ],
@@ -889,7 +1088,10 @@ class _CarouselArrow extends StatelessWidget {
       child: InkWell(
         onTap: onTap,
         customBorder: const CircleBorder(),
-        child: SizedBox(width: 28, height: 28, child: Icon(icon, size: 18, color: CocoTheme.secondary)),
+        child: SizedBox(
+            width: 28,
+            height: 28,
+            child: Icon(icon, size: 18, color: CocoTheme.secondary)),
       ),
     );
   }
@@ -900,7 +1102,11 @@ class _ActionIcon extends StatelessWidget {
   final Color iconColor;
   final String label;
   final VoidCallback onTap;
-  const _ActionIcon({required this.icon, required this.iconColor, required this.label, required this.onTap});
+  const _ActionIcon(
+      {required this.icon,
+      required this.iconColor,
+      required this.label,
+      required this.onTap});
 
   @override
   Widget build(BuildContext context) {
@@ -912,7 +1118,8 @@ class _ActionIcon extends StatelessWidget {
         children: [
           Icon(icon, size: 18, color: iconColor),
           const SizedBox(width: 6),
-          Text(label, style: TextStyle(fontSize: 13, color: Colors.grey.shade700)),
+          Text(label,
+              style: TextStyle(fontSize: 13, color: Colors.grey.shade700)),
         ],
       ),
     );
@@ -929,12 +1136,19 @@ class _RouteRankingList extends StatelessWidget {
   Widget build(BuildContext context) {
     return ListView(
       children: [
-        for (int i = 0; i < items.length; i++) _RouteRankRow(rank: i + 1, item: items[i], onToggleSave: () => onToggleSave(items[i])),
+        for (int i = 0; i < items.length; i++)
+          _RouteRankRow(
+              rank: i + 1,
+              item: items[i],
+              onToggleSave: () => onToggleSave(items[i])),
         Padding(
           padding: const EdgeInsets.fromLTRB(20, 14, 20, 24),
           child: Text(
             AppLocalizations.of(context)!.feedRankingSavedHint,
-            style: TextStyle(fontSize: 11, height: 1.5, color: Colors.black.withOpacity(0.35)),
+            style: TextStyle(
+                fontSize: 11,
+                height: 1.5,
+                color: Colors.black.withOpacity(0.35)),
           ),
         ),
       ],
@@ -946,14 +1160,17 @@ class _RouteRankRow extends StatelessWidget {
   final int rank;
   final FeedItem item;
   final VoidCallback onToggleSave;
-  const _RouteRankRow({required this.rank, required this.item, required this.onToggleSave});
+  const _RouteRankRow(
+      {required this.rank, required this.item, required this.onToggleSave});
 
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
-      decoration: BoxDecoration(border: Border(bottom: BorderSide(color: Colors.black.withOpacity(0.06)))),
+      decoration: BoxDecoration(
+          border: Border(
+              bottom: BorderSide(color: Colors.black.withOpacity(0.06)))),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
@@ -962,7 +1179,12 @@ class _RouteRankRow extends StatelessWidget {
             child: Text(
               '$rank',
               textAlign: TextAlign.center,
-              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: rank == 1 ? CocoTheme.primary : Colors.black.withOpacity(0.3)),
+              style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w700,
+                  color: rank == 1
+                      ? CocoTheme.primary
+                      : Colors.black.withOpacity(0.3)),
             ),
           ),
           const SizedBox(width: 12),
@@ -972,11 +1194,24 @@ class _RouteRankRow extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(item.displayTitle, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: CocoTheme.secondary)),
+                Text(item.displayTitle,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                        color: CocoTheme.secondary)),
                 const SizedBox(height: 3),
-                Text('@${item.author} · ${item.dong} · ${l10n.feedRankSpotCount(item.stopCount ?? 0)}', style: TextStyle(fontSize: 12, color: Colors.black.withOpacity(0.45))),
+                Text(
+                    '@${item.author} · ${item.dong} · ${l10n.feedRankSpotCount(item.stopCount ?? 0)}',
+                    style: TextStyle(
+                        fontSize: 12, color: Colors.black.withOpacity(0.45))),
                 const SizedBox(height: 5),
-                Text(l10n.feedRankStatsLine(item.saveCount, item.likeCount, item.shares), style: TextStyle(fontSize: 11, color: Colors.black.withOpacity(0.4))),
+                Text(
+                    l10n.feedRankStatsLine(
+                        item.saveCount, item.likeCount, item.shares),
+                    style: TextStyle(
+                        fontSize: 11, color: Colors.black.withOpacity(0.4))),
               ],
             ),
           ),
@@ -989,11 +1224,21 @@ class _RouteRankRow extends StatelessWidget {
               decoration: BoxDecoration(
                 color: item.saved ? const Color(0xFFFF5A36) : Colors.white,
                 borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: item.saved ? const Color(0xFFFF5A36) : Colors.grey.shade300),
+                border: Border.all(
+                    color: item.saved
+                        ? const Color(0xFFFF5A36)
+                        : Colors.grey.shade300),
               ),
               child: Text(
-                item.saved ? l10n.feedSaveButtonSaved : l10n.feedSaveButtonUnsaved,
-                style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: item.saved ? Colors.white : Colors.black.withOpacity(0.6)),
+                item.saved
+                    ? l10n.feedSaveButtonSaved
+                    : l10n.feedSaveButtonUnsaved,
+                style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: item.saved
+                        ? Colors.white
+                        : Colors.black.withOpacity(0.6)),
               ),
             ),
           ),
@@ -1012,12 +1257,24 @@ class _RouteThumb extends StatelessWidget {
     return Container(
       width: 64,
       height: 64,
-      decoration: BoxDecoration(color: const Color(0xFFEAE8E2), borderRadius: BorderRadius.circular(12)),
+      decoration: BoxDecoration(
+          color: const Color(0xFFEAE8E2),
+          borderRadius: BorderRadius.circular(12)),
       clipBehavior: Clip.hardEdge,
       child: Stack(
         children: [
-          Positioned(left: 0, top: 28, right: 0, height: 4, child: Container(color: Colors.white)),
-          Positioned(left: 23, top: 0, bottom: 0, width: 3, child: Container(color: Colors.white)),
+          Positioned(
+              left: 0,
+              top: 28,
+              right: 0,
+              height: 4,
+              child: Container(color: Colors.white)),
+          Positioned(
+              left: 23,
+              top: 0,
+              bottom: 0,
+              width: 3,
+              child: Container(color: Colors.white)),
           Positioned(left: 9, top: 14, child: _pin()),
           Positioned(left: 37, top: 37, child: _pin()),
         ],
@@ -1030,7 +1287,12 @@ class _RouteThumb extends StatelessWidget {
         child: Container(
           width: 10,
           height: 10,
-          decoration: const BoxDecoration(color: CocoTheme.primary, borderRadius: BorderRadius.only(topLeft: Radius.circular(5), topRight: Radius.circular(5), bottomRight: Radius.circular(5))),
+          decoration: const BoxDecoration(
+              color: CocoTheme.primary,
+              borderRadius: BorderRadius.only(
+                  topLeft: Radius.circular(5),
+                  topRight: Radius.circular(5),
+                  bottomRight: Radius.circular(5))),
         ),
       );
 }

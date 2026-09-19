@@ -85,6 +85,13 @@
   "feedSaveButtonSaved": "保存済み",
   "feedSaveButtonUnsaved": "保存",
 
+  "feedCreateChoiceTitle": "どんなフィードを投稿しますか？",
+  "feedCreateChoiceSubtitle": "共有したい内容を選んでください",
+  "feedCreateDailyTitle": "通常のフィード",
+  "feedCreateDailySubtitle": "写真や場所、ストーリーを気軽に共有します",
+  "feedCreateRouteTitle": "コースと一緒に投稿",
+  "feedCreateRouteSubtitle": "作成したコースを写真と一緒に紹介します",
+
   "feedComposerStepTitle": "投稿作成 ({step}/{total})",
   "@feedComposerStepTitle": {
     "placeholders": { "step": { "type": "int" }, "total": { "type": "int" } }
@@ -94,13 +101,18 @@
   "feedComposerNextButton": "次へ",
   "feedComposerSubmitting": "投稿中...",
   "feedComposerSubmitButton": "投稿する",
+  "feedComposerPageTitle": "新しいフィード投稿",
+  "feedComposerOptional": "任意",
+  "feedComposerCourseLabel": "コース",
+  "feedComposerCoursePlaceholder": "コースを追加",
+  "feedComposerCourseHint": "作成したコースをこの投稿に一緒に表示します",
   "feedComposerPhotoStepTitle": "写真を追加してください（任意）",
-  "feedComposerPhotoStepHint": "ギャラリーから写真を1枚選んでください（任意）",
+  "feedComposerPhotoStepHint": "最大10枚まで選択できます・最初の写真が代表写真になります",
   "feedComposerLocationStepTitle": "場所をタグ付けしてください（任意）",
   "feedComposerLocationSearchHint": "場所名または住所を検索",
   "feedComposerLocationNoResults": "検索結果がありません",
   "feedComposerDescStepTitle": "一言コメントを残してください",
-  "feedComposerDescHint": "このスポットについての感想を書いてください",
+  "feedComposerDescHint": "写真やコースにまつわるストーリーを自由に書いてください",
 
   "feedPostDetailPageTitle": "投稿",
   "feedPostDetailCommentFailed": "コメントを投稿できませんでした。ログイン状態をご確認ください。",
@@ -147,6 +159,13 @@
   "feedRouteComposePublicTitle": "全体公開",
   "feedRouteComposePublicSubtitle": "人気ランキングにも表示されます",
   "feedRouteComposeSubmitButton": "投稿する",
+  "feedRoutePickerTitle": "コースを選んでください",
+  "feedRoutePickerSubtitle": "フィードで紹介する自分のコースを先に選びます",
+  "feedRoutePickerEmpty": "まだ作成したコースがありません",
+  "feedRoutePickerEmptyHint": "マップタブでコースを作成してから戻ってきてください",
+  "feedRoutePickerNext": "このコースで続ける",
+  "feedRoutePhotoTitle": "コースに合う写真を選んでください",
+  "feedRoutePhotoHint": "コース内のスポットから代表写真を選択してください",
 
   "qnaHeaderTitle": "コミュニティ",
   "qnaHeaderSubtitle": "観光客の質問に地元住民が答えます",

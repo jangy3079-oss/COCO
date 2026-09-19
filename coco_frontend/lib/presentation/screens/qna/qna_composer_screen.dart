@@ -36,7 +36,9 @@ class _QnaComposerScreenState extends State<QnaComposerScreen> {
   bool _submitting = false;
 
   bool get _canSubmit =>
-      _titleController.text.trim().isNotEmpty && _bodyController.text.trim().isNotEmpty && !_submitting;
+      _titleController.text.trim().isNotEmpty &&
+      _bodyController.text.trim().isNotEmpty &&
+      !_submitting;
 
   @override
   void dispose() {
@@ -103,7 +105,9 @@ class _QnaComposerScreenState extends State<QnaComposerScreen> {
         requireLogin(context);
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(AppLocalizations.of(context)!.qnaComposerSubmitFailed)),
+          SnackBar(
+              content:
+                  Text(AppLocalizations.of(context)!.qnaComposerSubmitFailed)),
         );
       }
     }
@@ -117,26 +121,44 @@ class _QnaComposerScreenState extends State<QnaComposerScreen> {
       body: SafeArea(
         child: Column(
           children: [
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-              child: Row(
+            SizedBox(
+              height: 56,
+              child: Stack(
+                alignment: Alignment.center,
                 children: [
-                  TextButton(
-                    onPressed: () => context.pop(),
-                    child: Text(l10n.feedRouteComposeCancel, style: TextStyle(fontSize: 14, color: Colors.grey.shade600)),
-                  ),
-                  Expanded(
-                    child: Text(
-                      l10n.qnaComposerTitle,
-                      textAlign: TextAlign.center,
-                      style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: CocoTheme.secondary),
+                  Positioned(
+                    left: 4,
+                    child: IconButton(
+                      onPressed: () => context.pop(),
+                      icon: const Icon(
+                        Icons.close_rounded,
+                        size: 21,
+                        color: Color(0xFF9AA0A6),
+                      ),
                     ),
                   ),
-                  TextButton(
-                    onPressed: _canSubmit ? _submit : null,
-                    child: Text(
-                      l10n.feedPostDetailCommentSubmit,
-                      style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: _canSubmit ? CocoTheme.primary : Colors.grey.shade400),
+                  Text(
+                    l10n.qnaComposerTitle,
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w700,
+                      color: CocoTheme.secondary,
+                    ),
+                  ),
+                  Positioned(
+                    right: 8,
+                    child: TextButton(
+                      onPressed: _canSubmit ? _submit : null,
+                      child: Text(
+                        l10n.feedPostDetailCommentSubmit,
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w700,
+                          color: _canSubmit
+                              ? CocoTheme.primary
+                              : Colors.grey.shade400,
+                        ),
+                      ),
                     ),
                   ),
                 ],
@@ -151,11 +173,18 @@ class _QnaComposerScreenState extends State<QnaComposerScreen> {
                     TextField(
                       controller: _titleController,
                       onChanged: (_) => setState(() {}),
-                      style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w700, color: CocoTheme.secondary),
+                      style: const TextStyle(
+                          fontSize: 17,
+                          fontWeight: FontWeight.w700,
+                          color: CocoTheme.secondary),
                       decoration: InputDecoration(
                         hintText: l10n.qnaComposerTitleHint,
-                        border: UnderlineInputBorder(borderSide: BorderSide(color: Colors.grey.shade300)),
-                        enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: Colors.grey.shade300)),
+                        border: UnderlineInputBorder(
+                            borderSide:
+                                BorderSide(color: Colors.grey.shade300)),
+                        enabledBorder: UnderlineInputBorder(
+                            borderSide:
+                                BorderSide(color: Colors.grey.shade300)),
                       ),
                     ),
                     const SizedBox(height: 14),
@@ -164,7 +193,10 @@ class _QnaComposerScreenState extends State<QnaComposerScreen> {
                       onChanged: (_) => setState(() {}),
                       maxLines: 8,
                       minLines: 5,
-                      style: TextStyle(fontSize: 14, height: 1.7, color: Colors.grey.shade800),
+                      style: TextStyle(
+                          fontSize: 14,
+                          height: 1.7,
+                          color: Colors.grey.shade800),
                       decoration: InputDecoration(
                         hintText: l10n.qnaComposerBodyHint,
                         border: InputBorder.none,
@@ -173,9 +205,15 @@ class _QnaComposerScreenState extends State<QnaComposerScreen> {
                     const SizedBox(height: 8),
                     Row(
                       children: [
-                        Text(l10n.qnaComposerSpotTagLabel, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: CocoTheme.secondary)),
+                        Text(l10n.qnaComposerSpotTagLabel,
+                            style: const TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w700,
+                                color: CocoTheme.secondary)),
                         const SizedBox(width: 6),
-                        Text(l10n.qnaComposerOptionalLabel, style: TextStyle(fontSize: 12, color: Colors.grey.shade400)),
+                        Text(l10n.qnaComposerOptionalLabel,
+                            style: TextStyle(
+                                fontSize: 12, color: Colors.grey.shade400)),
                       ],
                     ),
                     const SizedBox(height: 10),
@@ -200,20 +238,35 @@ class _QnaComposerScreenState extends State<QnaComposerScreen> {
                           isDense: true,
                           filled: true,
                           fillColor: const Color(0xFFF8F8F8),
-                          contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: Colors.grey.shade300)),
-                          enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: Colors.grey.shade300)),
+                          contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 14, vertical: 12),
+                          border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(10),
+                              borderSide:
+                                  BorderSide(color: Colors.grey.shade300)),
+                          enabledBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(10),
+                              borderSide:
+                                  BorderSide(color: Colors.grey.shade300)),
                         ),
                       ),
                       if (_spotSearching)
                         const Padding(
                           padding: EdgeInsets.symmetric(vertical: 12),
-                          child: Center(child: SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))),
+                          child: Center(
+                              child: SizedBox(
+                                  width: 16,
+                                  height: 16,
+                                  child: CircularProgressIndicator(
+                                      strokeWidth: 2))),
                         )
-                      else if (_spotQuery.trim().isNotEmpty && _spotResults.isEmpty)
+                      else if (_spotQuery.trim().isNotEmpty &&
+                          _spotResults.isEmpty)
                         Padding(
                           padding: const EdgeInsets.symmetric(vertical: 12),
-                          child: Text(l10n.feedComposerLocationNoResults, style: TextStyle(fontSize: 13, color: Colors.grey.shade500)),
+                          child: Text(l10n.feedComposerLocationNoResults,
+                              style: TextStyle(
+                                  fontSize: 13, color: Colors.grey.shade500)),
                         )
                       else if (_spotResults.isNotEmpty)
                         Padding(
@@ -223,22 +276,37 @@ class _QnaComposerScreenState extends State<QnaComposerScreen> {
                             runSpacing: 8,
                             children: [
                               for (final spot in _spotResults)
-                                _SpotTagChip(label: spot.title, selected: false, onTap: () => _selectSpot(spot)),
+                                _SpotTagChip(
+                                    label: spot.title,
+                                    selected: false,
+                                    onTap: () => _selectSpot(spot)),
                             ],
                           ),
                         ),
                     ],
                     const SizedBox(height: 20),
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                      decoration: BoxDecoration(color: const Color(0xFFF4F8FC), borderRadius: BorderRadius.circular(12)),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 14, vertical: 12),
+                      decoration: BoxDecoration(
+                          color: const Color(0xFFF4F8FC),
+                          borderRadius: BorderRadius.circular(12)),
                       child: Text.rich(
                         TextSpan(
-                          style: TextStyle(fontSize: 12, height: 1.6, color: Colors.grey.shade700),
+                          style: TextStyle(
+                              fontSize: 12,
+                              height: 1.6,
+                              color: Colors.grey.shade700),
                           children: [
-                            TextSpan(text: l10n.qnaComposerLanguageNoticePrefix),
-                            TextSpan(text: l10n.qnaComposerLanguageNoticeLang, style: const TextStyle(color: CocoTheme.primary, fontWeight: FontWeight.w700)),
-                            TextSpan(text: l10n.qnaComposerLanguageNoticeSuffix),
+                            TextSpan(
+                                text: l10n.qnaComposerLanguageNoticePrefix),
+                            TextSpan(
+                                text: l10n.qnaComposerLanguageNoticeLang,
+                                style: const TextStyle(
+                                    color: CocoTheme.primary,
+                                    fontWeight: FontWeight.w700)),
+                            TextSpan(
+                                text: l10n.qnaComposerLanguageNoticeSuffix),
                           ],
                         ),
                       ),
@@ -258,7 +326,8 @@ class _SpotTagChip extends StatelessWidget {
   final String label;
   final bool selected;
   final VoidCallback onTap;
-  const _SpotTagChip({required this.label, required this.selected, required this.onTap});
+  const _SpotTagChip(
+      {required this.label, required this.selected, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
@@ -272,12 +341,16 @@ class _SpotTagChip extends StatelessWidget {
         decoration: BoxDecoration(
           color: selected ? const Color(0xFFE6F1FB) : Colors.white,
           borderRadius: BorderRadius.circular(18),
-          border: Border.all(color: selected ? CocoTheme.primary : Colors.grey.shade300),
+          border: Border.all(
+              color: selected ? CocoTheme.primary : Colors.grey.shade300),
         ),
         child: AnimatedDefaultTextStyle(
           duration: const Duration(milliseconds: 180),
           curve: Curves.easeOut,
-          style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: selected ? CocoTheme.primary : Colors.grey.shade700),
+          style: TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w500,
+              color: selected ? CocoTheme.primary : Colors.grey.shade700),
           child: Text(label),
         ),
       ),

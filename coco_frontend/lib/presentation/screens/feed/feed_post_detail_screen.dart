@@ -7,7 +7,8 @@ import '../../../data/repositories/feed_repository.dart';
 import '../../../data/repositories/route_repository.dart';
 import '../../../l10n/generated/app_localizations.dart';
 import '../../widgets/map/kakao_map_view.dart';
-import '../map/map_mock_data.dart' show MockSpot, mockSpotFromRouteStop, spotsCenter;
+import '../map/map_mock_data.dart'
+    show MockSpot, mockSpotFromRouteStop, spotsCenter;
 import 'feed_mock_data.dart';
 import 'feed_screen.dart' show showShareSheet;
 
@@ -35,7 +36,8 @@ class _FeedPostDetailScreenState extends State<FeedPostDetailScreen> {
   bool _submittingComment = false;
 
   bool get _isRoute => widget.item.type == FeedPostType.route;
-  int get _totalSlides => (_isRoute ? widget.item.imgCount + 1 : widget.item.imgCount).clamp(1, 99);
+  int get _totalSlides =>
+      (_isRoute ? widget.item.imgCount + 1 : widget.item.imgCount).clamp(1, 99);
   bool get _onMapSlide => _isRoute && _slide == _totalSlides - 1;
 
   @override
@@ -74,7 +76,8 @@ class _FeedPostDetailScreenState extends State<FeedPostDetailScreen> {
       try {
         final route = await _routeRepository.getById(numId);
         stops = route.spots.map(mockSpotFromRouteStop).toList();
-        isOwner = AuthTokenStore.nickname != null && AuthTokenStore.nickname == item.author;
+        isOwner = AuthTokenStore.nickname != null &&
+            AuthTokenStore.nickname == item.author;
       } catch (e) {
         debugPrint('[FeedPostDetailScreen] 코스 조회 실패: $e');
         return;
@@ -110,6 +113,22 @@ class _FeedPostDetailScreenState extends State<FeedPostDetailScreen> {
     }
   }
 
+  // 저장(북마크) 토글 — toggleLike와 동일한 낙관적 업데이트 패턴.
+  Future<void> _toggleSave() async {
+    final postId = widget.item.realPostId;
+    if (postId == null) {
+      setState(() => widget.item.saved = !widget.item.saved);
+      return;
+    }
+    setState(() => widget.item.saved = !widget.item.saved);
+    try {
+      await _feedRepository.toggleSave(postId);
+    } catch (e) {
+      debugPrint('[FeedPostDetailScreen] 저장 실패: $e');
+      if (mounted) setState(() => widget.item.saved = !widget.item.saved);
+    }
+  }
+
   Future<void> _submitComment() async {
     final text = _commentController.text.trim();
     if (text.isEmpty || _submittingComment) return;
@@ -142,12 +161,15 @@ class _FeedPostDetailScreenState extends State<FeedPostDetailScreen> {
       if (!mounted) return;
       setState(() => _submittingComment = false);
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(AppLocalizations.of(context)!.feedPostDetailCommentFailed)),
+        SnackBar(
+            content: Text(
+                AppLocalizations.of(context)!.feedPostDetailCommentFailed)),
       );
     }
   }
 
-  void _prevSlide() => setState(() => _slide = (_slide - 1 + _totalSlides) % _totalSlides);
+  void _prevSlide() =>
+      setState(() => _slide = (_slide - 1 + _totalSlides) % _totalSlides);
   void _nextSlide() => setState(() => _slide = (_slide + 1) % _totalSlides);
 
   Future<void> _share() async {
@@ -170,8 +192,14 @@ class _FeedPostDetailScreenState extends State<FeedPostDetailScreen> {
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
               child: Row(
                 children: [
-                  IconButton(onPressed: () => context.pop(), icon: const Icon(Icons.arrow_back_rounded)),
-                  Text(l10n.feedPostDetailPageTitle, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: CocoTheme.secondary)),
+                  IconButton(
+                      onPressed: () => context.pop(),
+                      icon: const Icon(Icons.arrow_back_rounded)),
+                  Text(l10n.feedPostDetailPageTitle,
+                      style: const TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w700,
+                          color: CocoTheme.secondary)),
                 ],
               ),
             ),
@@ -187,14 +215,24 @@ class _FeedPostDetailScreenState extends State<FeedPostDetailScreen> {
                           CircleAvatar(
                             radius: 14,
                             backgroundColor: const Color(0xFFF0ECE6),
-                            child: Text(item.authorInitial, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: CocoTheme.secondary)),
+                            child: Text(item.authorInitial,
+                                style: const TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w600,
+                                    color: CocoTheme.secondary)),
                           ),
                           const SizedBox(width: 8),
-                          Text(item.author ?? '', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: CocoTheme.secondary)),
+                          Text(item.author ?? '',
+                              style: const TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w700,
+                                  color: CocoTheme.secondary)),
                           const SizedBox(width: 6),
                           const _LocalBadge(),
                           const Spacer(),
-                          Text(item.timeLabel, style: TextStyle(fontSize: 12, color: Colors.grey.shade500)),
+                          Text(item.timeLabel,
+                              style: TextStyle(
+                                  fontSize: 12, color: Colors.grey.shade500)),
                         ],
                       ),
                     ),
@@ -208,13 +246,19 @@ class _FeedPostDetailScreenState extends State<FeedPostDetailScreen> {
                             children: [
                               Positioned.fill(
                                 child: _onMapSlide
-                                    ? _RouteMapSlide(stops: item.routeStops ?? const [])
-                                    : item.imageUrl != null
-                                        ? Image.network('${DioClient.baseUrl}${item.imageUrl}', fit: BoxFit.cover)
+                                    ? _RouteMapSlide(
+                                        stops: item.routeStops ?? const [])
+                                    : item.imageUrls.isNotEmpty
+                                        ? Image.network(
+                                            '${DioClient.baseUrl}${item.imageUrls[_slide.clamp(0, item.imageUrls.length - 1)]}',
+                                            fit: BoxFit.cover)
                                         : Container(
                                             color: color.withOpacity(0.12),
                                             alignment: Alignment.center,
-                                            child: Icon(categoryIcon(item.category), size: 40, color: color.withOpacity(0.4)),
+                                            child: Icon(
+                                                categoryIcon(item.category),
+                                                size: 40,
+                                                color: color.withOpacity(0.4)),
                                           ),
                               ),
                               if (_totalSlides > 1) ...[
@@ -222,13 +266,19 @@ class _FeedPostDetailScreenState extends State<FeedPostDetailScreen> {
                                   left: 10,
                                   top: 0,
                                   bottom: 0,
-                                  child: Center(child: _CarouselArrow(icon: Icons.chevron_left_rounded, onTap: _prevSlide)),
+                                  child: Center(
+                                      child: _CarouselArrow(
+                                          icon: Icons.chevron_left_rounded,
+                                          onTap: _prevSlide)),
                                 ),
                                 Positioned(
                                   right: 10,
                                   top: 0,
                                   bottom: 0,
-                                  child: Center(child: _CarouselArrow(icon: Icons.chevron_right_rounded, onTap: _nextSlide)),
+                                  child: Center(
+                                      child: _CarouselArrow(
+                                          icon: Icons.chevron_right_rounded,
+                                          onTap: _nextSlide)),
                                 ),
                                 Positioned(
                                   left: 0,
@@ -239,13 +289,19 @@ class _FeedPostDetailScreenState extends State<FeedPostDetailScreen> {
                                     children: [
                                       for (int i = 0; i < _totalSlides; i++)
                                         AnimatedContainer(
-                                          duration: const Duration(milliseconds: 150),
-                                          margin: const EdgeInsets.symmetric(horizontal: 3),
+                                          duration:
+                                              const Duration(milliseconds: 150),
+                                          margin: const EdgeInsets.symmetric(
+                                              horizontal: 3),
                                           width: i == _slide ? 18 : 6,
                                           height: 6,
                                           decoration: BoxDecoration(
-                                            borderRadius: BorderRadius.circular(3),
-                                            color: i == _slide ? CocoTheme.primary : Colors.white.withOpacity(0.85),
+                                            borderRadius:
+                                                BorderRadius.circular(3),
+                                            color: i == _slide
+                                                ? CocoTheme.primary
+                                                : Colors.white
+                                                    .withOpacity(0.85),
                                           ),
                                         ),
                                     ],
@@ -259,7 +315,11 @@ class _FeedPostDetailScreenState extends State<FeedPostDetailScreen> {
                     ),
                     Padding(
                       padding: const EdgeInsets.fromLTRB(20, 14, 20, 0),
-                      child: Text(item.desc, style: TextStyle(fontSize: 14, height: 1.7, color: Colors.black.withOpacity(0.7))),
+                      child: Text(item.desc,
+                          style: TextStyle(
+                              fontSize: 14,
+                              height: 1.7,
+                              color: Colors.black.withOpacity(0.7))),
                     ),
                     // 스팟 태그 없이 쓴 글이면 place가 빈 문자열이라 위치 배지를 아예 안 그린다.
                     if (!_isRoute && item.place.isNotEmpty)
@@ -269,7 +329,8 @@ class _FeedPostDetailScreenState extends State<FeedPostDetailScreen> {
                           onTap: () => context.go('/map'),
                           borderRadius: BorderRadius.circular(14),
                           child: Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 12, vertical: 9),
                             decoration: BoxDecoration(
                               borderRadius: BorderRadius.circular(14),
                               border: Border.all(color: Colors.grey.shade300),
@@ -277,11 +338,20 @@ class _FeedPostDetailScreenState extends State<FeedPostDetailScreen> {
                             child: Row(
                               mainAxisSize: MainAxisSize.min,
                               children: [
-                                const Icon(Icons.location_on_rounded, size: 15, color: CocoTheme.accent),
+                                const Icon(Icons.location_on_rounded,
+                                    size: 15, color: CocoTheme.accent),
                                 const SizedBox(width: 6),
-                                Text(item.dong, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: CocoTheme.primary)),
+                                Text(item.dong,
+                                    style: const TextStyle(
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.w700,
+                                        color: CocoTheme.primary)),
                                 const SizedBox(width: 4),
-                                Text(item.place, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: CocoTheme.secondary)),
+                                Text(item.place,
+                                    style: const TextStyle(
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.w600,
+                                        color: CocoTheme.secondary)),
                               ],
                             ),
                           ),
@@ -290,19 +360,27 @@ class _FeedPostDetailScreenState extends State<FeedPostDetailScreen> {
                     if (_onMapSlide)
                       Padding(
                         padding: const EdgeInsets.fromLTRB(20, 14, 20, 0),
-                        child: _RouteSummaryCard(item: item, onView: _openRoutePreview),
+                        child: _RouteSummaryCard(
+                            item: item, onView: _openRoutePreview),
                       ),
                     Padding(
                       padding: const EdgeInsets.fromLTRB(20, 18, 20, 4),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Container(margin: const EdgeInsets.only(bottom: 14), height: 1, color: Colors.black.withOpacity(0.07)),
+                          Container(
+                              margin: const EdgeInsets.only(bottom: 14),
+                              height: 1,
+                              color: Colors.black.withOpacity(0.07)),
                           Row(
                             children: [
                               _ActionIcon(
-                                icon: item.liked ? Icons.favorite_rounded : Icons.favorite_border_rounded,
-                                iconColor: item.liked ? CocoTheme.primary : Colors.grey.shade600,
+                                icon: item.liked
+                                    ? Icons.favorite_rounded
+                                    : Icons.favorite_border_rounded,
+                                iconColor: item.liked
+                                    ? CocoTheme.primary
+                                    : Colors.grey.shade600,
                                 label: '${item.likeCount}',
                                 onTap: _toggleLike,
                               ),
@@ -323,10 +401,14 @@ class _FeedPostDetailScreenState extends State<FeedPostDetailScreen> {
                               if (!_isRoute) ...[
                                 const Spacer(),
                                 _ActionIcon(
-                                  icon: item.saved ? Icons.bookmark_rounded : Icons.bookmark_border_rounded,
-                                  iconColor: item.saved ? CocoTheme.secondary : Colors.grey.shade600,
+                                  icon: item.saved
+                                      ? Icons.bookmark_rounded
+                                      : Icons.bookmark_border_rounded,
+                                  iconColor: item.saved
+                                      ? CocoTheme.secondary
+                                      : Colors.grey.shade600,
                                   label: '${item.saveCount}',
-                                  onTap: () => setState(() => item.saved = !item.saved),
+                                  onTap: _toggleSave,
                                 ),
                               ],
                             ],
@@ -336,7 +418,13 @@ class _FeedPostDetailScreenState extends State<FeedPostDetailScreen> {
                     ),
                     Padding(
                       padding: const EdgeInsets.fromLTRB(20, 4, 20, 4),
-                      child: Text(l10n.feedPostDetailCommentsCount(item.comments.length), style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: CocoTheme.secondary)),
+                      child: Text(
+                          l10n.feedPostDetailCommentsCount(
+                              item.comments.length),
+                          style: const TextStyle(
+                              fontSize: 15,
+                              fontWeight: FontWeight.w700,
+                              color: CocoTheme.secondary)),
                     ),
                     for (final c in item.comments)
                       Padding(
@@ -347,16 +435,28 @@ class _FeedPostDetailScreenState extends State<FeedPostDetailScreen> {
                             CircleAvatar(
                               radius: 14,
                               backgroundColor: const Color(0xFFF0ECE6),
-                              child: Text(c.authorInitial, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: CocoTheme.secondary)),
+                              child: Text(c.authorInitial,
+                                  style: const TextStyle(
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w600,
+                                      color: CocoTheme.secondary)),
                             ),
                             const SizedBox(width: 10),
                             Expanded(
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  Text(c.author, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: CocoTheme.secondary)),
+                                  Text(c.author,
+                                      style: const TextStyle(
+                                          fontSize: 13,
+                                          fontWeight: FontWeight.w600,
+                                          color: CocoTheme.secondary)),
                                   const SizedBox(height: 2),
-                                  Text(c.text, style: TextStyle(fontSize: 13, height: 1.4, color: Colors.grey.shade700)),
+                                  Text(c.text,
+                                      style: TextStyle(
+                                          fontSize: 13,
+                                          height: 1.4,
+                                          color: Colors.grey.shade700)),
                                 ],
                               ),
                             ),
@@ -379,7 +479,8 @@ class _FeedPostDetailScreenState extends State<FeedPostDetailScreen> {
                         hintText: l10n.feedPostDetailCommentHint,
                         filled: true,
                         fillColor: const Color(0xFFF8F8F8),
-                        contentPadding: const EdgeInsets.symmetric(horizontal: 14),
+                        contentPadding:
+                            const EdgeInsets.symmetric(horizontal: 14),
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(20),
                           borderSide: BorderSide(color: Colors.grey.shade300),
@@ -396,7 +497,8 @@ class _FeedPostDetailScreenState extends State<FeedPostDetailScreen> {
                   FilledButton(
                     style: FilledButton.styleFrom(
                       backgroundColor: CocoTheme.primary,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(20)),
                     ),
                     onPressed: _submitComment,
                     child: Text(l10n.feedPostDetailCommentSubmit),
@@ -418,8 +520,14 @@ class _LocalBadge extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-      decoration: BoxDecoration(color: CocoTheme.primary.withOpacity(0.12), borderRadius: BorderRadius.circular(10)),
-      child: Text(AppLocalizations.of(context)!.feedLocalBadge, style: const TextStyle(fontSize: 10.5, fontWeight: FontWeight.w700, color: CocoTheme.primary)),
+      decoration: BoxDecoration(
+          color: CocoTheme.primary.withOpacity(0.12),
+          borderRadius: BorderRadius.circular(10)),
+      child: Text(AppLocalizations.of(context)!.feedLocalBadge,
+          style: const TextStyle(
+              fontSize: 10.5,
+              fontWeight: FontWeight.w700,
+              color: CocoTheme.primary)),
     );
   }
 }
@@ -437,7 +545,10 @@ class _CarouselArrow extends StatelessWidget {
       child: InkWell(
         onTap: onTap,
         customBorder: const CircleBorder(),
-        child: SizedBox(width: 30, height: 30, child: Icon(icon, size: 18, color: CocoTheme.secondary)),
+        child: SizedBox(
+            width: 30,
+            height: 30,
+            child: Icon(icon, size: 18, color: CocoTheme.secondary)),
       ),
     );
   }
@@ -470,7 +581,12 @@ class _RouteMapSlide extends StatelessWidget {
             clusteringEnabled: false,
             markers: [
               for (final (i, spot) in stops.indexed)
-                KakaoMapMarker(id: spot.id, lat: spot.lat, lng: spot.lng, name: spot.name, order: i + 1),
+                KakaoMapMarker(
+                    id: spot.id,
+                    lat: spot.lat,
+                    lng: spot.lng,
+                    name: spot.name,
+                    order: i + 1),
             ],
           ),
         ),
@@ -480,8 +596,14 @@ class _RouteMapSlide extends StatelessWidget {
           top: 12,
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 5),
-            decoration: BoxDecoration(color: Colors.white.withOpacity(0.94), borderRadius: BorderRadius.circular(14)),
-            child: Text(l10n.feedRouteMapSlideBadge, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: CocoTheme.primary)),
+            decoration: BoxDecoration(
+                color: Colors.white.withOpacity(0.94),
+                borderRadius: BorderRadius.circular(14)),
+            child: Text(l10n.feedRouteMapSlideBadge,
+                style: const TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                    color: CocoTheme.primary)),
           ),
         ),
       ],
@@ -506,7 +628,9 @@ class _RouteSummaryCardState extends State<_RouteSummaryCard> {
     final l10n = AppLocalizations.of(context)!;
     return Container(
       padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(borderRadius: BorderRadius.circular(14), border: Border.all(color: Colors.black.withOpacity(0.08))),
+      decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: Colors.black.withOpacity(0.08))),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -514,19 +638,33 @@ class _RouteSummaryCardState extends State<_RouteSummaryCard> {
             children: [
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                decoration: BoxDecoration(color: CocoTheme.primary.withOpacity(0.12), borderRadius: BorderRadius.circular(10)),
-                child: Text(l10n.feedRouteSummaryBadge, style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: CocoTheme.primary)),
+                decoration: BoxDecoration(
+                    color: CocoTheme.primary.withOpacity(0.12),
+                    borderRadius: BorderRadius.circular(10)),
+                child: Text(l10n.feedRouteSummaryBadge,
+                    style: const TextStyle(
+                        fontSize: 10,
+                        fontWeight: FontWeight.w700,
+                        color: CocoTheme.primary)),
               ),
               const SizedBox(width: 6),
-              Text(l10n.feedRouteSummaryAuthorLine(item.author ?? ''), style: TextStyle(fontSize: 11, color: Colors.black.withOpacity(0.35))),
+              Text(l10n.feedRouteSummaryAuthorLine(item.author ?? ''),
+                  style: TextStyle(
+                      fontSize: 11, color: Colors.black.withOpacity(0.35))),
             ],
           ),
           const SizedBox(height: 10),
-          Text(item.displayTitle, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: CocoTheme.secondary)),
+          Text(item.displayTitle,
+              style: const TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w700,
+                  color: CocoTheme.secondary)),
           const SizedBox(height: 4),
           Text(
-            l10n.feedRouteSummaryStats(item.stopCount ?? 0, item.distanceKm.toStringAsFixed(1), item.durationMin),
-            style: TextStyle(fontSize: 12, color: Colors.black.withOpacity(0.45)),
+            l10n.feedRouteSummaryStats(item.stopCount ?? 0,
+                item.distanceKm.toStringAsFixed(1), item.durationMin),
+            style:
+                TextStyle(fontSize: 12, color: Colors.black.withOpacity(0.45)),
           ),
           const SizedBox(height: 12),
           Row(
@@ -536,28 +674,46 @@ class _RouteSummaryCardState extends State<_RouteSummaryCard> {
                   style: OutlinedButton.styleFrom(
                     minimumSize: const Size.fromHeight(44),
                     side: BorderSide(color: Colors.grey.shade300),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12)),
                   ),
                   // 코스 상세(route_preview_screen)로 이동 — 내가 올린 코스면(routeId 있음)
                   // 편집도 가능하고, 다른 로컬이 올린 코스면 보기 전용으로 뜬다.
-                  onPressed: (item.routeStops == null || item.routeStops!.isEmpty) && item.routeId == null
-                      ? null
-                      : () => widget.onView(item),
-                  child: Text(l10n.feedRouteSummaryViewButton, style: const TextStyle(color: CocoTheme.secondary, fontWeight: FontWeight.w600)),
+                  onPressed:
+                      (item.routeStops == null || item.routeStops!.isEmpty) &&
+                              item.routeId == null
+                          ? null
+                          : () => widget.onView(item),
+                  child: Text(l10n.feedRouteSummaryViewButton,
+                      style: const TextStyle(
+                          color: CocoTheme.secondary,
+                          fontWeight: FontWeight.w600)),
                 ),
               ),
               const SizedBox(width: 8),
               Expanded(
                 child: FilledButton(
                   style: FilledButton.styleFrom(
-                    backgroundColor: item.routeSaved ? const Color(0xFFFF5A36) : Colors.white,
-                    foregroundColor: item.routeSaved ? Colors.white : const Color(0xFFFF5A36),
+                    backgroundColor: item.routeSaved
+                        ? const Color(0xFFFF5A36)
+                        : Colors.white,
+                    foregroundColor: item.routeSaved
+                        ? Colors.white
+                        : const Color(0xFFFF5A36),
                     minimumSize: const Size.fromHeight(44),
-                    side: item.routeSaved ? null : const BorderSide(color: Color(0xFFFF5A36)),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    side: item.routeSaved
+                        ? null
+                        : const BorderSide(color: Color(0xFFFF5A36)),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12)),
                   ),
-                  onPressed: () => setState(() => item.routeSaved = !item.routeSaved),
-                  child: Text(item.routeSaved ? l10n.feedSaveButtonSaved : l10n.feedSaveButtonUnsaved, style: const TextStyle(fontWeight: FontWeight.w600)),
+                  onPressed: () =>
+                      setState(() => item.routeSaved = !item.routeSaved),
+                  child: Text(
+                      item.routeSaved
+                          ? l10n.feedSaveButtonSaved
+                          : l10n.feedSaveButtonUnsaved,
+                      style: const TextStyle(fontWeight: FontWeight.w600)),
                 ),
               ),
             ],
@@ -567,7 +723,8 @@ class _RouteSummaryCardState extends State<_RouteSummaryCard> {
               padding: const EdgeInsets.only(top: 9),
               child: Text(
                 l10n.feedRouteSummarySavedHint,
-                style: TextStyle(fontSize: 11, color: Colors.black.withOpacity(0.4)),
+                style: TextStyle(
+                    fontSize: 11, color: Colors.black.withOpacity(0.4)),
               ),
             ),
         ],
@@ -581,7 +738,11 @@ class _ActionIcon extends StatelessWidget {
   final Color iconColor;
   final String label;
   final VoidCallback onTap;
-  const _ActionIcon({required this.icon, required this.iconColor, required this.label, required this.onTap});
+  const _ActionIcon(
+      {required this.icon,
+      required this.iconColor,
+      required this.label,
+      required this.onTap});
 
   @override
   Widget build(BuildContext context) {
@@ -593,7 +754,8 @@ class _ActionIcon extends StatelessWidget {
         children: [
           Icon(icon, size: 18, color: iconColor),
           const SizedBox(width: 6),
-          Text(label, style: TextStyle(fontSize: 13, color: Colors.grey.shade700)),
+          Text(label,
+              style: TextStyle(fontSize: 13, color: Colors.grey.shade700)),
         ],
       ),
     );

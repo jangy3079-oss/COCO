@@ -22,31 +22,47 @@ class _MySavedScreenState extends State<MySavedScreen> {
   late String _filter = widget.initialFilter;
 
   final _feedRepository = FeedRepository();
-  // GET /api/feed 결과(feedItemFromPost로 변환) — "좋아요한 피드" 탭이 여기서 골라 보여준다.
-  // feed_screen.dart의 _loadRealPosts와 동일 패턴. 백엔드가 최신 50개까지만 내려주므로
-  // 그보다 오래된 글에 좋아요가 남아있으면 여기 안 보일 수 있음(TODO: 백엔드에
-  // GET /api/feed/liked 전용 엔드포인트가 생기면 그걸로 교체).
-  List<FeedItem> _feedItems = [];
-  bool _loadingFeed = false;
+  // GET /api/feed/liked 결과 — "좋아요한 피드" 탭 전용.
+  List<FeedItem> _likedItems = [];
+  bool _loadingLiked = false;
+  // GET /api/feed/saved 결과 — "저장한 피드" 탭 전용.
+  List<FeedItem> _savedItems = [];
+  bool _loadingSaved = false;
 
   @override
   void initState() {
     super.initState();
-    _loadFeed();
+    _loadLikedFeed();
+    _loadSavedFeed();
   }
 
-  Future<void> _loadFeed() async {
-    setState(() => _loadingFeed = true);
+  Future<void> _loadLikedFeed() async {
+    setState(() => _loadingLiked = true);
     try {
-      final posts = await _feedRepository.fetchFeed();
+      final posts = await _feedRepository.fetchLikedFeed();
       if (!mounted) return;
       setState(() {
-        _feedItems = posts.map(feedItemFromPost).toList();
-        _loadingFeed = false;
+        _likedItems = posts.map(feedItemFromPost).toList();
+        _loadingLiked = false;
       });
     } catch (e) {
-      debugPrint('[MySavedScreen] 피드 목록 조회 실패: $e');
-      if (mounted) setState(() => _loadingFeed = false);
+      debugPrint('[MySavedScreen] 좋아요 피드 조회 실패: $e');
+      if (mounted) setState(() => _loadingLiked = false);
+    }
+  }
+
+  Future<void> _loadSavedFeed() async {
+    setState(() => _loadingSaved = true);
+    try {
+      final posts = await _feedRepository.fetchSavedFeed();
+      if (!mounted) return;
+      setState(() {
+        _savedItems = posts.map(feedItemFromPost).toList();
+        _loadingSaved = false;
+      });
+    } catch (e) {
+      debugPrint('[MySavedScreen] 저장 피드 조회 실패: $e');
+      if (mounted) setState(() => _loadingSaved = false);
     }
   }
 
@@ -57,6 +73,8 @@ class _MySavedScreenState extends State<MySavedScreen> {
     setState(() => item.liked = !item.liked);
     try {
       await _feedRepository.toggleLike(postId);
+      // 좋아요 실제 해제 시 목록에서 지운다
+      if (!item.liked && mounted) setState(() => _likedItems.remove(item));
     } catch (e) {
       if (!mounted) return;
       setState(() => item.liked = !item.liked);
@@ -64,6 +82,26 @@ class _MySavedScreenState extends State<MySavedScreen> {
         requireLogin(context);
       } else {
         debugPrint('[MySavedScreen] 좋아요 해제 실패: $e');
+      }
+    }
+  }
+
+  Future<void> _toggleSave(FeedItem item) async {
+    final postId = item.realPostId;
+    if (postId == null) return;
+    if (!requireLogin(context)) return;
+    setState(() => item.saved = !item.saved);
+    try {
+      await _feedRepository.toggleSave(postId);
+      // 저장 실제 해제 시 목록에서 지운다
+      if (!item.saved && mounted) setState(() => _savedItems.remove(item));
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => item.saved = !item.saved);
+      if (isUnauthorized(e)) {
+        requireLogin(context);
+      } else {
+        debugPrint('[MySavedScreen] 저장 해제 실패: $e');
       }
     }
   }
@@ -79,7 +117,7 @@ class _MySavedScreenState extends State<MySavedScreen> {
     final l10n = AppLocalizations.of(context)!;
     switch (_filter) {
       case 'likedFeed':
-        return _feedItems.where((f) => f.liked).map((f) => _SavedEntry(
+        return _likedItems.map((f) => _SavedEntry(
               name: f.place,
               meta: l10n.mySavedMetaLiked(f.author ?? 'COCO', f.likeCount),
               color: categoryColor(f.category),
@@ -92,10 +130,18 @@ class _MySavedScreenState extends State<MySavedScreen> {
               },
             )).toList();
       case 'savedFeed':
-        // 백엔드에 피드 저장(북마크) 기능 자체가 없다(feed_post_likes만 존재, 별도
-        // save 테이블·엔드포인트 없음) — 있는 것처럼 로컬 목업으로 채우지 않고
-        // 항상 빈 목록으로 둔다. 백엔드 도입 요청은 FEED_SAVE_REQUEST.md 참고.
-        return [];
+        return _savedItems.map((f) => _SavedEntry(
+              name: f.place.isNotEmpty ? f.place : f.desc,
+              meta: l10n.mySavedMetaSaved(f.author ?? 'COCO', f.saveCount),
+              color: categoryColor(f.category),
+              icon: categoryIcon(f.category),
+              actionLabel: l10n.mySavedActionUnsave,
+              onAction: () => _toggleSave(f),
+              onTap: () async {
+                await context.push('/feed/post', extra: f);
+                if (mounted) setState(() {});
+              },
+            )).toList();
       case 'routes':
         return savedRoutes.map((r) {
           final numId = dbRouteNumericId(r.id);
@@ -220,7 +266,7 @@ class _MySavedScreenState extends State<MySavedScreen> {
               ),
             ),
             Expanded(
-              child: _filter == 'likedFeed' && _loadingFeed
+              child: (_filter == 'likedFeed' && _loadingLiked) || (_filter == 'savedFeed' && _loadingSaved)
                   ? const Center(child: CircularProgressIndicator())
                   : entries.isEmpty
                   ? _EmptyState(text: empty.text, cta: empty.cta, onCta: empty.onCta)

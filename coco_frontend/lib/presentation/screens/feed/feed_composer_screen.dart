@@ -5,152 +5,251 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
+
 import '../../../core/locale/locale_controller.dart';
+import '../../../core/network/login_guard.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../data/models/feed_post.dart';
 import '../../../data/models/spot.dart';
 import '../../../data/repositories/feed_repository.dart';
 import '../../../data/repositories/spot_repository.dart';
 import '../../../l10n/generated/app_localizations.dart';
+import '../map/map_mock_data.dart';
 
-/// 게시물 작성 3단계 위저드: 사진(선택) → 스팟 태그(실제 검색) → 한줄 설명.
-/// 제출하면 coco_backend POST /api/feed로 실제 게시물을 만든다. 사진을 고르면
-/// 그 자리에서 바로 POST /api/feed/images로 업로드해 imageUrl을 미리 받아두고,
-/// 최종 게시 시 그 값을 함께 보낸다 — 사진은 선택이라 안 골라도 게시할 수 있다.
-/// (예전엔 카테고리를 따로 고르는 4번째 단계가 있었지만, 실제 스팟을 태그하면
-///  카테고리는 그 스팟이 이미 갖고 있어서 없앴다.)
+const _maxFeedImages = 10;
+
+/// 당근의 게시글 작성 화면처럼 사진·설명·장소·코스를 한 화면에서 입력한다.
 class FeedComposerScreen extends StatefulWidget {
-  const FeedComposerScreen({super.key});
+  final MockRoute? initialRoute;
+
+  const FeedComposerScreen({super.key, this.initialRoute});
 
   @override
   State<FeedComposerScreen> createState() => _FeedComposerScreenState();
 }
 
 class _FeedComposerScreenState extends State<FeedComposerScreen> {
-  static const _totalSteps = 3;
+  final _descriptionController = TextEditingController();
+  final _locationController = TextEditingController();
+  final _feedRepository = FeedRepository();
+  final _spotRepository = SpotRepository();
 
-  int _step = 1;
-  Uint8List? _pickedImageBytes;
-  bool _uploadingImage = false;
-  String? _uploadedImageUrl;
+  final List<Uint8List> _pickedImageBytes = [];
+  final List<String> _uploadedImageUrls = [];
+  final List<Spot> _searchResults = [];
 
+  late MockRoute? _selectedRoute = widget.initialRoute;
   Spot? _selectedSpot;
-  String _locationQuery = '';
-  List<Spot> _searchResults = [];
-  bool _searching = false;
   Timer? _searchDebounce;
-
-  final _descController = TextEditingController();
+  bool _uploadingImages = false;
+  bool _searching = false;
+  bool _loadingRoutes = true;
   bool _submitting = false;
 
-  final _spotRepository = SpotRepository();
-  final _feedRepository = FeedRepository();
+  bool get _canSubmit =>
+      _descriptionController.text.trim().isNotEmpty &&
+      !_uploadingImages &&
+      !_submitting;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadRoutes();
+  }
+
+  Future<void> _loadRoutes() async {
+    await refreshMyRoutes();
+    if (mounted) setState(() => _loadingRoutes = false);
+  }
 
   @override
   void dispose() {
-    _descController.dispose();
+    _descriptionController.dispose();
+    _locationController.dispose();
     _searchDebounce?.cancel();
     super.dispose();
   }
 
-  bool get _nextEnabled => switch (_step) {
-        1 => true, // 사진은 선택이라 안 골라도 다음으로 넘어갈 수 있음
-        2 => true, // 스팟 태그도 선택 — 안 골라도 다음으로 넘어갈 수 있음
-        _ => true,
-      };
+  Future<void> _pickImages() async {
+    final remaining = _maxFeedImages - _pickedImageBytes.length;
+    if (remaining <= 0 || _uploadingImages) return;
 
-  void _back() {
-    if (_step > 1) {
-      setState(() => _step -= 1);
-    } else {
-      context.pop();
-    }
-  }
-
-  void _next() {
-    if (!_nextEnabled) return;
-    setState(() => _step += 1);
-  }
-
-  // 사진은 한 장만 지원(백엔드 feed_posts.image_url이 단일 컬럼) — 고르는 즉시 업로드해서
-  // imageUrl을 미리 받아두면, 최종 "게시하기" 시점엔 이미 준비된 URL만 붙이면 된다.
-  Future<void> _pickImage() async {
-    final picked = await ImagePicker().pickImage(source: ImageSource.gallery, imageQuality: 85);
-    if (picked == null) return;
-    final bytes = await picked.readAsBytes();
+    final picked = await ImagePicker().pickMultiImage(imageQuality: 85);
+    if (picked.isEmpty) return;
+    final selected = picked.take(remaining).toList();
+    final bytes =
+        await Future.wait(selected.map((image) => image.readAsBytes()));
     if (!mounted) return;
+
     setState(() {
-      _pickedImageBytes = bytes;
-      _uploadedImageUrl = null;
-      _uploadingImage = true;
+      _pickedImageBytes.addAll(bytes);
+      _uploadingImages = true;
     });
+
     try {
-      final url = await _feedRepository.uploadImage(bytes, picked.name);
+      final urls = <String>[];
+      for (var i = 0; i < selected.length; i++) {
+        urls.add(await _feedRepository.uploadImage(bytes[i], selected[i].name));
+      }
       if (!mounted) return;
       setState(() {
-        _uploadedImageUrl = url;
-        _uploadingImage = false;
+        _uploadedImageUrls.addAll(urls);
+        _uploadingImages = false;
       });
     } catch (e) {
       debugPrint('[FeedComposerScreen] 이미지 업로드 실패: $e');
       if (!mounted) return;
       setState(() {
-        _pickedImageBytes = null;
-        _uploadingImage = false;
+        _pickedImageBytes.removeRange(
+          _pickedImageBytes.length - bytes.length,
+          _pickedImageBytes.length,
+        );
+        _uploadingImages = false;
       });
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(AppLocalizations.of(context)!.feedComposerPhotoUploadFailed)),
+        SnackBar(
+            content: Text(
+                AppLocalizations.of(context)!.feedComposerPhotoUploadFailed)),
       );
     }
   }
 
-  void _removePhoto() => setState(() {
-        _pickedImageBytes = null;
-        _uploadedImageUrl = null;
-      });
+  void _removePhoto(int index) {
+    if (_uploadingImages) return;
+    setState(() {
+      _pickedImageBytes.removeAt(index);
+      if (index < _uploadedImageUrls.length) {
+        _uploadedImageUrls.removeAt(index);
+      }
+    });
+  }
 
-  // 스팟 검색은 DB 조회(네트워크 호출)라 타이핑마다 바로 쏘지 않고 300ms 디바운스한다.
-  // (route_builder_screen.dart의 "+ 스팟 추가" 검색과 동일한 패턴.)
-  void _onLocationQueryChanged(String query) {
-    setState(() => _locationQuery = query);
+  void _searchSpot(String query) {
+    setState(() {
+      if (_selectedSpot != null && query != _selectedSpot!.title) {
+        _selectedSpot = null;
+      }
+    });
     _searchDebounce?.cancel();
-    final q = query.trim();
-    if (q.isEmpty) {
-      setState(() => _searchResults = []);
+    final trimmed = query.trim();
+    if (trimmed.isEmpty) {
+      setState(() => _searchResults.clear());
       return;
     }
+
     _searchDebounce = Timer(const Duration(milliseconds: 300), () async {
-      setState(() => _searching = true);
+      if (mounted) setState(() => _searching = true);
       try {
         final results = await _spotRepository.search(
-          q,
+          trimmed,
           locale: context.read<LocaleController>().locale.languageCode,
         );
         if (!mounted) return;
         setState(() {
-          _searchResults = results;
+          _searchResults
+            ..clear()
+            ..addAll(results.take(4));
           _searching = false;
         });
       } catch (e) {
-        debugPrint('[FeedComposerScreen] 스팟 검색 실패: $e');
+        debugPrint('[FeedComposerScreen] 장소 검색 실패: $e');
         if (mounted) setState(() => _searching = false);
       }
     });
   }
 
+  void _selectSpot(Spot spot) {
+    setState(() {
+      _selectedSpot = spot;
+      _locationController.text = spot.title;
+      _searchResults.clear();
+    });
+    FocusScope.of(context).unfocus();
+  }
+
+  Future<void> _openRouteSheet() async {
+    if (_loadingRoutes) {
+      await refreshMyRoutes();
+      if (!mounted) return;
+      setState(() => _loadingRoutes = false);
+    }
+    final routes = mockMyRoutes
+        .where((route) => !route.isDraft && route.stops.isNotEmpty)
+        .toList();
+    final selected = await showModalBottomSheet<MockRoute?>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.white,
+      showDragHandle: true,
+      shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+      builder: (sheetContext) => SafeArea(
+        child: SizedBox(
+          height: MediaQuery.sizeOf(sheetContext).height * 0.58,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 4, 20, 14),
+                child: Text(
+                  AppLocalizations.of(sheetContext)!.feedRoutePickerTitle,
+                  style: const TextStyle(
+                      fontSize: 18, fontWeight: FontWeight.w800),
+                ),
+              ),
+              const Divider(height: 1),
+              Expanded(
+                child: _loadingRoutes
+                    ? const Center(
+                        child:
+                            CircularProgressIndicator(color: CocoTheme.primary))
+                    : routes.isEmpty
+                        ? _EmptyRoutes(
+                            onClose: () => Navigator.pop(sheetContext))
+                        : ListView.separated(
+                            padding: const EdgeInsets.all(16),
+                            itemCount: routes.length,
+                            separatorBuilder: (_, __) =>
+                                const SizedBox(height: 10),
+                            itemBuilder: (context, index) {
+                              final route = routes[index];
+                              return _RouteOption(
+                                route: route,
+                                selected: route.id == _selectedRoute?.id,
+                                onTap: () => Navigator.pop(sheetContext, route),
+                              );
+                            },
+                          ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+    if (selected != null && mounted) setState(() => _selectedRoute = selected);
+  }
+
   Future<void> _submit() async {
-    final desc = _descController.text.trim();
-    if (desc.isEmpty || _submitting || _uploadingImage) return;
+    if (!_canSubmit || !requireLogin(context)) return;
     setState(() => _submitting = true);
     try {
-      await _feedRepository.createPost(description: desc, spotId: _selectedSpot?.id, imageUrl: _uploadedImageUrl);
-      if (!mounted) return;
-      context.pop();
+      await _feedRepository.createPost(
+        description: _descriptionController.text.trim(),
+        spotId: _selectedSpot?.id,
+        routeId: dbRouteNumericId(_selectedRoute?.id ?? ''),
+        imageUrl: _uploadedImageUrls.isEmpty
+            ? null
+            : encodeFeedImageUrls(_uploadedImageUrls),
+      );
+      if (mounted) context.pop();
     } catch (e) {
       debugPrint('[FeedComposerScreen] 게시물 작성 실패: $e');
       if (!mounted) return;
       setState(() => _submitting = false);
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(AppLocalizations.of(context)!.feedComposerPostFailed)),
+        SnackBar(
+            content:
+                Text(AppLocalizations.of(context)!.feedComposerPostFailed)),
       );
     }
   }
@@ -160,85 +259,171 @@ class _FeedComposerScreenState extends State<FeedComposerScreen> {
     final l10n = AppLocalizations.of(context)!;
     return Scaffold(
       backgroundColor: Colors.white,
+      appBar: AppBar(
+        backgroundColor: Colors.white,
+        surfaceTintColor: Colors.transparent,
+        elevation: 0,
+        leading: IconButton(
+            onPressed: () => context.pop(),
+            icon: const Icon(
+              Icons.close_rounded,
+              size: 21,
+              color: Color(0xFF9AA0A6),
+            )),
+        title: Text(l10n.feedComposerPageTitle,
+            style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w800)),
+        centerTitle: true,
+      ),
       body: SafeArea(
+        top: false,
         child: Column(
           children: [
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-              child: Row(
-                children: [
-                  IconButton(onPressed: _back, icon: const Icon(Icons.arrow_back_rounded)),
-                  Text(l10n.feedComposerStepTitle(_step, _totalSteps), style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: CocoTheme.secondary)),
-                ],
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
-              child: Row(
-                children: [
-                  for (int i = 1; i <= _totalSteps; i++) ...[
-                    Expanded(
-                      child: Container(
-                        height: 4,
-                        decoration: BoxDecoration(
-                          color: i <= _step ? CocoTheme.primary : Colors.black.withOpacity(0.1),
-                          borderRadius: BorderRadius.circular(2),
-                        ),
-                      ),
-                    ),
-                    if (i != _totalSteps) const SizedBox(width: 6),
-                  ],
-                ],
-              ),
-            ),
             Expanded(
               child: SingleChildScrollView(
-                padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
-                child: switch (_step) {
-                  1 => _PhotoStep(
+                padding: const EdgeInsets.fromLTRB(20, 20, 20, 24),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _PhotoPicker(
                       imageBytes: _pickedImageBytes,
-                      uploading: _uploadingImage,
-                      onAdd: _pickImage,
+                      uploading: _uploadingImages,
+                      onAdd: _pickImages,
                       onRemove: _removePhoto,
                     ),
-                  2 => _LocationStep(
-                      query: _locationQuery,
-                      selected: _selectedSpot,
-                      results: _searchResults,
-                      searching: _searching,
-                      onQueryChanged: _onLocationQueryChanged,
-                      onSelect: (v) => setState(() => _selectedSpot = v),
+                    const SizedBox(height: 28),
+                    _SectionLabel(label: l10n.feedComposerDescStepTitle),
+                    const SizedBox(height: 10),
+                    TextField(
+                      controller: _descriptionController,
+                      maxLength: 300,
+                      minLines: 5,
+                      maxLines: 8,
+                      onChanged: (_) => setState(() {}),
+                      decoration: InputDecoration(
+                        hintText: l10n.feedComposerDescHint,
+                        hintStyle: TextStyle(
+                            color: Colors.black.withOpacity(0.32), height: 1.5),
+                        filled: true,
+                        fillColor: const Color(0xFFF8FAFC),
+                        contentPadding: const EdgeInsets.all(16),
+                        border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(14),
+                            borderSide: BorderSide.none),
+                      ),
                     ),
-                  _ => _DescriptionStep(controller: _descController, onChanged: (_) => setState(() {})),
-                },
+                    const SizedBox(height: 24),
+                    _SectionLabel(
+                        label: l10n.feedComposerCourseLabel, optional: true),
+                    const SizedBox(height: 10),
+                    _AttachCard(
+                      icon: Icons.route_rounded,
+                      title: _selectedRoute?.name ??
+                          l10n.feedComposerCoursePlaceholder,
+                      subtitle: _selectedRoute == null
+                          ? l10n.feedComposerCourseHint
+                          : l10n.myRoutesStopsDistance(
+                              _selectedRoute!.stops.length,
+                              _selectedRoute!.distanceKm.toStringAsFixed(1),
+                            ),
+                      selected: _selectedRoute != null,
+                      onTap: _openRouteSheet,
+                      onClear: _selectedRoute == null
+                          ? null
+                          : () => setState(() => _selectedRoute = null),
+                    ),
+                    const SizedBox(height: 24),
+                    _SectionLabel(label: l10n.feedComposerLocationStepTitle),
+                    const SizedBox(height: 10),
+                    TextField(
+                      controller: _locationController,
+                      onChanged: _searchSpot,
+                      style: const TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w700,
+                      ),
+                      decoration: InputDecoration(
+                        hintText: l10n.feedComposerLocationSearchHint,
+                        hintStyle: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w700,
+                          color: Colors.black.withOpacity(0.38),
+                        ),
+                        prefixIcon: const Icon(Icons.place_outlined,
+                            color: CocoTheme.primary),
+                        suffixIcon: _selectedSpot == null
+                            ? null
+                            : const Icon(Icons.check_circle_rounded,
+                                color: CocoTheme.primary),
+                        filled: true,
+                        fillColor: const Color(0xFFF8FAFC),
+                        border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(14),
+                            borderSide: BorderSide.none),
+                      ),
+                    ),
+                    if (_searching)
+                      const Padding(
+                        padding: EdgeInsets.symmetric(vertical: 14),
+                        child: Center(
+                          child: SizedBox(
+                              width: 18,
+                              height: 18,
+                              child: CircularProgressIndicator(strokeWidth: 2)),
+                        ),
+                      )
+                    else if (_searchResults.isNotEmpty)
+                      Container(
+                        margin: const EdgeInsets.only(top: 8),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(14),
+                          border:
+                              Border.all(color: Colors.black.withOpacity(0.08)),
+                        ),
+                        child: Column(
+                          children: [
+                            for (final spot in _searchResults)
+                              ListTile(
+                                dense: true,
+                                onTap: () => _selectSpot(spot),
+                                title: Text(
+                                  spot.title,
+                                  style: const TextStyle(
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.w600),
+                                ),
+                                subtitle: Text(spot.address,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis),
+                                trailing:
+                                    const Icon(Icons.chevron_right_rounded),
+                              ),
+                          ],
+                        ),
+                      ),
+                  ],
+                ),
               ),
             ),
             Padding(
-              padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-              child: _step == _totalSteps
-                  ? FilledButton(
-                      style: FilledButton.styleFrom(
-                        backgroundColor: _descController.text.trim().isNotEmpty && !_uploadingImage
-                            ? CocoTheme.primary
-                            : Colors.black.withOpacity(0.2),
-                        minimumSize: const Size.fromHeight(52),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                      ),
-                      onPressed: _uploadingImage ? null : _submit,
-                      child: Text(
-                        _submitting ? l10n.feedComposerSubmitting : l10n.feedComposerSubmitButton,
-                        style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
-                      ),
-                    )
-                  : FilledButton(
-                      style: FilledButton.styleFrom(
-                        backgroundColor: _nextEnabled ? CocoTheme.primary : Colors.black.withOpacity(0.2),
-                        minimumSize: const Size.fromHeight(52),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                      ),
-                      onPressed: _next,
-                      child: Text(l10n.feedComposerNextButton, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
-                    ),
+              padding: const EdgeInsets.fromLTRB(20, 8, 20, 16),
+              child: FilledButton(
+                onPressed: _canSubmit ? _submit : null,
+                style: FilledButton.styleFrom(
+                  backgroundColor: CocoTheme.primary,
+                  disabledBackgroundColor: Colors.black.withOpacity(0.12),
+                  minimumSize: const Size.fromHeight(52),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14)),
+                ),
+                child: Text(
+                  _submitting
+                      ? l10n.feedComposerSubmitting
+                      : l10n.feedComposerSubmitButton,
+                  style: const TextStyle(
+                      fontSize: 15, fontWeight: FontWeight.w700),
+                ),
+              ),
             ),
           ],
         ),
@@ -247,13 +432,17 @@ class _FeedComposerScreenState extends State<FeedComposerScreen> {
   }
 }
 
-/// 사진은 한 장만 지원(백엔드가 단일 imageUrl 컬럼) — 없어도 다음 단계로 넘어갈 수 있다.
-class _PhotoStep extends StatelessWidget {
-  final Uint8List? imageBytes;
+class _PhotoPicker extends StatelessWidget {
+  final List<Uint8List> imageBytes;
   final bool uploading;
   final VoidCallback onAdd;
-  final VoidCallback onRemove;
-  const _PhotoStep({required this.imageBytes, required this.uploading, required this.onAdd, required this.onRemove});
+  final ValueChanged<int> onRemove;
+
+  const _PhotoPicker(
+      {required this.imageBytes,
+      required this.uploading,
+      required this.onAdd,
+      required this.onRemove});
 
   @override
   Widget build(BuildContext context) {
@@ -261,179 +450,301 @@ class _PhotoStep extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(l10n.feedComposerPhotoStepTitle, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: CocoTheme.secondary)),
+        _SectionLabel(label: l10n.feedComposerPhotoStepTitle),
+        const SizedBox(height: 6),
+        Text(
+          l10n.feedComposerPhotoStepHint,
+          style: TextStyle(fontSize: 12, color: Colors.black.withOpacity(0.4)),
+        ),
         const SizedBox(height: 12),
         SizedBox(
-          width: 120,
-          height: 120,
-          child: imageBytes == null
-              ? InkWell(
-                  onTap: onAdd,
-                  borderRadius: BorderRadius.circular(10),
+          height: 108,
+          child: ListView.separated(
+            scrollDirection: Axis.horizontal,
+            itemCount: imageBytes.length +
+                (imageBytes.length < _maxFeedImages ? 1 : 0),
+            separatorBuilder: (_, __) => const SizedBox(width: 10),
+            itemBuilder: (context, index) {
+              if (index == imageBytes.length) {
+                return InkWell(
+                  onTap: uploading ? null : onAdd,
+                  borderRadius: BorderRadius.circular(14),
                   child: Container(
+                    width: 108,
                     decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(10),
-                      border: Border.all(color: Colors.black.withOpacity(0.2), width: 1.5),
+                      color: const Color(0xFFF8FAFC),
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(color: Colors.black.withOpacity(0.12)),
                     ),
-                    child: Icon(Icons.add, size: 24, color: Colors.grey.shade500),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        const Icon(Icons.photo_camera_outlined,
+                            color: CocoTheme.primary, size: 27),
+                        const SizedBox(height: 7),
+                        Text(
+                          '${imageBytes.length}/$_maxFeedImages',
+                          style: const TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w700,
+                              color: CocoTheme.primary),
+                        ),
+                      ],
+                    ),
                   ),
-                )
-              : Stack(
-                  children: [
-                    Positioned.fill(
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(10),
-                        child: Image.memory(imageBytes!, fit: BoxFit.cover),
+                );
+              }
+
+              return Stack(
+                children: [
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(14),
+                    child: Image.memory(imageBytes[index],
+                        width: 108, height: 108, fit: BoxFit.cover),
+                  ),
+                  if (index == 0)
+                    Positioned(
+                      left: 6,
+                      bottom: 6,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 7, vertical: 3),
+                        decoration: BoxDecoration(
+                            color: CocoTheme.primary,
+                            borderRadius: BorderRadius.circular(8)),
+                        child: const Text(
+                          '대표',
+                          style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 10,
+                              fontWeight: FontWeight.w700),
+                        ),
                       ),
                     ),
-                    if (uploading)
-                      Positioned.fill(
+                  if (!uploading)
+                    Positioned(
+                      right: 5,
+                      top: 5,
+                      child: GestureDetector(
+                        onTap: () => onRemove(index),
                         child: Container(
-                          decoration: BoxDecoration(color: Colors.black.withOpacity(0.35), borderRadius: BorderRadius.circular(10)),
-                          alignment: Alignment.center,
-                          child: const SizedBox(
-                            width: 22,
-                            height: 22,
-                            child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                          ),
+                          width: 22,
+                          height: 22,
+                          decoration: BoxDecoration(
+                              color: Colors.black.withOpacity(0.58),
+                              shape: BoxShape.circle),
+                          child: const Icon(Icons.close_rounded,
+                              size: 14, color: Colors.white),
                         ),
                       ),
-                    if (!uploading)
-                      Positioned(
-                        right: 4,
-                        top: 4,
-                        child: GestureDetector(
-                          onTap: onRemove,
-                          child: Container(
-                            width: 20,
-                            height: 20,
-                            alignment: Alignment.center,
-                            decoration: BoxDecoration(color: Colors.black.withOpacity(0.55), shape: BoxShape.circle),
-                            child: const Icon(Icons.close, size: 12, color: Colors.white),
-                          ),
-                        ),
-                      ),
-                  ],
-                ),
+                    ),
+                ],
+              );
+            },
+          ),
         ),
-        const SizedBox(height: 8),
-        Text(l10n.feedComposerPhotoStepHint, style: TextStyle(fontSize: 12, color: Colors.grey.shade500)),
+        if (uploading) ...[
+          const SizedBox(height: 10),
+          const LinearProgressIndicator(minHeight: 2, color: CocoTheme.primary),
+        ],
       ],
     );
   }
 }
 
-class _LocationStep extends StatelessWidget {
-  final String query;
-  final Spot? selected;
-  final List<Spot> results;
-  final bool searching;
-  final ValueChanged<String> onQueryChanged;
-  final ValueChanged<Spot> onSelect;
+class _SectionLabel extends StatelessWidget {
+  final String label;
+  final bool optional;
 
-  const _LocationStep({
-    required this.query,
+  const _SectionLabel({required this.label, this.optional = false});
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Text(
+          label,
+          style: const TextStyle(
+              fontSize: 15,
+              fontWeight: FontWeight.w700,
+              color: CocoTheme.secondary),
+        ),
+        if (optional) ...[
+          const SizedBox(width: 6),
+          Text(
+            AppLocalizations.of(context)!.feedComposerOptional,
+            style:
+                TextStyle(fontSize: 11, color: Colors.black.withOpacity(0.35)),
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+class _AttachCard extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final bool selected;
+  final VoidCallback onTap;
+  final VoidCallback? onClear;
+
+  const _AttachCard({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
     required this.selected,
-    required this.results,
-    required this.searching,
-    required this.onQueryChanged,
-    required this.onSelect,
+    required this.onTap,
+    this.onClear,
   });
 
   @override
   Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context)!;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(l10n.feedComposerLocationStepTitle, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: CocoTheme.secondary)),
-        const SizedBox(height: 12),
-        TextField(
-          onChanged: onQueryChanged,
-          decoration: InputDecoration(
-            hintText: l10n.feedComposerLocationSearchHint,
-            filled: true,
-            fillColor: const Color(0xFFF8F8F8),
-            contentPadding: const EdgeInsets.symmetric(horizontal: 14),
-            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: Colors.grey.shade300)),
-            enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: Colors.grey.shade300)),
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(14),
+      child: Container(
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: selected ? const Color(0xFFF2F9FE) : const Color(0xFFF8FAFC),
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(
+            color: selected
+                ? CocoTheme.primary.withOpacity(0.45)
+                : Colors.transparent,
           ),
         ),
-        const SizedBox(height: 8),
-        if (searching)
-          const Padding(
-            padding: EdgeInsets.symmetric(vertical: 16),
-            child: Center(child: SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))),
-          )
-        else if (query.trim().isNotEmpty && results.isEmpty)
-          Padding(
-            padding: const EdgeInsets.symmetric(vertical: 16),
-            child: Text(l10n.feedComposerLocationNoResults, style: TextStyle(fontSize: 13, color: Colors.grey.shade500)),
-          )
-        else
-          for (final spot in results)
-            InkWell(
-              onTap: () => onSelect(spot),
-              child: Container(
-                padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 4),
-                decoration: BoxDecoration(border: Border(bottom: BorderSide(color: Colors.black.withOpacity(0.06)))),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            spot.title,
-                            style: TextStyle(
-                              fontSize: 14,
-                              color: selected?.id == spot.id ? CocoTheme.primary : CocoTheme.secondary,
-                              fontWeight: selected?.id == spot.id ? FontWeight.w700 : FontWeight.w400,
-                            ),
-                          ),
-                          const SizedBox(height: 3),
-                          Text(spot.address, style: TextStyle(fontSize: 12, color: Colors.black.withOpacity(0.45))),
-                        ],
-                      ),
-                    ),
-                    if (selected?.id == spot.id) const Icon(Icons.check_rounded, size: 18, color: CocoTheme.primary),
-                  ],
-                ),
+        child: Row(
+          children: [
+            Container(
+              width: 42,
+              height: 42,
+              decoration: BoxDecoration(
+                color: CocoTheme.primary.withOpacity(0.11),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Icon(icon, color: CocoTheme.primary, size: 22),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                        fontSize: 14, fontWeight: FontWeight.w700),
+                  ),
+                  const SizedBox(height: 3),
+                  Text(subtitle,
+                      style: TextStyle(
+                          fontSize: 11, color: Colors.black.withOpacity(0.43))),
+                ],
               ),
             ),
-      ],
+            if (onClear != null)
+              IconButton(
+                  onPressed: onClear,
+                  icon: const Icon(Icons.close_rounded, size: 19))
+            else
+              const Icon(Icons.chevron_right_rounded),
+          ],
+        ),
+      ),
     );
   }
 }
 
-class _DescriptionStep extends StatelessWidget {
-  final TextEditingController controller;
-  final ValueChanged<String> onChanged;
-  const _DescriptionStep({required this.controller, required this.onChanged});
+class _RouteOption extends StatelessWidget {
+  final MockRoute route;
+  final bool selected;
+  final VoidCallback onTap;
+
+  const _RouteOption(
+      {required this.route, required this.selected, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(14),
+      child: Container(
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: selected ? const Color(0xFFF2F9FE) : Colors.white,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(
+              color: selected
+                  ? CocoTheme.primary
+                  : Colors.black.withOpacity(0.09)),
+        ),
+        child: Row(
+          children: [
+            const Icon(Icons.route_rounded, color: CocoTheme.primary),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(route.name,
+                      style: const TextStyle(
+                          fontSize: 14, fontWeight: FontWeight.w700)),
+                  const SizedBox(height: 3),
+                  Text(
+                    AppLocalizations.of(context)!.myRoutesStopsDistance(
+                      route.stops.length,
+                      route.distanceKm.toStringAsFixed(1),
+                    ),
+                    style: TextStyle(
+                        fontSize: 11, color: Colors.black.withOpacity(0.43)),
+                  ),
+                ],
+              ),
+            ),
+            if (selected)
+              const Icon(Icons.check_circle_rounded, color: CocoTheme.primary),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _EmptyRoutes extends StatelessWidget {
+  final VoidCallback onClose;
+
+  const _EmptyRoutes({required this.onClose});
 
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(l10n.feedComposerDescStepTitle, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: CocoTheme.secondary)),
-        const SizedBox(height: 12),
-        TextField(
-          controller: controller,
-          onChanged: onChanged,
-          maxLength: 200,
-          maxLines: 5,
-          decoration: InputDecoration(
-            hintText: l10n.feedComposerDescHint,
-            filled: true,
-            fillColor: const Color(0xFFF8F8F8),
-            contentPadding: const EdgeInsets.all(14),
-            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: Colors.grey.shade300)),
-            enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: Colors.grey.shade300)),
-          ),
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(28),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.signpost_outlined,
+                color: CocoTheme.primary, size: 36),
+            const SizedBox(height: 12),
+            Text(l10n.feedRoutePickerEmpty,
+                style:
+                    const TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
+            const SizedBox(height: 5),
+            Text(
+              l10n.feedRoutePickerEmptyHint,
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                  fontSize: 12, color: Colors.black.withOpacity(0.43)),
+            ),
+            const SizedBox(height: 16),
+            TextButton(onPressed: onClose, child: const Text('확인')),
+          ],
         ),
-      ],
+      ),
     );
   }
 }

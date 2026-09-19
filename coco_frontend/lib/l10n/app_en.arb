@@ -85,6 +85,13 @@
   "feedSaveButtonSaved": "Saved",
   "feedSaveButtonUnsaved": "Save",
 
+  "feedCreateChoiceTitle": "What would you like to post?",
+  "feedCreateChoiceSubtitle": "Choose what you want to share",
+  "feedCreateDailyTitle": "Regular post",
+  "feedCreateDailySubtitle": "Share photos, a place, and your story",
+  "feedCreateRouteTitle": "Post with a course",
+  "feedCreateRouteSubtitle": "Introduce a course you made with a photo",
+
   "feedComposerStepTitle": "New Post ({step}/{total})",
   "@feedComposerStepTitle": {
     "placeholders": { "step": { "type": "int" }, "total": { "type": "int" } }
@@ -94,13 +101,18 @@
   "feedComposerNextButton": "Next",
   "feedComposerSubmitting": "Posting...",
   "feedComposerSubmitButton": "Post",
+  "feedComposerPageTitle": "New feed post",
+  "feedComposerOptional": "Optional",
+  "feedComposerCourseLabel": "Course",
+  "feedComposerCoursePlaceholder": "Add a course",
+  "feedComposerCourseHint": "Show one of your courses with this post",
   "feedComposerPhotoStepTitle": "Add a photo (optional)",
-  "feedComposerPhotoStepHint": "Choose one photo from your gallery (optional)",
+  "feedComposerPhotoStepHint": "Choose up to 10 photos · The first will be the cover",
   "feedComposerLocationStepTitle": "Tag a spot (optional)",
   "feedComposerLocationSearchHint": "Search by name or address",
   "feedComposerLocationNoResults": "No results found",
   "feedComposerDescStepTitle": "Write a short description",
-  "feedComposerDescHint": "Share your thoughts about this spot",
+  "feedComposerDescHint": "Share the story behind these photos or this course",
 
   "feedPostDetailPageTitle": "Post",
   "feedPostDetailCommentFailed": "Couldn't post comment. Please check that you're logged in.",
@@ -147,6 +159,13 @@
   "feedRouteComposePublicTitle": "Share publicly",
   "feedRouteComposePublicSubtitle": "Appears in the trending ranking too",
   "feedRouteComposeSubmitButton": "Post",
+  "feedRoutePickerTitle": "Choose a course",
+  "feedRoutePickerSubtitle": "First, select one of your courses to share",
+  "feedRoutePickerEmpty": "You haven't made a course yet",
+  "feedRoutePickerEmptyHint": "Make a course from the Map tab and come back",
+  "feedRoutePickerNext": "Continue with this course",
+  "feedRoutePhotoTitle": "Choose a photo for this course",
+  "feedRoutePhotoHint": "Select a cover photo from a spot in the course",
 
   "qnaHeaderTitle": "Community",
   "qnaHeaderSubtitle": "Locals answer tourists' questions",
