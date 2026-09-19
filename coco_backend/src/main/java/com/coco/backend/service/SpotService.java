@@ -128,49 +128,20 @@ public class SpotService {
      * 그 자리에서 채워 넣는다. 새 스팟을 만들지 않고 이미 있는 row를 UPDATE하는 방식이라
      * 몇 번을 다시 돌려도 중복 저장 걱정이 없다 — 이미 채워진 스팟은 findNeedingTourApiBackfill()
      * 대상에서 자동으로 빠진다.
+     *
+     * 전체를 하나의 트랜잭션으로 묶지 않고 스팟 한 개 단위(backfillSpot)로 커밋한다 —
+     * 대상이 많을 때 중간에 메모리 문제 등으로 죽어도 그때까지 처리한 스팟은 DB에 남고,
+     * 다음 호출에서 findNeedingTourApiBackfill()이 남은 것만 다시 잡아 이어서 처리한다.
      */
-    @Transactional
     public Map<String, Integer> backfillMissingTourApiContent() {
         List<Spot> targets = spotRepository.findNeedingTourApiBackfill();
         int descriptionFilled = 0;
         int imagesFilled = 0;
 
         for (Spot spot : targets) {
-            boolean needsDescription = spot.getDescription() == null || spot.getDescription().isBlank();
-            boolean needsImages = spotImageRepository
-                    .findBySpot_IdOrderBySortOrderAsc(spot.getId()).isEmpty();
-
-            if (needsDescription) {
-                String overview = tourApiService.fetchOverview(spot.getTourApiid());
-                if (overview != null && !overview.isBlank()) {
-                    if (MAP_CATEGORIES.contains(spot.getCategory())) {
-                        // 6개 카테고리는 원래 로직처럼 재작성+번역까지.
-                        var localized = translationService.rewriteAndTranslate(spot.getTitleKo(), overview);
-                        spot.updateDescriptionFromBackfill(
-                                localized != null && localized.descriptionKo() != null
-                                        ? localized.descriptionKo() : overview,
-                                localized != null ? localized.descriptionEn() : null,
-                                localized != null ? localized.descriptionJa() : null
-                        );
-                    } else {
-                        // "기타" 카테고리는 원래 설계대로 번역 없이 원문만.
-                        spot.updateDescriptionFromBackfill(overview, null, null);
-                    }
-                    descriptionFilled++;
-                }
-            }
-
-            if (needsImages) {
-                List<String> images = tourApiService.fetchDetailImages(spot.getTourApiid());
-                for (int i = 0; i < images.size(); i++) {
-                    spotImageRepository.save(SpotImage.builder()
-                            .spot(spot)
-                            .imageUrl(images.get(i))
-                            .sortOrder(i)
-                            .build());
-                }
-                if (!images.isEmpty()) imagesFilled++;
-            }
+            BackfillResult result = backfillSpot(spot.getId());
+            if (result.descriptionFilled()) descriptionFilled++;
+            if (result.imagesFilled()) imagesFilled++;
         }
 
         return Map.of(
@@ -179,6 +150,61 @@ public class SpotService {
                 "imagesFilled", imagesFilled
         );
     }
+
+    /**
+     * 스팟 한 개의 설명 갱신 + 이미지 저장을 한 트랜잭션으로 처리한다.
+     * 주의: 같은 클래스 안에서 this로 호출하면(self-invocation) 스프링 프록시를 안 거쳐서
+     * 이 @Transactional이 실제로는 적용되지 않는다 — 그래도 정확성이 깨지지 않도록
+     * spotRepository.save()를 명시적으로 호출해 매 스팟 갱신이 즉시 반영되게 해뒀다.
+     */
+    @Transactional
+    public BackfillResult backfillSpot(Long spotId) {
+        Spot spot = spotRepository.findById(spotId)
+                .orElseThrow(() -> new IllegalArgumentException("스팟을 찾을 수 없습니다."));
+
+        boolean needsDescription = spot.getDescription() == null || spot.getDescription().isBlank();
+        boolean needsImages = spotImageRepository.findBySpot_IdOrderBySortOrderAsc(spot.getId()).isEmpty();
+
+        boolean descriptionFilled = false;
+        boolean imagesFilled = false;
+
+        if (needsDescription) {
+            String overview = tourApiService.fetchOverview(spot.getTourApiid());
+            if (overview != null && !overview.isBlank()) {
+                if (MAP_CATEGORIES.contains(spot.getCategory())) {
+                    // 6개 카테고리는 원래 로직처럼 재작성+번역까지.
+                    var localized = translationService.rewriteAndTranslate(spot.getTitleKo(), overview);
+                    spot.updateDescriptionFromBackfill(
+                            localized != null && localized.descriptionKo() != null
+                                    ? localized.descriptionKo() : overview,
+                            localized != null ? localized.descriptionEn() : null,
+                            localized != null ? localized.descriptionJa() : null
+                    );
+                } else {
+                    // "기타" 카테고리는 원래 설계대로 번역 없이 원문만.
+                    spot.updateDescriptionFromBackfill(overview, null, null);
+                }
+                spotRepository.save(spot);
+                descriptionFilled = true;
+            }
+        }
+
+        if (needsImages) {
+            List<String> images = tourApiService.fetchDetailImages(spot.getTourApiid());
+            for (int i = 0; i < images.size(); i++) {
+                spotImageRepository.save(SpotImage.builder()
+                        .spot(spot)
+                        .imageUrl(images.get(i))
+                        .sortOrder(i)
+                        .build());
+            }
+            imagesFilled = !images.isEmpty();
+        }
+
+        return new BackfillResult(descriptionFilled, imagesFilled);
+    }
+
+    private record BackfillResult(boolean descriptionFilled, boolean imagesFilled) {}
 
     /**
      * 카카오 로컬 API에서 관광 관련 카테고리로 좁힌 후보를 가져와 아직 DB에 없는 것만 저장한다.
