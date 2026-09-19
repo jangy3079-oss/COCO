@@ -40,6 +40,13 @@ public class User {
     @Column(length = 10)
     private String nationality;
 
+    // 마이페이지 프로필 편집에서 다루는 자기소개 — 짧은 한 줄 소개라 60자로 제한.
+    @Column(length = 60)
+    private String bio;
+
+    @Column(name = "profile_image_url", length = 255)
+    private String profileImageUrl;
+
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
@@ -52,5 +59,11 @@ public class User {
         this.locale = locale;
         this.role = role;
         this.nationality = nationality;
+    }
+
+    // 프로필 편집(UserService.updateProfile) 전용 — 보낸 필드만 갱신한다.
+    public void updateProfile(String nickname, String bio) {
+        if (nickname != null) this.nickname = nickname;
+        if (bio != null) this.bio = bio;
     }
 }

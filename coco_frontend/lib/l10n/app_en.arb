@@ -284,6 +284,7 @@
   "profileEditEmailImmutableHint": "Email can't be changed",
   "profileEditUserTypeLabel": "Account Type",
   "profileEditUserTypeImmutableHint": "The type you chose at signup can't be changed",
+  "profileEditSaveFailed": "Couldn't save your profile. Please check that you're logged in.",
 
   "settingsLogoutConfirmTitle": "Log out?",
   "settingsLogoutButton": "Log Out",

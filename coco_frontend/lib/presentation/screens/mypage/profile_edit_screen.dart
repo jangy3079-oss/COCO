@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../data/repositories/user_repository.dart';
 import '../../../l10n/generated/app_localizations.dart';
 import 'mypage_mock_data.dart';
 
@@ -15,10 +16,12 @@ class ProfileEditScreen extends StatefulWidget {
 }
 
 class _ProfileEditScreenState extends State<ProfileEditScreen> {
+  final _userRepository = UserRepository();
   late final _nicknameController = TextEditingController(text: myNickname);
   late final _bioController = TextEditingController(text: myBio);
+  bool _saving = false;
 
-  bool get _canSave => _nicknameController.text.trim().isNotEmpty;
+  bool get _canSave => _nicknameController.text.trim().isNotEmpty && !_saving;
 
   @override
   void dispose() {
@@ -27,11 +30,25 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
     super.dispose();
   }
 
-  void _save() {
+  Future<void> _save() async {
     if (!_canSave) return;
-    myNickname = _nicknameController.text.trim();
-    myBio = _bioController.text.trim();
-    context.pop();
+    final nickname = _nicknameController.text.trim();
+    final bio = _bioController.text.trim();
+    setState(() => _saving = true);
+    try {
+      await _userRepository.updateMyProfile(nickname: nickname, bio: bio);
+      myNickname = nickname;
+      myBio = bio;
+      if (!mounted) return;
+      context.pop();
+    } catch (e) {
+      debugPrint('[ProfileEditScreen] 프로필 저장 실패: $e');
+      if (!mounted) return;
+      setState(() => _saving = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(AppLocalizations.of(context)!.profileEditSaveFailed)),
+      );
+    }
   }
 
   @override

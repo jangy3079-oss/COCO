@@ -284,6 +284,7 @@
   "profileEditEmailImmutableHint": "이메일은 변경할 수 없어요",
   "profileEditUserTypeLabel": "회원 유형",
   "profileEditUserTypeImmutableHint": "가입 시 선택한 유형은 변경할 수 없어요",
+  "profileEditSaveFailed": "프로필을 저장하지 못했어요. 로그인 상태를 확인해주세요.",
 
   "settingsLogoutConfirmTitle": "로그아웃 하시겠어요?",
   "settingsLogoutButton": "로그아웃",
