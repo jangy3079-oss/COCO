@@ -8,11 +8,13 @@ import com.coco.backend.dto.response.LikeToggleResponse;
 import com.coco.backend.entity.FeedComment;
 import com.coco.backend.entity.FeedPost;
 import com.coco.backend.entity.FeedPostLike;
+import com.coco.backend.entity.RouteMap;
 import com.coco.backend.entity.Spot;
 import com.coco.backend.entity.User;
 import com.coco.backend.repository.FeedCommentRepository;
 import com.coco.backend.repository.FeedPostLikeRepository;
 import com.coco.backend.repository.FeedPostRepository;
+import com.coco.backend.repository.RouteMapRepository;
 import com.coco.backend.repository.SpotRepository;
 import com.coco.backend.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
@@ -38,8 +40,9 @@ public class FeedService {
     private final FeedCommentRepository feedCommentRepository;
     private final SpotRepository spotRepository;
     private final UserRepository userRepository;
+    private final RouteMapRepository routeMapRepository;
 
-    /** 로그인한 사용자(userId)가 특정 스팟을 태그해서 글을 쓴다. */
+    /** 로그인한 사용자(userId)가 특정 스팟을 태그해서(또는 코스를 공유해서) 글을 쓴다. */
     public FeedPostResponse createPost(Long userId, FeedPostRequest request) {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new IllegalArgumentException("사용자를 찾을 수 없습니다."));
@@ -47,10 +50,15 @@ public class FeedService {
                 ? spotRepository.findById(request.getSpotId())
                         .orElseThrow(() -> new IllegalArgumentException("스팟을 찾을 수 없습니다."))
                 : null;
+        RouteMap route = request.getRouteId() != null
+                ? routeMapRepository.findById(request.getRouteId())
+                        .orElseThrow(() -> new IllegalArgumentException("코스를 찾을 수 없습니다."))
+                : null;
 
         FeedPost saved = feedPostRepository.save(FeedPost.builder()
                 .user(user)
                 .spot(spot)
+                .route(route)
                 .imageUrl(request.getImageUrl())
                 .description(request.getDescription())
                 .build());
@@ -152,6 +160,7 @@ public class FeedService {
                 .spotName(spot != null ? spot.getTitleKo() : null)
                 .lat(spot != null ? spot.getLat() : null)
                 .lng(spot != null ? spot.getLng() : null)
+                .routeId(p.getRoute() != null ? p.getRoute().getId() : null)
                 .likeCount(p.getLikeCount())
                 .createdAt(p.getCreatedAt())
                 .trending(trending)

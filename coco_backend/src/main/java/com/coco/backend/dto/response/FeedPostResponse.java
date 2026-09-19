@@ -15,6 +15,8 @@ public class FeedPostResponse {
     private String spotName;
     private Double lat;
     private Double lng;
+    // 코스 공유로 만들어진 게시물인지 프론트가 판별할 수 있도록 — 아니면 null.
+    private Long routeId;
     private int likeCount;
     // Jackson write-dates-as-timestamps: false 설정과 이중으로 보호.
     // 프론트 Flutter의 DateTime.parse()가 읽을 수 있는 "2026-09-12T13:00:00" 형태로 내려감.

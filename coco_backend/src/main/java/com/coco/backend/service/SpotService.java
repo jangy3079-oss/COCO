@@ -1,12 +1,18 @@
 package com.coco.backend.service;
 
+import com.coco.backend.dto.response.LikeToggleResponse;
 import com.coco.backend.dto.response.SpotResponse;
 import com.coco.backend.entity.Spot;
+import com.coco.backend.entity.SpotLike;
+import com.coco.backend.entity.User;
 import com.coco.backend.repository.FeedPostRepository;
+import com.coco.backend.repository.SpotLikeRepository;
 import com.coco.backend.repository.SpotRepository;
+import com.coco.backend.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.HashMap;
 import java.util.List;
@@ -23,6 +29,8 @@ public class SpotService {
     private final TourApiService tourApiService;
     private final KakaoLocalService kakaoLocalService;
     private final FeedPostRepository feedPostRepository;
+    private final SpotLikeRepository spotLikeRepository;
+    private final UserRepository userRepository;
 
     // "인기 핀"(trending) 판정 기준값. 아직 실사용 데이터가 없어 임의로 정한 값이라,
     // 실제 유저 활동이 쌓이면 데모/운영 상황에 맞게 조정 필요.
@@ -143,6 +151,36 @@ public class SpotService {
     public Optional<SpotResponse> getById(Long id, String locale) {
         return spotRepository.findById(id)
                 .map(spot -> toResponse(spot, fetchEngagement(List.of(spot)).get(spot.getId()), locale));
+    }
+
+    /** 스팟 찜 토글 — 이미 찜했으면 취소, 아니면 새로 찜한다. */
+    @Transactional
+    public LikeToggleResponse toggleLike(Long userId, Long spotId) {
+        Spot spot = spotRepository.findById(spotId)
+                .orElseThrow(() -> new IllegalArgumentException("스팟을 찾을 수 없습니다."));
+
+        var existing = spotLikeRepository.findByUser_IdAndSpot_Id(userId, spotId);
+        boolean liked;
+        if (existing.isPresent()) {
+            spotLikeRepository.delete(existing.get());
+            liked = false;
+        } else {
+            User user = userRepository.findById(userId)
+                    .orElseThrow(() -> new IllegalArgumentException("사용자를 찾을 수 없습니다."));
+            spotLikeRepository.save(SpotLike.builder().user(user).spot(spot).build());
+            liked = true;
+        }
+        int likeCount = (int) spotLikeRepository.countBySpot_Id(spotId);
+        return LikeToggleResponse.builder().liked(liked).likeCount(likeCount).build();
+    }
+
+    /** 현재 로그인한 유저가 찜한 스팟 목록. */
+    public List<SpotResponse> getLikedSpots(Long userId, String locale) {
+        List<Spot> spots = spotLikeRepository.findSpotsByUserId(userId);
+        Map<Long, long[]> engagementBySpotId = fetchEngagement(spots);
+        return spots.stream()
+                .map(s -> toResponse(s, engagementBySpotId.get(s.getId()), locale))
+                .toList();
     }
 
     // 검색 결과가 너무 많아지는 걸 막는 상한. 코스 만들기 "+ 스팟 추가" 같은 자동완성성

@@ -27,13 +27,18 @@ public class RouteMapSpot {
     @JoinColumn(name = "spot_id", nullable = false)
     private Spot spot;
 
+    // 코스 안에서 스팟이 방문되는 순서(0부터) — 요청의 spotIds 배열 순서를 그대로 반영한다.
+    @Column(name = "sort_order", nullable = false)
+    private Integer sortOrder;
+
     @CreationTimestamp
     @Column(name = "added_at", nullable = false, updatable = false)
     private LocalDateTime addedAt;
 
     @Builder
-    public RouteMapSpot(RouteMap routeMap, Spot spot) {
+    public RouteMapSpot(RouteMap routeMap, Spot spot, Integer sortOrder) {
         this.routeMap = routeMap;
         this.spot = spot;
+        this.sortOrder = sortOrder;
     }
 }

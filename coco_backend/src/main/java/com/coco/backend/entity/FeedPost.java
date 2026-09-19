@@ -29,6 +29,11 @@ public class FeedPost {
     @JoinColumn(name = "spot_id")
     private Spot spot;
 
+    // 코스 공유로 만들어진 게시물인 경우에만 채워짐 — 일반 피드 게시물은 코스와 무관하므로 nullable.
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "route_id")
+    private RouteMap route;
+
     @Column(name = "image_url", columnDefinition = "TEXT")
     private String imageUrl;
 
@@ -44,9 +49,10 @@ public class FeedPost {
     private LocalDateTime createdAt;
 
     @Builder
-    public FeedPost(User user, Spot spot, String imageUrl, String description, Integer likeCount) {
+    public FeedPost(User user, Spot spot, RouteMap route, String imageUrl, String description, Integer likeCount) {
         this.user = user;
         this.spot = spot;
+        this.route = route;
         this.imageUrl = imageUrl;
         this.description = description;
         // 게시글이 처음 생성될 때 좋아요 수는 무조건 0이어야 하므로

@@ -43,7 +43,13 @@ public class QnaAnswer {
         this.qnaPost = qnaPost;
         this.user = user;
         this.content = content;
-        this.adopted = adopted;
+        // 답변이 처음 생성될 때 채택 여부는 무조건 false여야 하므로
+        this.adopted = adopted != null ? adopted : false;
+    }
+
+    // 답변 채택(QnaService.adopt) 전용 — adopted 컬럼을 여기서만 갱신한다.
+    public void markAdopted() {
+        this.adopted = true;
     }
 }
 

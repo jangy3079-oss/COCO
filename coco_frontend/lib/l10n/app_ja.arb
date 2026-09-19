@@ -284,6 +284,7 @@
   "profileEditEmailImmutableHint": "メールアドレスは変更できません",
   "profileEditUserTypeLabel": "会員タイプ",
   "profileEditUserTypeImmutableHint": "登録時に選んだタイプは変更できません",
+  "profileEditSaveFailed": "プロフィールを保存できませんでした。ログイン状態をご確認ください。",
 
   "settingsLogoutConfirmTitle": "ログアウトしますか?",
   "settingsLogoutButton": "ログアウト",

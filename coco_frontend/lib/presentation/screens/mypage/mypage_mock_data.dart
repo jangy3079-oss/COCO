@@ -3,8 +3,9 @@ import '../../../data/models/user_type.dart';
 
 // nickname/role은 로그인 시 AuthTokenStore에 저장된 실제 로그인 응답(AuthResult)을 읽는다.
 // 값이 없을 때(비정상 진입 등)만 아래 폴백을 쓴다.
-// bio는 아직 백엔드에 컬럼이 없어 로컬에서만 유지되는 값 — 프로필 수정 화면에서 바뀌므로
-// top-level mutable 변수로 둔다 (feed_mock_data.dart의 mockFeedItems와 동일한 패턴).
+// bio는 이제 백엔드(users.bio)에 저장되지만, 로그인 응답에는 포함되지 않고 프로필
+// 편집 화면에서 GET/PATCH로만 주고받는다 — 그래서 세션 동안의 캐시 용도로 top-level
+// mutable 변수를 그대로 둔다(feed_mock_data.dart의 mockFeedItems와 동일한 패턴).
 String get myNickname => AuthTokenStore.nickname ?? '';
 set myNickname(String value) => AuthTokenStore.setNickname(value);
 String myBio = '';
