@@ -28,7 +28,7 @@ public class RouteMapSpot {
     private Spot spot;
 
     // 코스 안에서 스팟이 방문되는 순서(0부터) — 요청의 spotIds 배열 순서를 그대로 반영한다.
-    @Column(name = "sort_order", nullable = false)
+    @Column(name = "sort_order", nullable = false, columnDefinition = "integer default 0")
     private Integer sortOrder;
 
     @CreationTimestamp

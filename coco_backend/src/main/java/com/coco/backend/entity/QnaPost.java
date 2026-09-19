@@ -25,10 +25,10 @@ public class QnaPost {
     @JoinColumn(name = "user_id", nullable = false)
     private User user;
 
-    @Column(length = 100, nullable = false)
+    @Column(length = 100, nullable = false, columnDefinition = "varchar(100) default ''")
     private String title;
 
-    @Column(columnDefinition = "TEXT", nullable = false)
+    @Column(nullable = false, columnDefinition = "text default ''")
     private String content;
 
     // 질문에 태그된 장소 — 선택사항
