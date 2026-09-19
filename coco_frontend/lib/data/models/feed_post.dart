@@ -9,6 +9,7 @@ class FeedPost {
   final String? spotName;
   final double? lat;
   final double? lng;
+  final int? routeId; // 코스 공유로 만들어진 게시물이면 그 코스 id, 아니면 null
   final int likeCount;
   final DateTime createdAt;
   final bool trending; // SpotService.isTrending 기준 — 피드 카드 "인기" 배지용
@@ -23,6 +24,7 @@ class FeedPost {
     this.spotName,
     this.lat,
     this.lng,
+    this.routeId,
     required this.likeCount,
     required this.createdAt,
     required this.trending,
@@ -39,6 +41,7 @@ class FeedPost {
       spotName: json['spotName'] as String?,
       lat: (json['lat'] as num?)?.toDouble(),
       lng: (json['lng'] as num?)?.toDouble(),
+      routeId: json['routeId'] as int?,
       likeCount: json['likeCount'] as int? ?? 0,
       createdAt: DateTime.parse(json['createdAt'] as String),
       trending: json['trending'] as bool? ?? false,

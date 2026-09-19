@@ -17,7 +17,6 @@ import '../screens/feed/feed_post_detail_screen.dart';
 import '../screens/feed/feed_composer_screen.dart';
 import '../screens/feed/feed_route_compose_screen.dart';
 import '../screens/qna/qna_screen.dart';
-import '../screens/qna/qna_mock_data.dart';
 import '../screens/qna/qna_post_detail_screen.dart';
 import '../screens/qna/qna_composer_screen.dart';
 import '../screens/mypage/mypage_screen.dart';
@@ -117,7 +116,7 @@ final appRouter = GoRouter(
     // ShellRoute 바깥의 최상위 라우트로 둔다.
     GoRoute(
       path: '/qna/post',
-      builder: (c, s) => QnaPostDetailScreen(post: s.extra as QnaPost),
+      builder: (c, s) => QnaPostDetailScreen(postId: s.extra as int),
     ),
     GoRoute(
       path: '/qna/compose',

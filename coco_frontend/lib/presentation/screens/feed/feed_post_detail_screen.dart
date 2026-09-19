@@ -1,18 +1,20 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/network/auth_token_store.dart';
 import '../../../core/network/dio_client.dart';
 import '../../../data/repositories/feed_repository.dart';
+import '../../../data/repositories/route_repository.dart';
 import '../../../l10n/generated/app_localizations.dart';
 import '../../widgets/map/kakao_map_view.dart';
-import '../map/map_mock_data.dart' show MockSpot, spotsCenter;
+import '../map/map_mock_data.dart' show MockSpot, mockSpotFromRouteStop, spotsCenter;
 import 'feed_mock_data.dart';
 import 'feed_screen.dart' show showShareSheet;
 
 /// 피드 게시물 상세 화면 (당근마켓 스타일). FeedScreen에서 push할 때 같은
-/// FeedItem 인스턴스를 extra로 전달받아 직접 mutate한다 — mockFeedItems가
-/// 공유 리스트라 여기서 좋아요/저장/댓글을 바꾸면 피드 목록으로 돌아갔을 때도
-/// 그대로 반영된다.
+/// FeedItem 인스턴스를 extra로 전달받아 직접 mutate한다 — 피드 목록(feed_screen)이
+/// 들고 있는 것과 같은 인스턴스라, 여기서 좋아요/저장/댓글을 바꾸면 피드 목록으로
+/// 돌아갔을 때도 그대로 반영된다.
 ///
 /// 골목지도(type == route) 게시물은 사진 슬라이드 마지막에 정적 골목지도
 /// 슬라이드가 하나 더 붙고, 그 슬라이드를 보고 있을 때만 아래에 골목지도
@@ -28,6 +30,7 @@ class FeedPostDetailScreen extends StatefulWidget {
 class _FeedPostDetailScreenState extends State<FeedPostDetailScreen> {
   final _commentController = TextEditingController();
   final _feedRepository = FeedRepository();
+  final _routeRepository = RouteRepository();
   int _slide = 0;
   bool _submittingComment = false;
 
@@ -55,6 +58,35 @@ class _FeedPostDetailScreenState extends State<FeedPostDetailScreen> {
     } catch (e) {
       debugPrint('[FeedPostDetailScreen] 댓글 조회 실패: $e');
     }
+  }
+
+  // 목업 코스(routeStops가 이미 있음)는 그대로 쓰고, 실제 게시물(routeId만 있고
+  // FeedPostResponse엔 스팟 목록이 없음)은 여기서 코스 상세를 조회해 스팟 목록을 채운다.
+  Future<void> _openRoutePreview(FeedItem item) async {
+    var stops = item.routeStops;
+    // 실제 게시물이면(item.author == 백엔드 userNickname) 로그인한 나와 닉네임이
+    // 같은지로 진짜 소유권을 판단하고, 목업 데이터는 예전처럼 source로만 판단한다
+    // (목업 작성자는 실제 로그인 계정과 무관해서 닉네임 비교가 의미가 없음).
+    var isOwner = item.source == FeedSource.user;
+    if (stops == null || stops.isEmpty) {
+      final numId = int.tryParse(item.routeId ?? '');
+      if (numId == null) return;
+      try {
+        final route = await _routeRepository.getById(numId);
+        stops = route.spots.map(mockSpotFromRouteStop).toList();
+        isOwner = AuthTokenStore.nickname != null && AuthTokenStore.nickname == item.author;
+      } catch (e) {
+        debugPrint('[FeedPostDetailScreen] 코스 조회 실패: $e');
+        return;
+      }
+    }
+    if (!mounted) return;
+    context.push('/map/route/preview', extra: {
+      'name': item.displayTitle,
+      'stops': stops,
+      'routeId': item.routeId,
+      'isOwner': isOwner,
+    });
   }
 
   @override
@@ -258,7 +290,7 @@ class _FeedPostDetailScreenState extends State<FeedPostDetailScreen> {
                     if (_onMapSlide)
                       Padding(
                         padding: const EdgeInsets.fromLTRB(20, 14, 20, 0),
-                        child: _RouteSummaryCard(item: item),
+                        child: _RouteSummaryCard(item: item, onView: _openRoutePreview),
                       ),
                     Padding(
                       padding: const EdgeInsets.fromLTRB(20, 18, 20, 4),
@@ -460,7 +492,8 @@ class _RouteMapSlide extends StatelessWidget {
 /// 골목지도 마지막 슬라이드 아래에 붙는 요약 카드 — 골목지도 보기/저장.
 class _RouteSummaryCard extends StatefulWidget {
   final FeedItem item;
-  const _RouteSummaryCard({required this.item});
+  final ValueChanged<FeedItem> onView;
+  const _RouteSummaryCard({required this.item, required this.onView});
 
   @override
   State<_RouteSummaryCard> createState() => _RouteSummaryCardState();
@@ -507,14 +540,9 @@ class _RouteSummaryCardState extends State<_RouteSummaryCard> {
                   ),
                   // 코스 상세(route_preview_screen)로 이동 — 내가 올린 코스면(routeId 있음)
                   // 편집도 가능하고, 다른 로컬이 올린 코스면 보기 전용으로 뜬다.
-                  onPressed: item.routeStops == null || item.routeStops!.isEmpty
+                  onPressed: (item.routeStops == null || item.routeStops!.isEmpty) && item.routeId == null
                       ? null
-                      : () => context.push('/map/route/preview', extra: {
-                            'name': item.displayTitle,
-                            'stops': item.routeStops,
-                            'routeId': item.routeId,
-                            'isOwner': item.source == FeedSource.user,
-                          }),
+                      : () => widget.onView(item),
                   child: Text(l10n.feedRouteSummaryViewButton, style: const TextStyle(color: CocoTheme.secondary, fontWeight: FontWeight.w600)),
                 ),
               ),

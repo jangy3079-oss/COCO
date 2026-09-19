@@ -57,4 +57,19 @@ class SpotRepository {
         .map((e) => Spot.fromJson(e as Map<String, dynamic>))
         .toList();
   }
+
+  /// 찜 토글 — 이미 찜했으면 취소, 아니면 새로 찜한다. 로그인 필요(401).
+  Future<({bool liked, int likeCount})> toggleLike(int spotId) async {
+    final response = await _dio.post('/api/spot/$spotId/like');
+    final data = response.data as Map<String, dynamic>;
+    return (liked: data['liked'] as bool, likeCount: data['likeCount'] as int);
+  }
+
+  /// 현재 로그인한 사용자가 찜한 스팟 목록. 로그인 필요(401).
+  Future<List<Spot>> fetchLikedSpots({String locale = 'ko'}) async {
+    final response = await _dio.get('/api/spot/liked', queryParameters: {'locale': locale});
+    return (response.data as List)
+        .map((e) => Spot.fromJson(e as Map<String, dynamic>))
+        .toList();
+  }
 }

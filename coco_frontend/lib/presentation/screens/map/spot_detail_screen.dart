@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import '../../../core/locale/locale_controller.dart';
+import '../../../core/network/login_guard.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../data/repositories/spot_repository.dart';
 import '../../../l10n/generated/app_localizations.dart';
@@ -39,14 +40,12 @@ class SpotDetailScreen extends StatefulWidget {
 class _SpotDetailScreenState extends State<SpotDetailScreen> {
   bool _liked = true;
 
-  // "db-"로 시작하면 목업이 아니라 실제 DB(TourAPI/카카오 로컬 수집) 스팟이다.
-  bool get _isDbSpot => widget.spotId.startsWith('db-');
-
   final _spotRepository = SpotRepository();
   bool _loading = false;
   bool _loadFailed = false;
-  // "이런 스팟은 어때요"용 — 현재 DB 스팟 주변의 다른 실제 스팟들.
-  List<MockSpot> _relatedDbSpots = [];
+  // "이런 스팟은 어때요"용 — 현재 스팟 주변의 다른 실제 DB 스팟들. 고정 데모
+  // 스팟('spot-1' 등)도 실제 부산 좌표를 갖고 있어 동일하게 조회 가능하다.
+  List<MockSpot> _relatedSpots = [];
 
   // 연관 스팟을 찾을 반경(도 단위) — 위경도 1도 ≈ 111km라 0.01이면 대략 1km 남짓.
   // 별도 "연관 관광지" API 없이, 주변 스팟을 그냥 작은 뷰포트로 다시 조회해서 대체한다.
@@ -55,13 +54,14 @@ class _SpotDetailScreenState extends State<SpotDetailScreen> {
   @override
   void initState() {
     super.initState();
-    if (_isDbSpot) {
-      if (dbSpotCache.containsKey(widget.spotId)) {
-        _loadRelatedDbSpots();
-      } else {
-        _loadDbSpot();
-      }
+    if (dbSpotCache.containsKey(widget.spotId)) {
+      _loadRelatedSpots(dbSpotCache[widget.spotId]!);
+    } else {
+      _loadDbSpot();
     }
+    // 이 화면에 직접 딥링크로 들어오는 등 likedSpotIds가 아직 한 번도 안 채워졌을
+    // 수 있어서, 하트 상태를 정확히 보여주려면 여기서도 한 번 갱신해둔다.
+    refreshLikedSpots(locale: context.read<LocaleController>().locale.languageCode);
   }
 
   Future<void> _loadDbSpot() async {
@@ -80,9 +80,10 @@ class _SpotDetailScreenState extends State<SpotDetailScreen> {
         });
         return;
       }
-      dbSpotCache[widget.spotId] = mockSpotFromDb(spot);
+      final mockSpot = mockSpotFromDb(spot);
+      dbSpotCache[widget.spotId] = mockSpot;
       setState(() => _loading = false);
-      _loadRelatedDbSpots();
+      _loadRelatedSpots(mockSpot);
     } catch (e) {
       if (!mounted) return;
       setState(() {
@@ -92,9 +93,10 @@ class _SpotDetailScreenState extends State<SpotDetailScreen> {
     }
   }
 
-  Future<void> _loadRelatedDbSpots() async {
-    final spot = dbSpotCache[widget.spotId];
-    if (spot == null) return;
+  // "이런 스팟은 어때요" — 별도 "연관 스팟" API 없이, 주변을 작은 뷰포트로 다시
+  // 조회해서 대체한다. db 스팟이든 고정 데모 스팟이든 실제 위경도를 갖고 있어
+  // 동일한 방식으로 조회할 수 있다.
+  Future<void> _loadRelatedSpots(MockSpot spot) async {
     try {
       final nearby = await _spotRepository.fetchSpotsInViewport(
         swLat: spot.lat - _relatedRadiusDeg,
@@ -113,39 +115,56 @@ class _SpotDetailScreenState extends State<SpotDetailScreen> {
       for (final s in related) {
         dbSpotCache[s.id] = s;
       }
-      setState(() => _relatedDbSpots = related);
+      setState(() => _relatedSpots = related);
     } catch (e) {
       debugPrint('[SpotDetailScreen] 연관 스팟 조회 실패: $e');
     }
   }
 
-  // 찜(저장) 상태는 map_mock_data.dart의 공유 savedSpotIds를 그대로 사용한다
-  // (지도 탭 북마크·MY탭 "찜한 스팟"과 같은 상태를 봐야 하므로 화면 로컬 State가 아님).
-  bool get _saved => savedSpotIds.contains(widget.spotId);
-  void _toggleSaved() {
+  // 찜(저장) 상태는 map_mock_data.dart의 공유 likedSpotIds(실제 백엔드와 동기화)를
+  // 그대로 사용한다 — 지도 탭 북마크·MY탭 "찜한 스팟"과 같은 상태를 봐야 하므로
+  // 화면 로컬 State가 아님. 고정 데모 스팟('spot-1' 등)은 API가 없어 항상 false.
+  bool get _saved => isSpotSaved(widget.spotId);
+
+  Future<void> _toggleSaved() async {
+    final numId = dbSpotNumericId(widget.spotId);
+    if (numId == null) return; // 데모 스팟은 찜 불가
+    if (!requireLogin(context)) return;
+    final wasSaved = _saved;
     setState(() {
-      if (_saved) {
-        savedSpotIds.remove(widget.spotId);
+      if (wasSaved) {
+        likedSpotIds.remove(numId);
       } else {
-        savedSpotIds.add(widget.spotId);
+        likedSpotIds.add(numId);
       }
     });
+    try {
+      await toggleSpotLike(numId);
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        if (wasSaved) {
+          likedSpotIds.add(numId);
+        } else {
+          likedSpotIds.remove(numId);
+        }
+      });
+      if (isUnauthorized(e)) {
+        requireLogin(context);
+      } else {
+        debugPrint('[SpotDetailScreen] 찜 토글 실패: $e');
+      }
+    }
   }
 
-  MockSpot? get _spot {
-    if (_isDbSpot) return dbSpotCache[widget.spotId];
-    for (final spot in mockSpots) {
-      if (spot.id == widget.spotId) return spot;
-    }
-    return null;
-  }
+  MockSpot? get _spot => dbSpotCache[widget.spotId];
 
   @override
   Widget build(BuildContext context) {
-    if (_isDbSpot && _loading) {
+    if (_loading) {
       return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
-    if (_isDbSpot && _loadFailed) {
+    if (_loadFailed) {
       return Scaffold(
         appBar: AppBar(leading: const BackButton()),
         body: const Center(child: Text('스팟 정보를 불러오지 못했어요')),
@@ -160,10 +179,7 @@ class _SpotDetailScreenState extends State<SpotDetailScreen> {
       );
     }
 
-    // DB 스팟은 주변 실제 스팟을(뷰포트 재조회로), 목업 스팟은 그대로 목업 중에서 고른다.
-    final related = _isDbSpot
-        ? _relatedDbSpots
-        : mockSpots.where((s) => s.id != spot.id).take(3).toList();
+    final related = _relatedSpots;
 
     return Scaffold(
       backgroundColor: Colors.white,
@@ -224,10 +240,7 @@ class _SpotDetailScreenState extends State<SpotDetailScreen> {
                     ],
                   ),
                   const SizedBox(height: 18),
-                  Text(
-                    spot.description,
-                    style: TextStyle(fontSize: 14, height: 1.6, color: Colors.grey.shade800),
-                  ),
+                  if (spot.description.trim().isNotEmpty) _ExpandableDescription(text: spot.description),
                   const SizedBox(height: 24),
                   const Text(
                     '이런 스팟은 어때요',
@@ -391,6 +404,73 @@ class _ActionPillButton extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+// 기본 3줄만 보여주고, 실제로 3줄을 넘칠 때만 구분선+버튼을 노출해 전체 내용을
+// 펼쳐볼 수 있게 한다. TextPainter로 3줄 제한 시 실제 줄바꿈이 넘치는지 미리 재서,
+// 짧은 소개글에는 불필요한 "전체보기" 버튼이 뜨지 않게 한다.
+class _ExpandableDescription extends StatefulWidget {
+  final String text;
+  const _ExpandableDescription({required this.text});
+
+  @override
+  State<_ExpandableDescription> createState() => _ExpandableDescriptionState();
+}
+
+class _ExpandableDescriptionState extends State<_ExpandableDescription> {
+  static const int _collapsedMaxLines = 3;
+  bool _expanded = false;
+
+  @override
+  Widget build(BuildContext context) {
+    const style = TextStyle(fontSize: 14, height: 1.6, color: Color(0xFF3D3D3D));
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final painter = TextPainter(
+          text: TextSpan(text: widget.text, style: style),
+          maxLines: _collapsedMaxLines,
+          textDirection: Directionality.of(context),
+        )..layout(maxWidth: constraints.maxWidth);
+        final overflows = painter.didExceedMaxLines;
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              widget.text,
+              style: style,
+              maxLines: _expanded ? null : _collapsedMaxLines,
+              overflow: _expanded ? TextOverflow.visible : TextOverflow.ellipsis,
+            ),
+            if (overflows) ...[
+              const SizedBox(height: 10),
+              Divider(height: 1, color: Colors.grey.shade200),
+              const SizedBox(height: 10),
+              InkWell(
+                onTap: () => setState(() => _expanded = !_expanded),
+                borderRadius: BorderRadius.circular(8),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      _expanded ? '접기' : '전체보기',
+                      style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: CocoTheme.secondary),
+                    ),
+                    Icon(
+                      _expanded ? Icons.keyboard_arrow_up_rounded : Icons.keyboard_arrow_down_rounded,
+                      size: 18,
+                      color: CocoTheme.secondary,
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ],
+        );
+      },
     );
   }
 }

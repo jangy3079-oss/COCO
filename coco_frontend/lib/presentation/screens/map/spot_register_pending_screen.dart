@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/theme/app_theme.dart';
 
-/// 스팟 등록 ③ 신청 완료(심사 대기) 화면. 실제로 mockSpots에 반영하지 않는다 —
+/// 스팟 등록 ③ 신청 완료(심사 대기) 화면. 실제로 지도에 반영하지 않는다 —
 /// 관리자 심사를 거쳐 승인된 뒤에야 지도에 반영되는 흐름이라(시나리오 2-A8),
 /// 이 화면은 신청이 접수됐다는 확인만 보여준다.
 class SpotRegisterPendingScreen extends StatelessWidget {

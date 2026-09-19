@@ -31,6 +31,14 @@ class _MyRoutesScreenState extends State<MyRoutesScreen> {
   String _query = '';
 
   @override
+  void initState() {
+    super.initState();
+    refreshMyRoutes().then((_) {
+      if (mounted) setState(() {});
+    });
+  }
+
+  @override
   void dispose() {
     _searchController.dispose();
     super.dispose();
@@ -64,7 +72,7 @@ class _MyRoutesScreenState extends State<MyRoutesScreen> {
     final isAlley = _tab == 'alley';
     final query = _query.trim();
 
-    final likedSpots = mockSpots.where((s) => savedSpotIds.contains(s.id)).toList();
+    final likedSpots = savedSpots;
     final filteredSpots = query.isEmpty ? likedSpots : likedSpots.where((s) => s.name.contains(query)).toList();
 
     final routes = mockMyRoutes;

@@ -24,7 +24,7 @@ class _FeedScreenState extends State<FeedScreen> {
 
   final _scrollController = ScrollController();
   final _feedRepository = FeedRepository();
-  // GET /api/feed로 받아온 실제 게시물 — mockFeedItems와 합쳐서 보여준다.
+  // GET /api/feed로 받아온 실제 게시물.
   List<FeedItem> _realItems = [];
 
   @override
@@ -56,16 +56,8 @@ class _FeedScreenState extends State<FeedScreen> {
   List<FeedItem> get _filteredSorted {
     // 실제 DB 게시물(_realItems)은 동네 정보가 아직 백엔드에서 안 내려와서
     // dongId가 'all'로 세팅돼 있다 — 동네 필터와 무관하게 항상 포함시킨다.
-    // 타입 필터는 실제 게시물도 적용 (코스 필터 시엔 실제 게시물이 spot 타입이므로 제외됨).
-    final realFiltered = _realItems
-        .where((it) => _typeFilter == null || it.type == _typeFilter)
-        .toList();
-    final mockFiltered = mockFeedItems
-        .where((it) => (_dongId == 'all' || it.dongId == _dongId) && (_typeFilter == null || it.type == _typeFilter))
-        .toList();
-
-    // 중복 방지: 실제 게시물 id는 'real-{n}' 형태라 목업과 겹치지 않는다.
-    var list = [...realFiltered, ...mockFiltered];
+    // 타입 필터만 적용(코스 필터 시엔 spot 타입 게시물이 제외됨).
+    var list = _realItems.where((it) => _typeFilter == null || it.type == _typeFilter).toList();
 
     switch (_sortBy) {
       case 'likes':

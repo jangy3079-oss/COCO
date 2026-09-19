@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import '../../../core/network/login_guard.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../data/repositories/spot_registration_repository.dart';
+import '../../../l10n/generated/app_localizations.dart';
 import 'spot_register_mock_data.dart';
 
 /// 스팟 등록 ② 등록 폼 화면. 검색에서 고른 위치에 카테고리·노출 기간·한줄 소개를
@@ -19,11 +22,14 @@ class _SpotRegisterFormScreenState extends State<SpotRegisterFormScreen> {
   final _startController = TextEditingController();
   final _endController = TextEditingController();
   final _introController = TextEditingController();
+  final _spotRegistrationRepository = SpotRegistrationRepository();
+  bool _submitting = false;
 
   bool get _periodRequired => _category.forcePeriod || _exposure == 'limited';
   bool get _canSubmit =>
       _introController.text.trim().isNotEmpty &&
-      (!_periodRequired || (_startController.text.trim().isNotEmpty && _endController.text.trim().isNotEmpty));
+      (!_periodRequired || (_startController.text.trim().isNotEmpty && _endController.text.trim().isNotEmpty)) &&
+      !_submitting;
 
   @override
   void dispose() {
@@ -33,17 +39,43 @@ class _SpotRegisterFormScreenState extends State<SpotRegisterFormScreen> {
     super.dispose();
   }
 
-  void _submit() {
+  Future<void> _submit() async {
     if (!_canSubmit) return;
+    if (!requireLogin(context)) return;
+
     final exposureLabel = _periodRequired
         ? '기간 한정${_endController.text.trim().isNotEmpty ? ' · ${_endController.text.trim()} 종료' : ''}'
         : '상시 노출';
-    context.push('/map/register/pending', extra: {
-      'name': widget.picked.name,
-      'address': widget.picked.address,
-      'categoryLabel': _category.label,
-      'exposureLabel': exposureLabel,
-    });
+
+    setState(() => _submitting = true);
+    try {
+      await _spotRegistrationRepository.register(
+        name: widget.picked.name,
+        category: _category.code,
+        address: widget.picked.address,
+        lat: widget.picked.lat,
+        lng: widget.picked.lng,
+        description: _introController.text.trim(),
+      );
+      if (!mounted) return;
+      context.push('/map/register/pending', extra: {
+        'name': widget.picked.name,
+        'address': widget.picked.address,
+        'categoryLabel': _category.label,
+        'exposureLabel': exposureLabel,
+      });
+    } catch (e) {
+      debugPrint('[SpotRegisterFormScreen] 등록 신청 실패: $e');
+      if (!mounted) return;
+      setState(() => _submitting = false);
+      if (isUnauthorized(e)) {
+        requireLogin(context);
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(AppLocalizations.of(context)!.spotRegisterSubmitFailedMessage)),
+        );
+      }
+    }
   }
 
   @override

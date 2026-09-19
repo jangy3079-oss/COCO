@@ -1,13 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import '../../../core/network/login_guard.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../data/repositories/feed_repository.dart';
 import '../../../l10n/generated/app_localizations.dart';
 import '../feed/feed_mock_data.dart';
 import '../map/map_mock_data.dart';
 
 /// "저장 · 좋아요" 화면. 찜한 스팟 / 좋아요한 피드 / 저장한 피드 / 저장한 코스
 /// 4개 필터를 탭으로 전환하며, 각 항목의 해제 버튼을 누르면 그 자리에서 바로
-/// 공유 상태(savedSpotIds/FeedItem.liked·saved/mockMyRoutes)에 반영된다.
+/// 공유 상태(likedSpotIds/FeedItem.liked/mockMyRoutes)에 반영된다.
 class MySavedScreen extends StatefulWidget {
   final String initialFilter; // spots | likedFeed | savedFeed | routes
   const MySavedScreen({super.key, this.initialFilter = 'spots'});
@@ -18,6 +20,53 @@ class MySavedScreen extends StatefulWidget {
 
 class _MySavedScreenState extends State<MySavedScreen> {
   late String _filter = widget.initialFilter;
+
+  final _feedRepository = FeedRepository();
+  // GET /api/feed 결과(feedItemFromPost로 변환) — "좋아요한 피드" 탭이 여기서 골라 보여준다.
+  // feed_screen.dart의 _loadRealPosts와 동일 패턴. 백엔드가 최신 50개까지만 내려주므로
+  // 그보다 오래된 글에 좋아요가 남아있으면 여기 안 보일 수 있음(TODO: 백엔드에
+  // GET /api/feed/liked 전용 엔드포인트가 생기면 그걸로 교체).
+  List<FeedItem> _feedItems = [];
+  bool _loadingFeed = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadFeed();
+  }
+
+  Future<void> _loadFeed() async {
+    setState(() => _loadingFeed = true);
+    try {
+      final posts = await _feedRepository.fetchFeed();
+      if (!mounted) return;
+      setState(() {
+        _feedItems = posts.map(feedItemFromPost).toList();
+        _loadingFeed = false;
+      });
+    } catch (e) {
+      debugPrint('[MySavedScreen] 피드 목록 조회 실패: $e');
+      if (mounted) setState(() => _loadingFeed = false);
+    }
+  }
+
+  Future<void> _toggleLike(FeedItem item) async {
+    final postId = item.realPostId;
+    if (postId == null) return;
+    if (!requireLogin(context)) return;
+    setState(() => item.liked = !item.liked);
+    try {
+      await _feedRepository.toggleLike(postId);
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => item.liked = !item.liked);
+      if (isUnauthorized(e)) {
+        requireLogin(context);
+      } else {
+        debugPrint('[MySavedScreen] 좋아요 해제 실패: $e');
+      }
+    }
+  }
 
   List<(String, String)> _filters(AppLocalizations l10n) => [
         ('spots', l10n.mySavedFilterSpots),
@@ -30,66 +79,64 @@ class _MySavedScreenState extends State<MySavedScreen> {
     final l10n = AppLocalizations.of(context)!;
     switch (_filter) {
       case 'likedFeed':
-        return mockFeedItems.where((f) => f.liked).map((f) => _SavedEntry(
+        return _feedItems.where((f) => f.liked).map((f) => _SavedEntry(
               name: f.place,
               meta: l10n.mySavedMetaLiked(f.author ?? 'COCO', f.likeCount),
               color: categoryColor(f.category),
               icon: categoryIcon(f.category),
               actionLabel: l10n.mySavedActionUnlike,
-              onAction: () => setState(() => f.liked = false),
+              onAction: () => _toggleLike(f),
               onTap: () async {
                 await context.push('/feed/post', extra: f);
                 if (mounted) setState(() {});
               },
             )).toList();
       case 'savedFeed':
-        return mockFeedItems.where((f) => f.saved).map((f) => _SavedEntry(
-              name: f.place,
-              meta: l10n.mySavedMetaSaved(f.author ?? 'COCO', f.saveCount),
-              color: categoryColor(f.category),
-              icon: categoryIcon(f.category),
-              actionLabel: l10n.mySavedActionUnsave,
-              onAction: () => setState(() => f.saved = false),
-              onTap: () async {
-                await context.push('/feed/post', extra: f);
-                if (mounted) setState(() {});
-              },
-            )).toList();
+        // 백엔드에 피드 저장(북마크) 기능 자체가 없다(feed_post_likes만 존재, 별도
+        // save 테이블·엔드포인트 없음) — 있는 것처럼 로컬 목업으로 채우지 않고
+        // 항상 빈 목록으로 둔다. 백엔드 도입 요청은 FEED_SAVE_REQUEST.md 참고.
+        return [];
       case 'routes':
-        return mockMyRoutes.map((r) => _SavedEntry(
-              name: r.name,
-              meta: l10n.mySavedMetaRoute(r.stops.length),
-              color: CocoTheme.primary,
-              icon: Icons.map_outlined,
-              actionLabel: l10n.commonDeleteLabel,
-              onAction: () => setState(() => mockMyRoutes.remove(r)),
-              // 저장한 코스는 내가 만든 게 아니라 저장만 해둔 것이라, 코스 상세에서
-              // 편집·공유는 못 하고 보기만 가능하다(isOwner: false).
-              onTap: () => context.push('/map/route/preview', extra: {
-                'name': r.name,
-                'stops': r.stops,
-                'routeId': r.id,
-                'isOwner': false,
-              }),
-            )).toList();
+        return savedRoutes.map((r) {
+          final numId = dbRouteNumericId(r.id);
+          return _SavedEntry(
+            name: r.name,
+            meta: l10n.mySavedMetaRoute(r.stops.length),
+            color: CocoTheme.primary,
+            icon: Icons.map_outlined,
+            actionLabel: l10n.mySavedActionUnsave,
+            onAction: () async {
+              if (numId == null) return;
+              if (!requireLogin(context)) return;
+              try {
+                await toggleRouteSave(numId);
+                if (mounted) setState(() {});
+              } catch (e) {
+                if (isUnauthorized(e)) {
+                  requireLogin(context);
+                } else {
+                  debugPrint('[MySavedScreen] 코스 저장 해제 실패: $e');
+                }
+              }
+            },
+            // 저장한 코스는 내가 만든 게 아니라 저장만 해둔 것이라, 코스 상세에서
+            // 편집·공유는 못 하고 보기만 가능하다(isOwner: false).
+            onTap: () => context.push('/map/route/preview', extra: {
+              'name': r.name,
+              'stops': r.stops,
+              'routeId': r.id,
+              'isOwner': false,
+            }),
+          );
+        }).toList();
       case 'spots':
       default:
-        // 찜한 id 순서대로 목업/DB 스팟을 각자의 출처에서 찾는다 — DB 스팟은
-        // map_mock_data.dart의 공유 캐시(dbSpotCache)에서(지도/상세 화면에서 한 번이라도
-        // 불러온 적 있어야 여기서도 보인다 — 앱을 새로 켠 직후라 캐시가 비어있으면 아직 안 보일 수 있음).
+        // 찜한 id 순서대로 DB 스팟을 map_mock_data.dart의 공유 캐시(dbSpotCache)에서
+        // 찾는다 — refreshLikedSpots가 likedSpotIds와 함께 채워주므로 보통 다 있지만,
+        // 혹시 캐시에 없는 id는 건너뛴다(이론상 거의 발생 안 함).
         final result = <_SavedEntry>[];
-        for (final id in savedSpotIds) {
-          MockSpot? s;
-          if (id.startsWith('db-')) {
-            s = dbSpotCache[id];
-          } else {
-            for (final m in mockSpots) {
-              if (m.id == id) {
-                s = m;
-                break;
-              }
-            }
-          }
+        for (final numId in likedSpotIds) {
+          final s = dbSpotCache['db-$numId'];
           if (s == null) continue;
           result.add(_SavedEntry(
             name: s.name,
@@ -97,9 +144,23 @@ class _MySavedScreenState extends State<MySavedScreen> {
             color: s.pinColor,
             icon: s.icon,
             actionLabel: l10n.mySavedActionUnwish,
-            onAction: () => setState(() => savedSpotIds.remove(id)),
+            onAction: () async {
+              if (!requireLogin(context)) return;
+              setState(() => likedSpotIds.remove(numId));
+              try {
+                await toggleSpotLike(numId);
+              } catch (e) {
+                if (!mounted) return;
+                setState(() => likedSpotIds.add(numId));
+                if (isUnauthorized(e)) {
+                  requireLogin(context);
+                } else {
+                  debugPrint('[MySavedScreen] 찜 해제 실패: $e');
+                }
+              }
+            },
             onTap: () async {
-              await context.push('/map/spot/$id');
+              await context.push('/map/spot/db-$numId');
               if (mounted) setState(() {});
             },
           ));
@@ -159,7 +220,9 @@ class _MySavedScreenState extends State<MySavedScreen> {
               ),
             ),
             Expanded(
-              child: entries.isEmpty
+              child: _filter == 'likedFeed' && _loadingFeed
+                  ? const Center(child: CircularProgressIndicator())
+                  : entries.isEmpty
                   ? _EmptyState(text: empty.text, cta: empty.cta, onCta: empty.onCta)
                   : ListView.separated(
                       itemCount: entries.length,

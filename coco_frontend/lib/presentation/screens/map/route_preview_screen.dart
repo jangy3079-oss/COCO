@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import '../../../core/network/login_guard.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../data/repositories/route_repository.dart';
 import '../../../l10n/generated/app_localizations.dart';
 import '../../widgets/map/kakao_map_view.dart';
 import 'map_mock_data.dart';
@@ -30,8 +32,120 @@ class RoutePreviewScreen extends StatefulWidget {
 }
 
 class _RoutePreviewScreenState extends State<RoutePreviewScreen> {
+  final _routeRepository = RouteRepository();
   bool _liked = false;
   bool _saved = false;
+  int _likeCount = 0;
+  int _saveCount = 0;
+
+  int? get _numericRouteId {
+    final id = widget.routeId;
+    return id == null ? null : dbRouteNumericId(id);
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    final numId = _numericRouteId;
+    if (numId != null) _loadDetail(numId);
+  }
+
+  Future<void> _loadDetail(int numId) async {
+    try {
+      final route = await _routeRepository.getById(numId);
+      if (route.saved) {
+        savedRouteCache[numId] = route;
+      } else {
+        savedRouteCache.remove(numId);
+      }
+      if (!mounted) return;
+      setState(() {
+        _liked = route.liked;
+        _saved = route.saved;
+        _likeCount = route.likeCount;
+        _saveCount = route.saveCount;
+      });
+    } catch (e) {
+      debugPrint('[RoutePreviewScreen] 코스 상세 조회 실패: $e');
+    }
+  }
+
+  Future<void> _toggleLike() async {
+    final numId = _numericRouteId;
+    if (numId == null) return;
+    if (!requireLogin(context)) return;
+    final wasLiked = _liked;
+    setState(() {
+      _liked = !wasLiked;
+      _likeCount += _liked ? 1 : -1;
+    });
+    try {
+      final result = await _routeRepository.toggleLike(numId);
+      if (!mounted) return;
+      setState(() {
+        _liked = result.liked;
+        _likeCount = result.likeCount;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _liked = wasLiked;
+        _likeCount += wasLiked ? 1 : -1;
+      });
+      if (isUnauthorized(e)) {
+        requireLogin(context);
+      } else {
+        debugPrint('[RoutePreviewScreen] 좋아요 토글 실패: $e');
+      }
+    }
+  }
+
+  Future<void> _toggleSave() async {
+    final numId = _numericRouteId;
+    if (numId == null) return;
+    if (!requireLogin(context)) return;
+    final wasSaved = _saved;
+    setState(() {
+      _saved = !wasSaved;
+      _saveCount += _saved ? 1 : -1;
+    });
+    try {
+      final result = await toggleRouteSave(numId);
+      if (!mounted) return;
+      setState(() {
+        _saved = result.saved;
+        _saveCount = result.saveCount;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _saved = wasSaved;
+        _saveCount += wasSaved ? 1 : -1;
+      });
+      if (isUnauthorized(e)) {
+        requireLogin(context);
+      } else {
+        debugPrint('[RoutePreviewScreen] 저장 토글 실패: $e');
+      }
+    }
+  }
+
+  Future<void> _share() async {
+    final numId = _numericRouteId;
+    if (numId != null) {
+      try {
+        await _routeRepository.share(numId);
+      } catch (e) {
+        debugPrint('[RoutePreviewScreen] 공유 카운트 반영 실패: $e');
+      }
+    }
+    if (!mounted) return;
+    context.push('/feed/compose-route', extra: {
+      'name': widget.routeName,
+      'stops': widget.stops,
+      'routeId': widget.routeId,
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -89,20 +203,20 @@ class _RoutePreviewScreenState extends State<RoutePreviewScreen> {
                       Expanded(
                         child: _CountPillButton(
                           label: l10n.routePreviewLikeLabel,
-                          count: _liked ? 1 : 0,
+                          count: _likeCount,
                           active: _liked,
                           activeColor: CocoTheme.primary,
-                          onTap: () => setState(() => _liked = !_liked),
+                          onTap: _toggleLike,
                         ),
                       ),
                       const SizedBox(width: 10),
                       Expanded(
                         child: _CountPillButton(
                           label: l10n.feedSaveButtonUnsaved,
-                          count: _saved ? 1 : 0,
+                          count: _saveCount,
                           active: _saved,
                           activeColor: CocoTheme.secondary,
-                          onTap: () => setState(() => _saved = !_saved),
+                          onTap: _toggleSave,
                         ),
                       ),
                       if (widget.isOwner) ...[
@@ -113,11 +227,7 @@ class _RoutePreviewScreenState extends State<RoutePreviewScreen> {
                             count: null,
                             active: false,
                             activeColor: CocoTheme.secondary,
-                            onTap: () => context.push('/feed/compose-route', extra: {
-                              'name': widget.routeName,
-                              'stops': widget.stops,
-                              'routeId': widget.routeId,
-                            }),
+                            onTap: _share,
                           ),
                         ),
                       ],

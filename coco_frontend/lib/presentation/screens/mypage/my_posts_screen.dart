@@ -1,14 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../data/models/qna_post.dart';
+import '../../../data/repositories/feed_repository.dart';
+import '../../../data/repositories/qna_repository.dart';
 import '../../../l10n/generated/app_localizations.dart';
 import '../feed/feed_mock_data.dart';
-import '../qna/qna_mock_data.dart';
 import 'mypage_mock_data.dart';
 
-/// "내가 쓴 글" 화면. mockFeedItems(작성자==나) + qnaMockPosts(mine)를 합쳐서 보여준다.
-/// 두 데이터가 하나의 새 모델로 통합되어 있지 않아, 화면 표시에 필요한 값만 뽑아
-/// 화면 로컬 클래스(_PostEntry)로 매핑한다 — 별도 공유 모델을 새로 만들 필요는 없음.
+/// "내가 쓴 글" 화면. 실제 피드 게시물(작성자==나) + 실제 QnA 질문(filter=mine)을
+/// 합쳐서 보여준다. 두 모델이 하나로 통합되어 있지 않아, 화면 표시에 필요한 값만
+/// 뽑아 화면 로컬 클래스(_PostEntry)로 매핑한다 — 별도 공유 모델을 새로 만들 필요는 없음.
 class MyPostsScreen extends StatefulWidget {
   final String initialFilter; // all | feed | qna
   const MyPostsScreen({super.key, this.initialFilter = 'all'});
@@ -20,47 +22,64 @@ class MyPostsScreen extends StatefulWidget {
 class _MyPostsScreenState extends State<MyPostsScreen> {
   late String _filter = widget.initialFilter;
 
-  // FeedItem에는 실제 타임스탬프가 없고 정렬용 ts(정수)만 있어서, 정확한 상대
-  // 시간 대신 근사치 라벨을 보여준다. 실 서버 연동 시 created_at 기준으로 교체.
-  String _feedTimeLabel(FeedItem f) {
-    final l10n = AppLocalizations.of(context)!;
-    if (f.ts >= 8) return l10n.myPostsTimeToday;
-    if (f.ts >= 6) return l10n.myPostsTimeYesterday;
-    if (f.ts >= 3) return l10n.myPostsTimeThisWeek;
-    return l10n.myPostsTimeLastMonth;
+  final _feedRepository = FeedRepository();
+  final _qnaRepository = QnaRepository();
+  List<FeedItem> _feedItems = [];
+  List<QnaPost> _qnaPosts = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    // 두 요청을 동시에 시작해두고(await는 따로) 순서와 무관하게 병렬로 기다린다.
+    final feedFuture = _feedRepository.fetchFeed();
+    final qnaFuture = _qnaRepository.listPosts(filter: 'mine');
+    try {
+      final posts = await feedFuture;
+      if (!mounted) return;
+      setState(() => _feedItems = posts.map(feedItemFromPost).toList());
+    } catch (e) {
+      debugPrint('[MyPostsScreen] 내가 쓴 피드 조회 실패: $e');
+    }
+    try {
+      final posts = await qnaFuture;
+      if (!mounted) return;
+      setState(() => _qnaPosts = posts);
+    } catch (e) {
+      debugPrint('[MyPostsScreen] 내가 쓴 질문 조회 실패: $e');
+    }
   }
 
   List<_PostEntry> get _entries {
     final l10n = AppLocalizations.of(context)!;
-    final feedEntries = mockFeedItems
-        .where((f) => f.source == FeedSource.user && f.author == myNickname)
-        .map((f) => _PostEntry(
-              kind: 'feed',
-              title: f.place,
-              meta: l10n.myPostsFeedMeta(f.likeCount, f.comments.length),
-              timeLabel: _feedTimeLabel(f),
-              solved: false,
-              sortTs: f.ts,
-              thumbnailColor: categoryColor(f.category),
-              onTap: () async {
-                await context.push('/feed/post', extra: f);
-                if (mounted) setState(() {});
-              },
-              onDelete: () => setState(() => mockFeedItems.remove(f)),
-            ));
-    final qnaEntries = qnaMockPosts.where((p) => p.mine).map((p) => _PostEntry(
-          kind: 'qna',
-          title: p.title,
-          meta: l10n.qnaAnswerCount(p.answers.length),
-          timeLabel: p.timeLabel,
-          solved: p.solved,
-          sortTs: p.ts,
-          thumbnailColor: null,
+    final feedEntries = _feedItems.where((f) => f.author == myNickname).map((f) => _PostEntry(
+          kind: 'feed',
+          title: f.place,
+          meta: l10n.myPostsFeedMeta(f.likeCount, f.comments.length),
+          timeLabel: f.timeLabel,
+          solved: false,
+          sortTs: f.ts,
+          thumbnailColor: categoryColor(f.category),
           onTap: () async {
-            await context.push('/qna/post', extra: p);
+            await context.push('/feed/post', extra: f);
             if (mounted) setState(() {});
           },
-          onDelete: () => setState(() => qnaMockPosts.remove(p)),
+        ));
+    final qnaEntries = _qnaPosts.map((p) => _PostEntry(
+          kind: 'qna',
+          title: p.title,
+          meta: l10n.qnaAnswerCount(p.answerCount),
+          timeLabel: _relativeTimeLabel(p.createdAt),
+          solved: p.solved,
+          sortTs: p.createdAt.millisecondsSinceEpoch,
+          thumbnailColor: null,
+          onTap: () async {
+            await context.push('/qna/post', extra: p.id);
+            if (mounted) setState(() {});
+          },
         ));
 
     var combined = [...feedEntries, ...qnaEntries];
@@ -127,7 +146,6 @@ class _PostEntry {
   final int sortTs;
   final Color? thumbnailColor;
   final VoidCallback onTap;
-  final VoidCallback onDelete;
 
   _PostEntry({
     required this.kind,
@@ -138,7 +156,6 @@ class _PostEntry {
     required this.sortTs,
     required this.thumbnailColor,
     required this.onTap,
-    required this.onDelete,
   });
 }
 
@@ -234,12 +251,6 @@ class _PostRow extends StatelessWidget {
                 ],
               ),
             ),
-            PopupMenuButton<String>(
-              icon: Text('⋯', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: Colors.grey.shade400)),
-              padding: EdgeInsets.zero,
-              onSelected: (_) => entry.onDelete(),
-              itemBuilder: (context) => [PopupMenuItem(value: 'delete', child: Text(l10n.commonDeleteLabel))],
-            ),
           ],
         ),
       ),
@@ -272,4 +283,15 @@ class _EmptyPosts extends StatelessWidget {
       ),
     );
   }
+}
+
+// qna_screen.dart/qna_post_detail_screen.dart의 _relativeTimeLabel과 동일한 로직 —
+// 화면 파일마다 필요한 만큼만 복제해 쓰는 기존 코드베이스 패턴을 따른다.
+String _relativeTimeLabel(DateTime dt) {
+  final diff = DateTime.now().difference(dt);
+  if (diff.inMinutes < 1) return '방금';
+  if (diff.inMinutes < 60) return '${diff.inMinutes}분 전';
+  if (diff.inHours < 24) return '${diff.inHours}시간 전';
+  if (diff.inDays < 2) return '어제';
+  return '${diff.inDays}일 전';
 }

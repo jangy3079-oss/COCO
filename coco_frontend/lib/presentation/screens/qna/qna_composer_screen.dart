@@ -1,12 +1,17 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:provider/provider.dart';
+import '../../../core/locale/locale_controller.dart';
+import '../../../core/network/login_guard.dart';
 import '../../../core/theme/app_theme.dart';
-import '../../../data/models/user_type.dart';
+import '../../../data/models/spot.dart';
+import '../../../data/repositories/qna_repository.dart';
+import '../../../data/repositories/spot_repository.dart';
 import '../../../l10n/generated/app_localizations.dart';
-import '../map/map_mock_data.dart';
-import 'qna_mock_data.dart';
 
-/// 질문 작성 화면. 제출하면 공유 목업 리스트(qnaMockPosts) 맨 앞에 추가하고
+/// 질문 작성 화면. 제출하면 실제 백엔드(POST /api/qna/posts)에 등록하고
 /// 커뮤니티 목록으로 돌아간다.
 class QnaComposerScreen extends StatefulWidget {
   const QnaComposerScreen({super.key});
@@ -18,34 +23,90 @@ class QnaComposerScreen extends StatefulWidget {
 class _QnaComposerScreenState extends State<QnaComposerScreen> {
   final _titleController = TextEditingController();
   final _bodyController = TextEditingController();
-  String? _selectedSpot;
+  final _qnaRepository = QnaRepository();
+  final _spotRepository = SpotRepository();
 
-  bool get _canSubmit => _titleController.text.trim().isNotEmpty && _bodyController.text.trim().isNotEmpty;
+  // 실제 DB 스팟 검색(GET /api/spot/search) — feed_composer_screen.dart의
+  // "장소를 태그해주세요" 단계와 동일한 패턴(타이핑 300ms 디바운스).
+  Spot? _selectedSpot;
+  String _spotQuery = '';
+  List<Spot> _spotResults = [];
+  bool _spotSearching = false;
+  Timer? _spotSearchDebounce;
+  bool _submitting = false;
+
+  bool get _canSubmit =>
+      _titleController.text.trim().isNotEmpty && _bodyController.text.trim().isNotEmpty && !_submitting;
 
   @override
   void dispose() {
     _titleController.dispose();
     _bodyController.dispose();
+    _spotSearchDebounce?.cancel();
     super.dispose();
   }
 
-  void _submit() {
+  void _onSpotQueryChanged(String query) {
+    setState(() => _spotQuery = query);
+    _spotSearchDebounce?.cancel();
+    final q = query.trim();
+    if (q.isEmpty) {
+      setState(() => _spotResults = []);
+      return;
+    }
+    _spotSearchDebounce = Timer(const Duration(milliseconds: 300), () async {
+      setState(() => _spotSearching = true);
+      try {
+        final results = await _spotRepository.search(
+          q,
+          locale: context.read<LocaleController>().locale.languageCode,
+        );
+        if (!mounted) return;
+        setState(() {
+          _spotResults = results;
+          _spotSearching = false;
+        });
+      } catch (e) {
+        debugPrint('[QnaComposerScreen] 스팟 검색 실패: $e');
+        if (mounted) setState(() => _spotSearching = false);
+      }
+    });
+  }
+
+  void _selectSpot(Spot spot) {
+    setState(() {
+      _selectedSpot = spot;
+      _spotQuery = '';
+      _spotResults = [];
+    });
+  }
+
+  Future<void> _submit() async {
     if (!_canSubmit) return;
-    final maxTs = qnaMockPosts.isEmpty ? 0 : qnaMockPosts.map((p) => p.ts).reduce((a, b) => a > b ? a : b);
-    qnaMockPosts.insert(
-      0,
-      QnaPost(
-        id: 'q${DateTime.now().millisecondsSinceEpoch}',
-        authorRole: UserType.tourist,
+    if (!requireLogin(context)) return;
+
+    setState(() => _submitting = true);
+    try {
+      await _qnaRepository.createPost(
         title: _titleController.text.trim(),
         content: _bodyController.text.trim(),
-        spotName: _selectedSpot,
-        timeLabel: '방금',
-        ts: maxTs + 1,
-        mine: true,
-      ),
-    );
-    context.pop();
+        spotId: _selectedSpot?.id,
+        locale: context.read<LocaleController>().locale.languageCode,
+      );
+      if (!mounted) return;
+      context.pop();
+    } catch (e) {
+      debugPrint('[QnaComposerScreen] 질문 작성 실패: $e');
+      if (!mounted) return;
+      setState(() => _submitting = false);
+      if (isUnauthorized(e)) {
+        requireLogin(context);
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(AppLocalizations.of(context)!.qnaComposerSubmitFailed)),
+        );
+      }
+    }
   }
 
   @override
@@ -118,18 +179,55 @@ class _QnaComposerScreenState extends State<QnaComposerScreen> {
                       ],
                     ),
                     const SizedBox(height: 10),
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
-                      children: [
-                        for (final spot in mockSpots)
+                    if (_selectedSpot != null)
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: [
                           _SpotTagChip(
-                            label: spot.name,
-                            selected: _selectedSpot == spot.name,
-                            onTap: () => setState(() => _selectedSpot = _selectedSpot == spot.name ? null : spot.name),
+                            label: _selectedSpot!.title,
+                            selected: true,
+                            onTap: () => setState(() => _selectedSpot = null),
                           ),
-                      ],
-                    ),
+                        ],
+                      )
+                    else ...[
+                      TextField(
+                        onChanged: _onSpotQueryChanged,
+                        style: const TextStyle(fontSize: 13),
+                        decoration: InputDecoration(
+                          hintText: l10n.feedComposerLocationSearchHint,
+                          isDense: true,
+                          filled: true,
+                          fillColor: const Color(0xFFF8F8F8),
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: Colors.grey.shade300)),
+                          enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: Colors.grey.shade300)),
+                        ),
+                      ),
+                      if (_spotSearching)
+                        const Padding(
+                          padding: EdgeInsets.symmetric(vertical: 12),
+                          child: Center(child: SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))),
+                        )
+                      else if (_spotQuery.trim().isNotEmpty && _spotResults.isEmpty)
+                        Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          child: Text(l10n.feedComposerLocationNoResults, style: TextStyle(fontSize: 13, color: Colors.grey.shade500)),
+                        )
+                      else if (_spotResults.isNotEmpty)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 8),
+                          child: Wrap(
+                            spacing: 8,
+                            runSpacing: 8,
+                            children: [
+                              for (final spot in _spotResults)
+                                _SpotTagChip(label: spot.title, selected: false, onTap: () => _selectSpot(spot)),
+                            ],
+                          ),
+                        ),
+                    ],
                     const SizedBox(height: 20),
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),

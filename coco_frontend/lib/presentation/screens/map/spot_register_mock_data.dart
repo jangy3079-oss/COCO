@@ -16,6 +16,18 @@ class SpotSearchCandidate {
     required this.lat,
     required this.lng,
   });
+
+  /// GET /api/spot/search/external 응답 한 건을 변환한다. 백엔드가 아직 실제 DB row가
+  /// 아닌 카카오 검색 결과를 그대로 주므로 id는 백엔드가 안 내려주고, 화면에서 목록
+  /// 순서로 부여한다.
+  factory SpotSearchCandidate.fromJson(Map<String, dynamic> json, {required String id}) =>
+      SpotSearchCandidate(
+        id: id,
+        name: json['name'] as String,
+        address: json['address'] as String,
+        lat: (json['lat'] as num).toDouble(),
+        lng: (json['lng'] as num).toDouble(),
+      );
 }
 
 const spotRegisterCandidates = [

@@ -46,6 +46,9 @@ class _BottomNavShellState extends State<BottomNavShell>
   late final AnimationController _controller = AnimationController(
     vsync: this,
     duration: const Duration(milliseconds: 200),
+    value: 1.0, // idle 상태 불변식(위 build() 주석 참고): 항상 애니메이션 종료 지점에서 시작해야
+    // 첫 진입 시(예: 로그인 직후 currentIndex와 resolvedIdx가 우연히 같아 forward()가 한 번도
+    // 안 불리는 경우) 화면이 begin 오프셋(화면 밖)에 멈춰 있는 채로 안 그려지는 버그를 막는다.
   );
   // 슬라이드(지도가 아닌 화면)에만 easing을 입혀서 더 빠르고 부드럽게 느껴지게 한다.
   // 지도 화면의 페이드는 그대로 _controller(선형)를 써서 건드리지 않는다.

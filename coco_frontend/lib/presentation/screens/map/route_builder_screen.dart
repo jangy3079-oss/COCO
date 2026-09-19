@@ -2,10 +2,9 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
-import 'package:provider/provider.dart';
-import '../../../core/locale/locale_controller.dart';
+import '../../../core/network/login_guard.dart';
 import '../../../core/theme/app_theme.dart';
-import '../../../data/repositories/spot_repository.dart';
+import '../../../data/repositories/route_repository.dart';
 import '../../../l10n/generated/app_localizations.dart';
 import 'map_mock_data.dart';
 
@@ -32,6 +31,8 @@ class _RouteBuilderScreenState extends State<RouteBuilderScreen> {
 
   // "+ 스팟 추가" 검색 팝업 — 화면 전환 없이 이 화면 위에 오버레이로 뜬다
   // (재생목록에 곡 담듯 검색창을 유지한 채 연속으로 여러 스팟을 담을 수 있게).
+  // 코스는 "내가 찜해둔 스팟"들을 묶어 만드는 것이라, 후보 목록은 항상
+  // savedSpots(찜한 스팟)로 제한한다 — 전체 DB 스팟 검색이 아니다.
   bool _searchOpen = false;
   String _searchQuery = '';
   String? _toastMessage;
@@ -40,18 +41,13 @@ class _RouteBuilderScreenState extends State<RouteBuilderScreen> {
   // 추가한 것만 되돌리고(원래 있던 스팟은 그대로 두고), "완료"를 누르면 그대로
   // 확정한다. 예전엔 닫기 버튼이 하나뿐이라 그게 사실상 "완료"처럼 동작했었다.
   final Set<String> _addedDuringSearch = {};
-
-  // 실제 DB 스팟 검색 — 목업(mockSpots)은 로컬이라 바로 필터링되지만, DB는
-  // 네트워크 호출이라 타이핑마다 바로 쏘지 않고 300ms 디바운스한다.
-  final _spotRepository = SpotRepository();
-  List<MockSpot> _dbSearchResults = [];
-  Timer? _dbSearchDebounce;
+  final _routeRepository = RouteRepository();
+  bool _saving = false;
 
   @override
   void dispose() {
     _nameController.dispose();
     _toastTimer?.cancel();
-    _dbSearchDebounce?.cancel();
     super.dispose();
   }
 
@@ -60,10 +56,6 @@ class _RouteBuilderScreenState extends State<RouteBuilderScreen> {
       _searchOpen = true;
       _addedDuringSearch.clear();
     });
-    // 검색어를 아직 안 쳐도 실제로 등록된 스팟들이 바로 보이게, 빈 검색어로 한 번
-    // 조회해둔다 — 백엔드 검색(LIKE '%q%')이 빈 문자열이면 전체(최대 20개)를
-    // 돌려주므로 이미 있는 API 그대로 재사용할 수 있다(백엔드 수정 없음).
-    _fetchDbResults('');
   }
 
   // 취소 — 이번 검색 세션에서 새로 담은 스팟만 되돌리고 닫는다.
@@ -72,7 +64,6 @@ class _RouteBuilderScreenState extends State<RouteBuilderScreen> {
         _addedDuringSearch.clear();
         _searchOpen = false;
         _searchQuery = '';
-        _dbSearchResults = [];
       });
 
   // 완료 — 담은 내용을 그대로 확정하고 닫는다.
@@ -80,36 +71,9 @@ class _RouteBuilderScreenState extends State<RouteBuilderScreen> {
         _addedDuringSearch.clear();
         _searchOpen = false;
         _searchQuery = '';
-        _dbSearchResults = [];
       });
 
-  void _onSearchQueryChanged(String query) {
-    setState(() => _searchQuery = query);
-    _dbSearchDebounce?.cancel();
-    // 검색어가 비어도 _fetchDbResults('')를 그대로 호출한다 — 빈 검색어는 전체
-    // 목록을 보여주는 용도로 쓴다(아래 _fetchDbResults 주석 참고).
-    _dbSearchDebounce = Timer(const Duration(milliseconds: 300), () => _fetchDbResults(query));
-  }
-
-  // 실제 DB 스팟 검색 — query가 빈 문자열이면 백엔드 LIKE 검색('%q%')이 전체를
-  // 돌려주는 걸 그대로 이용해 "검색어 없을 때 기본 목록"으로도 재사용한다.
-  Future<void> _fetchDbResults(String query) async {
-    try {
-      final results = await _spotRepository.search(
-        query.trim(),
-        locale: context.read<LocaleController>().locale.languageCode,
-      );
-      if (!mounted) return;
-      final converted = results.map(mockSpotFromDb).toList();
-      // 다른 화면(스팟 상세 등)에서도 id로 다시 찾을 수 있게 공유 캐시에 채워 넣는다.
-      for (final s in converted) {
-        dbSpotCache[s.id] = s;
-      }
-      setState(() => _dbSearchResults = converted);
-    } catch (e) {
-      debugPrint('[RouteBuilderScreen] 스팟 검색 실패: $e');
-    }
-  }
+  void _onSearchQueryChanged(String query) => setState(() => _searchQuery = query);
 
   void _addStopFromSearch(MockSpot spot) {
     if (_stops.any((s) => s.id == spot.id)) return;
@@ -144,7 +108,7 @@ class _RouteBuilderScreenState extends State<RouteBuilderScreen> {
 
   void _remove(int i) => setState(() => _stops.removeAt(i));
 
-  void _handleSave() {
+  Future<void> _handleSave() async {
     if (_nameController.text.trim().isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(AppLocalizations.of(context)!.routeBuilderNameRequiredWarning)),
@@ -157,36 +121,48 @@ class _RouteBuilderScreenState extends State<RouteBuilderScreen> {
       );
       return;
     }
+    if (!requireLogin(context)) return;
+    if (_saving) return;
+
     final name = _nameController.text.trim();
-    // MY탭 "내가 만든 코스"에서 보여줄 수 있도록 공유 리스트에 반영.
-    // 편집 모드면 기존 코스를 같은 자리에서 갱신하고, 아니면 새 코스로 맨 앞에 추가한다.
+    // 스팟 추가 검색이 찜한 스팟(savedSpots, 전부 'db-' id)으로 제한돼 있어(#147) 전부
+    // 실제 DB 스팟 id로 변환된다 — whereType은 혹시 모를 데모 스팟 방어용.
+    final spotIds = _stops.map((s) => dbSpotNumericId(s.id)).whereType<int>().toList();
     final editingId = widget.editingRouteId;
-    String routeId;
-    if (editingId != null) {
-      routeId = editingId;
-      final i = mockMyRoutes.indexWhere((r) => r.id == editingId);
-      if (i != -1) {
-        final old = mockMyRoutes[i];
-        mockMyRoutes[i] = MockRoute(
-          id: old.id,
-          name: name,
-          stops: List.of(_stops),
-          isPublic: old.isPublic,
-          likes: old.likes,
-          saves: old.saves,
-          shares: old.shares,
+
+    setState(() => _saving = true);
+    try {
+      final int backendId;
+      if (editingId != null) {
+        final numId = dbRouteNumericId(editingId);
+        if (numId == null) return;
+        final result = await _routeRepository.update(numId, name: name, spotIds: spotIds);
+        backendId = result.id;
+      } else {
+        final result = await _routeRepository.create(name: name, spotIds: spotIds);
+        backendId = result.id;
+      }
+      await refreshMyRoutes();
+      if (!mounted) return;
+      context.push('/map/route/preview', extra: {
+        'name': name,
+        'stops': _stops,
+        'routeId': 'route-$backendId',
+        'isOwner': true,
+      });
+    } catch (e) {
+      debugPrint('[RouteBuilderScreen] 코스 저장 실패: $e');
+      if (!mounted) return;
+      if (isUnauthorized(e)) {
+        requireLogin(context);
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(AppLocalizations.of(context)!.routeBuilderSaveFailedMessage)),
         );
       }
-    } else {
-      routeId = 'route-${DateTime.now().millisecondsSinceEpoch}';
-      mockMyRoutes.insert(0, MockRoute(id: routeId, name: name, stops: List.of(_stops)));
+    } finally {
+      if (mounted) setState(() => _saving = false);
     }
-    context.push('/map/route/preview', extra: {
-      'name': name,
-      'stops': _stops,
-      'routeId': routeId,
-      'isOwner': true,
-    });
   }
 
   @override
@@ -308,7 +284,6 @@ class _RouteBuilderScreenState extends State<RouteBuilderScreen> {
             _StopSearchOverlay(
               query: _searchQuery,
               stops: _stops,
-              dbResults: _dbSearchResults,
               toastMessage: _toastMessage,
               onQueryChanged: _onSearchQueryChanged,
               onCancel: _cancelSearch,
@@ -327,7 +302,6 @@ class _RouteBuilderScreenState extends State<RouteBuilderScreen> {
 class _StopSearchOverlay extends StatelessWidget {
   final String query;
   final List<MockSpot> stops;
-  final List<MockSpot> dbResults; // 실제 DB 검색 결과 — 이미 서버에서 검색어로 걸러져 온 상태
   final String? toastMessage;
   final ValueChanged<String> onQueryChanged;
   final VoidCallback onCancel;
@@ -337,7 +311,6 @@ class _StopSearchOverlay extends StatelessWidget {
   const _StopSearchOverlay({
     required this.query,
     required this.stops,
-    required this.dbResults,
     required this.toastMessage,
     required this.onQueryChanged,
     required this.onCancel,
@@ -345,18 +318,17 @@ class _StopSearchOverlay extends StatelessWidget {
     required this.onAdd,
   });
 
+  // 후보는 항상 내가 찜한(저장한) 스팟(savedSpots)으로 제한한다 — 코스는 찜한
+  // 스팟들을 묶어 만드는 것이라 전체 DB 스팟을 검색해 보여주면 안 된다.
   // "남포 카페"처럼 여러 단어를 띄어써도 찾을 수 있게 — 공백으로 쪼갠 키워드가
   // 이름/동네/부제/주소 중 어디든 전부 포함돼 있으면 후보로 인정한다(순서 무관).
-  // 목업 후보 뒤에 실제 DB 검색 결과를 이어 붙인다(DB 쪽은 이미 서버에서 필터링됨).
   List<MockSpot> get _candidates {
     final keywords = query.trim().split(RegExp(r'\s+')).where((k) => k.isNotEmpty).toList();
-    final mockCandidates = keywords.isEmpty
-        ? mockSpots
-        : mockSpots.where((s) {
-            final haystack = '${s.name} ${s.dong} ${s.subtitle} ${s.address}'.toLowerCase();
-            return keywords.every((k) => haystack.contains(k.toLowerCase()));
-          }).toList();
-    return [...mockCandidates, ...dbResults];
+    if (keywords.isEmpty) return savedSpots;
+    return savedSpots.where((s) {
+      final haystack = '${s.name} ${s.dong} ${s.subtitle} ${s.address}'.toLowerCase();
+      return keywords.every((k) => haystack.contains(k.toLowerCase()));
+    }).toList();
   }
 
   @override

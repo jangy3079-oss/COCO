@@ -1,7 +1,10 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../data/repositories/spot_registration_repository.dart';
 import '../../widgets/map/kakao_map_view.dart';
 import 'map_mock_data.dart' show mapDefaultCenterLat, mapDefaultCenterLng;
 import 'spot_register_mock_data.dart';
@@ -19,6 +22,14 @@ class _SpotRegisterSearchScreenState extends State<SpotRegisterSearchScreen> {
   String _query = '';
   SpotSearchCandidate? _picked;
 
+  // 실시간 장소 검색(카카오 로컬 키워드 검색 프록시) — 다른 검색 화면들(지도 탭,
+  // 코스 만들기)과 동일하게 300ms 디바운스 후 호출한다. 백엔드에 아직 이 엔드포인트가
+  // 없어서(요청서 전달됨) 지금은 항상 빈 목록으로 떨어지고, 그동안은 지도를 직접
+  // 눌러 위치를 찍는 방식으로 등록을 계속할 수 있다.
+  final _spotRegistrationRepository = SpotRegistrationRepository();
+  Timer? _searchDebounce;
+  List<SpotSearchCandidate> _results = [];
+
   // 미니맵 기본 중심 좌표 — 진입 시 현재 위치로 재설정을 시도하고,
   // 권한 거부/실패 시 mapDefaultCenterLat/Lng(부산 남포동)를 그대로 쓴다.
   double _centerLat = mapDefaultCenterLat;
@@ -28,6 +39,12 @@ class _SpotRegisterSearchScreenState extends State<SpotRegisterSearchScreen> {
   void initState() {
     super.initState();
     _loadCurrentLocation();
+  }
+
+  @override
+  void dispose() {
+    _searchDebounce?.cancel();
+    super.dispose();
   }
 
   Future<void> _loadCurrentLocation() async {
@@ -56,10 +73,27 @@ class _SpotRegisterSearchScreenState extends State<SpotRegisterSearchScreen> {
     }
   }
 
-  List<SpotSearchCandidate> get _results {
-    final q = _query.trim();
-    if (q.isEmpty) return spotRegisterCandidates;
-    return spotRegisterCandidates.where((c) => c.name.contains(q) || c.address.contains(q)).toList();
+  void _onQueryChanged(String query) {
+    setState(() => _query = query);
+    _searchDebounce?.cancel();
+    final trimmed = query.trim();
+    if (trimmed.isEmpty) {
+      setState(() => _results = []);
+      return;
+    }
+    _searchDebounce = Timer(const Duration(milliseconds: 300), () async {
+      try {
+        final raw = await _spotRegistrationRepository.searchExternal(trimmed);
+        if (!mounted) return;
+        setState(() => _results = [
+              for (var i = 0; i < raw.length; i++)
+                SpotSearchCandidate.fromJson(raw[i] as Map<String, dynamic>, id: 'ext-$i'),
+            ]);
+      } catch (e) {
+        debugPrint('[SpotRegisterSearchScreen] 장소 검색 실패: $e');
+        if (mounted) setState(() => _results = []);
+      }
+    });
   }
 
   // 지도를 직접 눌러 위치를 찍었을 때 — 검색 후보를 고른 것과 동일하게 취급해서
@@ -109,7 +143,7 @@ class _SpotRegisterSearchScreenState extends State<SpotRegisterSearchScreen> {
                       border: Border.all(color: CocoTheme.primary),
                     ),
                     child: TextField(
-                      onChanged: (v) => setState(() => _query = v),
+                      onChanged: _onQueryChanged,
                       decoration: const InputDecoration(
                         prefixIcon: Icon(Icons.search_rounded, size: 20, color: Colors.black45),
                         hintText: '장소명 또는 주소 검색',

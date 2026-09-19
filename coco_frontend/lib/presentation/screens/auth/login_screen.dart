@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:provider/provider.dart';
+import '../../../core/locale/locale_controller.dart';
 import '../../../core/network/auth_token_store.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../data/repositories/auth_repository.dart';
@@ -17,9 +19,12 @@ class _LoginScreenState extends State<LoginScreen> {
   final _authRepository = AuthRepository();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
+  final _passwordFocusNode = FocusNode();
   bool _showPassword = false;
   bool _keepSignedIn = true;
   bool _isLoading = false;
+
+  static const _languages = [('ko', '한국어'), ('en', 'English'), ('ja', '日本語')];
 
   bool get _canLogin =>
       _emailController.text.trim().isNotEmpty && _passwordController.text.isNotEmpty;
@@ -28,6 +33,7 @@ class _LoginScreenState extends State<LoginScreen> {
   void dispose() {
     _emailController.dispose();
     _passwordController.dispose();
+    _passwordFocusNode.dispose();
     super.dispose();
   }
 
@@ -61,10 +67,16 @@ class _LoginScreenState extends State<LoginScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Padding(
-              padding: const EdgeInsets.fromLTRB(8, 8, 8, 0),
-              child: IconButton(
-                onPressed: () => context.pop(),
-                icon: const Icon(Icons.arrow_back_rounded),
+              padding: const EdgeInsets.fromLTRB(8, 8, 16, 0),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  IconButton(
+                    onPressed: () => context.pop(),
+                    icon: const Icon(Icons.arrow_back_rounded),
+                  ),
+                  _LanguageSelector(languages: _languages),
+                ],
               ),
             ),
             Expanded(
@@ -87,15 +99,20 @@ class _LoginScreenState extends State<LoginScreen> {
                       controller: _emailController,
                       hintText: 'you@example.com',
                       keyboardType: TextInputType.emailAddress,
+                      textInputAction: TextInputAction.next,
                       onChanged: (_) => setState(() {}),
+                      onSubmitted: (_) => FocusScope.of(context).requestFocus(_passwordFocusNode),
                     ),
                     const SizedBox(height: 16),
                     _AuthField(
                       label: l10n.passwordLabel,
                       controller: _passwordController,
+                      focusNode: _passwordFocusNode,
                       hintText: '••••••••',
                       obscureText: !_showPassword,
+                      textInputAction: TextInputAction.done,
                       onChanged: (_) => setState(() {}),
+                      onSubmitted: (_) => _handleLogin(),
                       suffix: TextButton(
                         onPressed: () => setState(() => _showPassword = !_showPassword),
                         child: Text(
@@ -176,19 +193,25 @@ class _LoginScreenState extends State<LoginScreen> {
 class _AuthField extends StatelessWidget {
   final String label;
   final TextEditingController controller;
+  final FocusNode? focusNode;
   final String hintText;
   final bool obscureText;
   final TextInputType? keyboardType;
+  final TextInputAction? textInputAction;
   final ValueChanged<String>? onChanged;
+  final ValueChanged<String>? onSubmitted;
   final Widget? suffix;
 
   const _AuthField({
     required this.label,
     required this.controller,
+    this.focusNode,
     required this.hintText,
     this.obscureText = false,
     this.keyboardType,
+    this.textInputAction,
     this.onChanged,
+    this.onSubmitted,
     this.suffix,
   });
 
@@ -203,9 +226,12 @@ class _AuthField extends StatelessWidget {
         const SizedBox(height: 8),
         TextField(
           controller: controller,
+          focusNode: focusNode,
           obscureText: obscureText,
           keyboardType: keyboardType,
+          textInputAction: textInputAction,
           onChanged: onChanged,
+          onSubmitted: onSubmitted,
           style: const TextStyle(fontSize: 15, color: CocoTheme.secondary),
           decoration: InputDecoration(
             hintText: hintText,
@@ -222,6 +248,44 @@ class _AuthField extends StatelessWidget {
             ),
           ),
         ),
+      ],
+    );
+  }
+}
+
+class _LanguageSelector extends StatelessWidget {
+  final List<(String, String)> languages;
+  const _LanguageSelector({required this.languages});
+
+  @override
+  Widget build(BuildContext context) {
+    final currentCode = context.watch<LocaleController>().locale.languageCode;
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        for (final l in languages)
+          Padding(
+            padding: const EdgeInsets.only(left: 4),
+            child: InkWell(
+              onTap: () => context.read<LocaleController>().setLocale(Locale(l.$1)),
+              borderRadius: BorderRadius.circular(20),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                decoration: BoxDecoration(
+                  color: currentCode == l.$1 ? CocoTheme.primary.withOpacity(0.10) : Colors.transparent,
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Text(
+                  l.$2,
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: currentCode == l.$1 ? FontWeight.w800 : FontWeight.w500,
+                    color: currentCode == l.$1 ? CocoTheme.primary : Colors.grey.shade500,
+                  ),
+                ),
+              ),
+            ),
+          ),
       ],
     );
   }

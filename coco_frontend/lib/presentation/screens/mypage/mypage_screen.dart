@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:provider/provider.dart';
+import '../../../core/locale/locale_controller.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../l10n/generated/app_localizations.dart';
 import '../../widgets/map/kakao_map_view.dart';
@@ -16,6 +18,16 @@ class MypageScreen extends StatefulWidget {
 }
 
 class _MypageScreenState extends State<MypageScreen> {
+  @override
+  void initState() {
+    super.initState();
+    // MY탭 진입 시 실제 찜 목록을 한 번 채워둔다("나의 코스" 미리보기 카드가
+    // likedSpotIds를 쓰므로, 여기 안 하면 지도 탭에 한 번도 안 들어갔을 때 비어보임).
+    refreshLikedSpots(locale: context.read<LocaleController>().locale.languageCode).then((_) {
+      if (mounted) setState(() {});
+    });
+  }
+
   // 다른 화면(프로필 수정/찜 해제 등)에서 돌아왔을 때 반영되도록
   // 피드·커뮤니티 탭과 동일하게 push 후 setState하는 패턴을 쓴다.
   Future<void> _open(String path, {Object? extra}) async {
@@ -25,7 +37,7 @@ class _MypageScreenState extends State<MypageScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final savedSpots = mockSpots.where((s) => savedSpotIds.contains(s.id)).toList();
+    final mySavedSpots = savedSpots;
     final l10n = AppLocalizations.of(context)!;
 
     return Scaffold(
@@ -65,7 +77,7 @@ class _MypageScreenState extends State<MypageScreen> {
             Divider(height: 1, color: Colors.black.withOpacity(0.07)),
             Padding(
               padding: const EdgeInsets.fromLTRB(20, 20, 20, 18),
-              child: _MyMapCard(spots: savedSpots, onTap: () => _open('/mypage/routes')),
+              child: _MyMapCard(spots: mySavedSpots, onTap: () => _open('/mypage/routes')),
             ),
             Divider(height: 1, color: Colors.black.withOpacity(0.07)),
             _MenuRow(icon: Icons.article_outlined, label: l10n.myPageMenuMyPosts, onTap: () => _open('/mypage/posts')),

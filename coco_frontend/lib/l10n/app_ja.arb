@@ -181,6 +181,10 @@
   "qnaPostDetailAnswerHint": "回答を残してください",
   "qnaAdoptedBadge": "✓ 採用済み",
   "qnaAdoptButton": "この回答を採用する",
+  "qnaLoadFailedMessage": "質問を読み込めませんでした",
+  "qnaAdoptForbiddenMessage": "自分が作成した質問でのみ採択できます",
+  "qnaComposerSubmitFailed": "質問の投稿に失敗しました",
+  "spotRegisterSubmitFailedMessage": "スポット登録の申請に失敗しました",
 
   "myPageMenuMyPosts": "書いた投稿",
   "myPageMenuSaved": "保存・いいね",
@@ -218,6 +222,7 @@
   },
   "myPostsKindFeed": "フィード",
   "commonDeleteLabel": "削除",
+  "commonLoginRequiredMessage": "ログインが必要です",
   "myPostsEmptyState": "まだ書いた投稿がありません",
   "myPostsGoToFeedButton": "フィードへ",
 
@@ -332,6 +337,7 @@
   "routeBuilderAddSpotButton": "+ スポット追加",
   "routeBuilderNameRequiredWarning": "コース名を入力してください",
   "routeBuilderStopsRequiredWarning": "スポットを1つ以上追加してください",
+  "routeBuilderSaveFailedMessage": "コースの保存に失敗しました",
   "routeBuilderSpotAddedToast": "{name}スポットが追加されました",
   "@routeBuilderSpotAddedToast": {
     "placeholders": { "name": { "type": "String" } }

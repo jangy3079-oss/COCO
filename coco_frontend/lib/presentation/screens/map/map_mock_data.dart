@@ -1,14 +1,17 @@
 import 'package:flutter/material.dart';
+import '../../../data/models/route.dart';
 import '../../../data/models/spot.dart' as db;
+import '../../../data/repositories/route_repository.dart';
+import '../../../data/repositories/spot_repository.dart';
 
-// TODO: 실제 지도 SDK(flutter_naver_map) + TourAPI 연동 전까지의 목업 데이터.
-// 현재 flutter_naver_map은 jni/Gradle 툴체인 충돌로 pubspec에서 비활성화된 상태
-// (pubspec.yaml 주석 참고). 연동되면 left/top(지도 영역 대비 상대 위치)은 실제
-// 위경도 기반 좌표 변환으로, MockSpot 목업 리스트는 spots 테이블 조회 결과로 교체.
+// TODO: 실제 지도 SDK(flutter_naver_map) 연동 전까지는 KakaoMapView 대신 이 파일의
+// left/top(지도 영역 대비 상대 위치, MockMapBackground 캔버스 전용)로 그리는 화면이
+// 남아있다. 현재 flutter_naver_map은 jni/Gradle 툴체인 충돌로 pubspec에서 비활성화된
+// 상태(pubspec.yaml 주석 참고).
 //
-// 지도 탭(map_screen), 스팟 상세(spot_detail_screen), 골목지도 만들기
-// (route_builder_screen), 골목지도 미리보기(route_preview_screen)가 이 파일의
-// mockSpots를 공유해서 참조한다.
+// MockSpot 자체는 더 이상 목업이 아니라, 스팟 상세/코스 만들기/코스 미리보기 등
+// 여러 화면이 공유하는 스팟 모양(shape)이다 — 실제 DB 스팟은 mockSpotFromDb로
+// 이 모양에 맞춰 변환해서 쓴다.
 class MockSpot {
   final String id;
   final String name;
@@ -21,6 +24,9 @@ class MockSpot {
   final double top;
   final double lat; // 실제 위경도 — KakaoMapView(실제 지도) 전용
   final double lng;
+  // 코스를 피드에 공유할 때(feed_route_compose_screen) 대표 스팟의 사진을 게시물
+  // 사진으로 쓴다 — 사진이 없는 스팟(카카오 로컬 소스 등)은 빈 문자열.
+  final String imageUrl;
 
   const MockSpot({
     required this.id,
@@ -34,6 +40,7 @@ class MockSpot {
     required this.top,
     required this.lat,
     required this.lng,
+    this.imageUrl = '',
   });
 
   Color get pinColor => switch (category) {
@@ -53,15 +60,59 @@ class MockSpot {
 
 // 스팟 찜(저장) 상태 — 지도 탭(주변 스팟 목록 북마크)과 스팟 상세 화면,
 // 마이(MY) 탭(나의 지도·저장한 스팟 목록)이 함께 참조하는 공유 상태.
-// 예전엔 각 화면이 자기만의 로컬 State로 들고 있어서 화면을 벗어나면
-// 사라졌는데, MY탭에서 "찜한 스팟"을 보여주려면 공유 상태가 필요해서 승격함.
-final Set<String> savedSpotIds = {'spot-1', 'spot-2', 'spot-4'};
+// PART 1(찜 실API 연동)부터는 실제 백엔드(GET/POST /api/spot/{id}/like)와 동기화되는
+// 정수 id 집합이다(dbSpotNumericId로 'db-{id}' 문자열에서 뽑아낸 값).
+final Set<int> likedSpotIds = {};
+final _likeSpotRepository = SpotRepository();
+
+/// 'db-{id}'에서 실제 백엔드 정수 id를 뽑는다. 데모 스팟이면 null(=찜 불가 판정에도 쓰임).
+int? dbSpotNumericId(String spotId) =>
+    spotId.startsWith('db-') ? int.tryParse(spotId.substring(3)) : null;
+
+/// spotId(MockSpot.id, 문자열)가 지금 찜한 상태인지 — 화면들이 하트/북마크 아이콘을
+/// 채울지 판단할 때 쓴다. 데모 스팟은 항상 false(찜 개념이 없음).
+bool isSpotSaved(String spotId) {
+  final numId = dbSpotNumericId(spotId);
+  return numId != null && likedSpotIds.contains(numId);
+}
+
+/// GET /api/spot/liked로 실제 찜 목록을 가져와 likedSpotIds + dbSpotCache를 채운다.
+/// 마이탭 진입 시/지도 탭 진입 시 한 번씩 호출한다. 로그인 안 된 상태(401)면 조용히
+/// 무시 — 화면들은 그냥 "찜한 스팟 없음"으로 보인다.
+Future<void> refreshLikedSpots({String locale = 'ko'}) async {
+  try {
+    final spots = await _likeSpotRepository.fetchLikedSpots(locale: locale);
+    likedSpotIds
+      ..clear()
+      ..addAll(spots.map((s) => s.id));
+    for (final s in spots) {
+      dbSpotCache['db-${s.id}'] = mockSpotFromDb(s);
+    }
+  } catch (e) {
+    debugPrint('[map_mock_data] 찜 목록 조회 실패: $e');
+  }
+}
+
+/// 찜 토글 실제 API 호출 — 성공하면 likedSpotIds도 함께 갱신한다. 호출부가 먼저
+/// 낙관적으로 UI를 바꾸고, 실패하면 되돌리는 방식을 쓰므로 여기선 에러를 그대로 던진다.
+/// (데모 스팟은 호출부에서 dbSpotNumericId가 null인지로 미리 걸러야 함 — 여기선 가정하지 않음.)
+Future<bool> toggleSpotLike(int numId) async {
+  final result = await _likeSpotRepository.toggleLike(numId);
+  if (result.liked) {
+    likedSpotIds.add(numId);
+  } else {
+    likedSpotIds.remove(numId);
+  }
+  return result.liked;
+}
 
 /// 골목지도(코스). 지도 탭에서 "코스 저장하기"로 만든 코스가 여기 쌓이고,
 /// 마이(MY) 탭의 "내가 만든 골목지도"/"저장한 코스"에서 보여준다.
-/// TODO: 백엔드 연동 시 routes/route_stops 테이블 조회 결과로 교체 (신규 테이블 필요, MY_TAB_SPEC.md 참고).
+/// PART 2(코스 실API 연동)부터는 mockRouteFromApi가 실제 백엔드(RouteMap)를 이 모양으로
+/// 바꿔 채운다 — 화면들(route_builder/route_preview/my_routes 등)이 전부 MockRoute 하나의
+/// 모양을 기준으로 짜여 있어서, PART 1의 MockSpot/mockSpotFromDb와 동일한 전략을 썼다.
 class MockRoute {
-  final String id;
+  final String id; // 'route-{백엔드 id}'
   final String name;
   final List<MockSpot> stops;
   final bool isPublic; // true: 전체 공유, false: 나만 보기
@@ -84,30 +135,85 @@ class MockRoute {
   double get distanceKm => stops.length * 0.3;
 }
 
-final List<MockRoute> mockMyRoutes = [
-  MockRoute(
-    id: 'route-1',
-    name: '겨울밤 노포 투어',
-    stops: [mockSpotById('spot-1'), mockSpotById('spot-2'), mockSpotById('spot-3'), mockSpotById('spot-4')],
-    isPublic: true,
-    likes: 128,
-    saves: 64,
-    shares: 33,
-  ),
-  MockRoute(
-    id: 'route-2',
-    name: '영도 한바퀴 산책',
-    stops: [mockSpotById('spot-4'), mockSpotById('spot-1'), mockSpotById('spot-2')],
-  ),
-  MockRoute(
-    id: 'route-3',
-    name: '아직 이름 없는 코스',
-    stops: [mockSpotById('spot-5')],
-    isDraft: true,
-  ),
-];
+/// 'route-{id}'에서 실제 백엔드 정수 id를 뽑는다.
+int? dbRouteNumericId(String routeId) =>
+    routeId.startsWith('route-') ? int.tryParse(routeId.substring(6)) : null;
 
-MockSpot mockSpotById(String id) => mockSpots.firstWhere((s) => s.id == id);
+final _routeRepository = RouteRepository();
+
+/// 코스의 스팟(RouteMapSpot)을 MockSpot으로 변환한다. 이미 dbSpotCache에 있으면
+/// (찜한 스팟이라 이미 본 적 있는 경우가 대부분) 그대로 쓰고, 없으면 백엔드가 주는
+/// 최소 필드(제목/좌표)만으로 채운다.
+MockSpot mockSpotFromRouteStop(RouteMapSpot stop) {
+  final cached = dbSpotCache['db-${stop.spotId}'];
+  if (cached != null) return cached;
+  return MockSpot(
+    id: 'db-${stop.spotId}',
+    name: stop.title,
+    category: '',
+    subtitle: '',
+    address: '',
+    description: '',
+    dong: '',
+    left: _clamp01((stop.lng - _dbLngMin) / (_dbLngMax - _dbLngMin)),
+    top: _clamp01((_dbLatMax - stop.lat) / (_dbLatMax - _dbLatMin)),
+    lat: stop.lat,
+    lng: stop.lng,
+    imageUrl: stop.imageUrl ?? '',
+  );
+}
+
+MockRoute mockRouteFromApi(RouteMap r) => MockRoute(
+      id: 'route-${r.id}',
+      name: r.name,
+      stops: r.spots.map(mockSpotFromRouteStop).toList(),
+      isPublic: r.visibility == 'PUBLIC',
+      isDraft: r.isDraft,
+      likes: r.likeCount,
+      saves: r.saveCount,
+      shares: r.shareCount,
+    );
+
+/// 내가 만든 코스 목록 — MY탭 "내가 만든 코스"가 참조하는 공유 상태.
+final List<MockRoute> mockMyRoutes = [];
+
+/// GET /api/routes/mine으로 내가 만든 코스 목록을 가져와 mockMyRoutes를 채운다.
+/// 로그인 안 된 상태(401)면 조용히 무시.
+Future<void> refreshMyRoutes() async {
+  try {
+    final routes = await _routeRepository.listMine();
+    mockMyRoutes
+      ..clear()
+      ..addAll(routes.map(mockRouteFromApi));
+  } catch (e) {
+    debugPrint('[map_mock_data] 내 코스 목록 조회 실패: $e');
+  }
+}
+
+/// 저장(북마크)한 코스 캐시 — 백엔드에 "내가 저장한 코스 전체 목록"을 한 번에 조회하는
+/// API가 없다(좋아요/저장 여부는 코스 상세(getById) 응답에만 로그인 유저 기준으로 담겨
+/// 온다). 그래서 코스 상세를 열거나(route_preview_screen) 저장을 토글할 때마다 여기
+/// 채워 넣는 세션 한정 캐시로 대신한다 — 이번 세션에서 한 번도 열어보거나 저장하지
+/// 않은 코스는 앱을 새로 켜기 전까진 MY탭 "저장한 코스"에 안 잡힌다.
+final Map<int, RouteMap> savedRouteCache = {};
+
+List<MockRoute> get savedRoutes => savedRouteCache.values.map(mockRouteFromApi).toList();
+
+/// 코스 저장 토글 실제 API 호출 — 성공하면 savedRouteCache도 함께 갱신한다.
+Future<({bool saved, int saveCount})> toggleRouteSave(int numId) async {
+  final result = await _routeRepository.toggleSave(numId);
+  if (result.saved) {
+    try {
+      savedRouteCache[numId] = await _routeRepository.getById(numId);
+    } catch (e) {
+      savedRouteCache.remove(numId);
+      debugPrint('[map_mock_data] 저장한 코스 캐시 갱신 실패: $e');
+    }
+  } else {
+    savedRouteCache.remove(numId);
+  }
+  return result;
+}
 
 // Busan 원도심(중구/동구) 대략적인 좌표 범위 — 실제 스팟들이 몰려있는 구간을 0~1로
 // 정규화해서 _RouteMiniMap 같은 목업 캔버스 위에 위치를 잡아줄 때 쓴다(장식용이라
@@ -120,7 +226,8 @@ double _clamp01(double v) => v < 0.05 ? 0.05 : (v > 0.95 ? 0.95 : v);
 /// 실제 DB 스팟(db.Spot)을 화면들이 공유하는 MockSpot 모양으로 바꿔준다.
 /// 스팟 상세/코스 만들기/코스 미리보기가 전부 MockSpot 하나의 모양을 기준으로 짜여
 /// 있어서, 이 화면들을 전부 새로 쓰는 대신 실제 데이터를 이 모양에 맞춰 넣는 쪽을
-/// 택했다. id 앞에 "db-"를 붙여서 목업 id("spot-1" 등)와 절대 겹치지 않게 한다.
+/// 택했다. id 앞에 "db-"를 붙여서 순수 숫자 id와 구분한다(dbSpotNumericId가 그
+/// 접두어를 보고 실제 백엔드 정수 id를 뽑아낸다).
 /// (설명/부제/동네 이름처럼 백엔드가 아직 안 주는 필드는 최소한의 문구로 채운다.)
 MockSpot mockSpotFromDb(db.Spot spot) {
   return MockSpot(
@@ -139,6 +246,7 @@ MockSpot mockSpotFromDb(db.Spot spot) {
     top: _clamp01((_dbLatMax - spot.lat) / (_dbLatMax - _dbLatMin)), // 위도가 높을수록(북쪽) top은 작아짐
     lat: spot.lat,
     lng: spot.lng,
+    imageUrl: spot.imageUrl,
   );
 }
 
@@ -148,80 +256,14 @@ MockSpot mockSpotFromDb(db.Spot spot) {
 /// 캐시로 충분 — 앱 재시작 전까지만 유지돼도 됨).
 final Map<String, MockSpot> dbSpotCache = {};
 
-const mockSpots = [
-  MockSpot(
-    id: 'spot-1',
-    name: '깡통시장',
-    category: '노포',
-    subtitle: '야시장 · 도보 4분',
-    address: '부산 중구 부평2길 3',
-    description: '부평시장의 밤 버전. 좁은 골목 사이로 야시장 포차가 늘어서 있고, '
-        '몇십 년째 같은 자리를 지킨 노포들이 관광객보다 동네 사람들로 더 붐빈다.',
-    dong: '남포동',
-    left: 0.18,
-    top: 0.30,
-    lat: 35.1005,
-    lng: 129.0296,
-  ),
-  MockSpot(
-    id: 'spot-2',
-    name: '젠골목',
-    category: '골목',
-    subtitle: '감성 골목 · 도보 6분',
-    address: '부산 중구 젼골목',
-    description: '국제시장 뒤편, 오래된 인쇄소와 작은 밥집이 늘어선 좁은 골목. '
-        '동네 사람들은 아직도 할머니 때부터 다니던 같은 간장집에 들른다.',
-    dong: '광복동',
-    left: 0.55,
-    top: 0.18,
-    lat: 35.1013,
-    lng: 129.0284,
-  ),
-  MockSpot(
-    id: 'spot-3',
-    name: '할머니 순대',
-    category: '노포',
-    subtitle: '노포 맛집 · 도보 3분',
-    address: '부산 중구 남포동 5가',
-    description: '자정이 넘어도 불이 꺼지지 않는 순대국밥집. 삼대째 같은 레시피로 '
-        '끓여내는 국물이 이 동네 밤을 지켜온 맛이다.',
-    dong: '남포동',
-    left: 0.72,
-    top: 0.28,
-    lat: 35.0975,
-    lng: 129.0305,
-  ),
-  MockSpot(
-    id: 'spot-4',
-    name: '영도다리공원',
-    category: '공원',
-    subtitle: '동네 공원 · 도보 8분',
-    address: '부산 영도구 대교동',
-    description: '영도다리가 한눈에 보이는 작은 수변 공원. 노을 질 때 다리 조명이 '
-        '켜지는 순간을 보러 오는 동네 주민들의 산책 코스.',
-    dong: '영도',
-    left: 0.26,
-    top: 0.48,
-    lat: 35.0965,
-    lng: 129.0349,
-  ),
-  MockSpot(
-    id: 'spot-5',
-    name: '옥상카페',
-    category: '카페',
-    subtitle: '로컬 카페 · 도보 5분',
-    address: '부산 중구 광복로 15',
-    description: '오래된 상가 건물 옥상에 자리한 작은 카페. 간판도 없지만 원도심 '
-        '지붕들이 내려다보이는 뷰 때문에 로컬들 사이에서만 알려진 곳.',
-    dong: '광복동',
-    left: 0.40,
-    top: 0.62,
-    lat: 35.0995,
-    lng: 129.0308,
-  ),
-];
+/// 지금까지 찜한 스팟 전체(likedSpotIds를 dbSpotCache에서 찾아 펼친 것) — "나의
+/// 골목지도"(MY탭)와 "코스 만들기"의 "+ 스팟 추가"(찜한 스팟 중에서만 고르게)가
+/// 함께 쓰는 단일 소스. refreshLikedSpots가 dbSpotCache도 같이 채워주므로 보통
+/// 여기서 못 찾는 경우는 없다.
+List<MockSpot> get savedSpots =>
+    likedSpotIds.map((id) => dbSpotCache['db-$id']).whereType<MockSpot>().toList();
 
-/// 지도 초기 중심 좌표 — 목업 스팟들이 몰려 있는 부산 중구 남포동 일대.
+/// 지도 초기 중심 좌표 — 부산 중구 남포동 일대(실제 스팟이 몰려 있는 원도심 구간).
 const double mapDefaultCenterLat = 35.0995;
 const double mapDefaultCenterLng = 129.0305;
 

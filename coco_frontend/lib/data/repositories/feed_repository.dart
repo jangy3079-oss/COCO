@@ -1,5 +1,4 @@
 // 유저 UGC 피드 CRUD + 좋아요/댓글 — coco_backend /api/feed 연동.
-// 코스(경로) 첨부 게시물은 아직 없음 — 그 부분은 여전히 feed_mock_data.dart의 목업이 담당한다.
 import 'dart:typed_data';
 
 import 'package:dio/dio.dart';
@@ -18,12 +17,13 @@ class FeedRepository {
         .toList();
   }
 
-  /// 로그인한 사용자가 글을 쓴다. 스팟 태그는 선택 — 로그인 안 된 상태면 백엔드가 401을 준다.
-  Future<FeedPost> createPost({String? imageUrl, String? description, int? spotId}) async {
+  /// 로그인한 사용자가 글을 쓴다. 스팟 태그·코스 공유는 선택 — 로그인 안 된 상태면 백엔드가 401을 준다.
+  Future<FeedPost> createPost({String? imageUrl, String? description, int? spotId, int? routeId}) async {
     final response = await _dio.post('/api/feed', data: {
       'imageUrl': imageUrl,
       'description': description,
       'spotId': spotId,
+      'routeId': routeId,
     });
     return FeedPost.fromJson(response.data as Map<String, dynamic>);
   }

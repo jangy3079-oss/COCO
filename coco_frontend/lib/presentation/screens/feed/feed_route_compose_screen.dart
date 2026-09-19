@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import '../../../core/network/login_guard.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../data/repositories/feed_repository.dart';
 import '../../../l10n/generated/app_localizations.dart';
 import '../map/map_mock_data.dart';
-import 'feed_mock_data.dart';
 
 /// 골목지도(코스)를 피드에 공유하는 전용 작성 화면.
 /// 골목지도 미리보기 화면(route_preview_screen.dart)의 "공유" 버튼에서 진입한다.
@@ -23,6 +24,7 @@ class _FeedRouteComposeScreenState extends State<FeedRouteComposeScreen> {
   static const _maxLen = 150;
 
   final _textController = TextEditingController();
+  final _feedRepository = FeedRepository();
   late MockSpot? _coverSpot = widget.stops.isNotEmpty ? widget.stops.first : null;
   bool _public = true;
   bool _submitting = false;
@@ -37,40 +39,35 @@ class _FeedRouteComposeScreenState extends State<FeedRouteComposeScreen> {
 
   Future<void> _submit() async {
     if (!_canPost) return;
-    setState(() => _submitting = true);
-    await Future.delayed(const Duration(milliseconds: 400));
-    if (!mounted) return;
+    if (!requireLogin(context)) return;
 
-    // "나만 보기"는 피드에 올라가지 않아요 (시나리오 그대로) — 전체 공유일 때만 피드에 반영.
-    if (_public) {
-      final maxTs = mockFeedItems.isEmpty ? 0 : mockFeedItems.map((e) => e.ts).reduce((a, b) => a > b ? a : b);
-      mockFeedItems.insert(
-        0,
-        FeedItem(
-          id: 'u${DateTime.now().millisecondsSinceEpoch}',
-          source: FeedSource.user,
-          author: AppLocalizations.of(context)!.feedMeAvatarLabel,
-          category: '골목',
-          place: _coverSpot!.name,
-          title: widget.routeName,
-          desc: _textController.text.trim(),
-          neighborhood: '내 동네',
-          dongId: 'nampo',
-          distanceMin: 1,
-          likes: 0,
-          saves: 0,
-          shares: 0,
-          imgCount: 1,
-          ts: maxTs + 1,
-          timeLabel: '방금',
-          type: FeedPostType.route,
-          stopCount: widget.stops.length,
-          routeStops: widget.stops,
-          routeId: widget.routeId,
-        ),
-      );
+    // "나만 보기"는 피드에 올라가지 않는다(시나리오 그대로) — 전체 공유일 때만 실제로 게시한다.
+    if (!_public) {
+      if (mounted) context.pop();
+      return;
     }
-    if (mounted) context.pop();
+
+    setState(() => _submitting = true);
+    try {
+      await _feedRepository.createPost(
+        imageUrl: _coverSpot!.imageUrl,
+        description: _textController.text.trim(),
+        routeId: dbRouteNumericId(widget.routeId ?? ''),
+      );
+      if (!mounted) return;
+      context.pop();
+    } catch (e) {
+      debugPrint('[FeedRouteComposeScreen] 코스 공유 게시 실패: $e');
+      if (!mounted) return;
+      setState(() => _submitting = false);
+      if (isUnauthorized(e)) {
+        requireLogin(context);
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(AppLocalizations.of(context)!.feedComposerPostFailed)),
+        );
+      }
+    }
   }
 
   @override

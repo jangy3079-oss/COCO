@@ -181,6 +181,10 @@
   "qnaPostDetailAnswerHint": "답변을 남겨보세요",
   "qnaAdoptedBadge": "✓ 채택됨",
   "qnaAdoptButton": "이 답변 채택하기",
+  "qnaLoadFailedMessage": "질문을 불러오지 못했어요",
+  "qnaAdoptForbiddenMessage": "본인 질문에서만 채택할 수 있어요",
+  "qnaComposerSubmitFailed": "질문 등록에 실패했어요",
+  "spotRegisterSubmitFailedMessage": "스팟 등록 신청에 실패했어요",
 
   "myPageMenuMyPosts": "내가 쓴 글",
   "myPageMenuSaved": "저장 · 좋아요",
@@ -218,6 +222,7 @@
   },
   "myPostsKindFeed": "피드",
   "commonDeleteLabel": "삭제",
+  "commonLoginRequiredMessage": "로그인이 필요해요",
   "myPostsEmptyState": "아직 쓴 글이 없어요",
   "myPostsGoToFeedButton": "피드로 가기",
 
@@ -332,6 +337,7 @@
   "routeBuilderAddSpotButton": "+ 스팟 추가",
   "routeBuilderNameRequiredWarning": "코스 이름을 입력해주세요",
   "routeBuilderStopsRequiredWarning": "스팟을 1개 이상 담아주세요",
+  "routeBuilderSaveFailedMessage": "코스 저장에 실패했어요",
   "routeBuilderSpotAddedToast": "{name} 스팟이 추가되었습니다",
   "@routeBuilderSpotAddedToast": {
     "placeholders": { "name": { "type": "String" } }

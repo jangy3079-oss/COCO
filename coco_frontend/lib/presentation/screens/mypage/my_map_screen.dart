@@ -15,7 +15,7 @@ class MyMapScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final spots = mockSpots.where((s) => savedSpotIds.contains(s.id)).toList();
+    final spots = savedSpots;
     final l10n = AppLocalizations.of(context)!;
 
     return Scaffold(

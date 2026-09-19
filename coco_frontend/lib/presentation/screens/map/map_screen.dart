@@ -7,6 +7,7 @@ import 'package:go_router/go_router.dart';
 import 'package:pointer_interceptor/pointer_interceptor.dart';
 import 'package:provider/provider.dart';
 import '../../../core/locale/locale_controller.dart';
+import '../../../core/network/login_guard.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../data/models/spot.dart' as db;
 import '../../../data/repositories/spot_repository.dart';
@@ -168,6 +169,11 @@ class _MapScreenState extends State<MapScreen> {
     // 이미 코스 필터가 걸린 채로 들어온 경우(예: 코스 상세에서 막 넘어온 직후)
     // 바로 그 코스 중심으로 카메라를 맞춘다.
     if (courseMapFilter.value != null) _onCourseFilterChanged();
+    // 지도 탭이 찜 버튼(하트)을 가장 먼저 보여주는 화면이라, 여기서도 한 번 실제
+    // 찜 목록을 채워둔다(likedSpotIds가 비어있으면 전부 안 찜한 것처럼 보이므로).
+    refreshLikedSpots(locale: context.read<LocaleController>().locale.languageCode).then((_) {
+      if (mounted) setState(() {});
+    });
   }
 
   @override
@@ -224,16 +230,6 @@ class _MapScreenState extends State<MapScreen> {
     });
   }
 
-  // 목업 스팟은 API 호출 없이 이름/카테고리/주소로 즉시 필터링.
-  List<MockSpot> get _searchMockResults {
-    final q = _searchQuery.trim();
-    if (q.isEmpty) return const [];
-    return mockSpots
-        .where((s) =>
-            s.name.contains(q) || s.category.contains(q) || s.address.contains(q))
-        .toList();
-  }
-
   void _clearSearch() {
     _searchController.clear();
     _searchDebounce?.cancel();
@@ -260,11 +256,8 @@ class _MapScreenState extends State<MapScreen> {
     });
   }
 
-  // 검색창 드롭다운에 보여줄 결과 — 목업(즉시) + DB(디바운스) 결과를 합친다.
-  List<MockSpot> get _searchResults => [
-        ..._searchMockResults,
-        ..._searchDbResults.map(mockSpotFromDb),
-      ];
+  // 검색창 드롭다운에 보여줄 결과 — DB 검색(디바운스) 결과.
+  List<MockSpot> get _searchResults => _searchDbResults.map(mockSpotFromDb).toList();
 
   // auto=true: 화면 진입 시 자동으로 한 번 호출되는 경우 — 코스 필터를 보러 막
   // 들어온 직후라면(코스 중심으로 카메라를 이미 맞춰둔 상태) GPS 조회가 뒤늦게 끝나면서
@@ -301,44 +294,50 @@ class _MapScreenState extends State<MapScreen> {
     }
   }
 
-  List<MockSpot> get _filteredSpots {
-    // "골목"은 category 태그가 붙은 곳뿐 아니라, 이름에 "골목"이라는 단어가 들어간
-    // 곳도 같이 잡는다 — 다른 카테고리는 태그만으로 정확히 걸러진다.
-    final byCategory = _selectedCategory == '전체'
-        ? mockSpots
-        : _selectedCategory == '골목'
-            ? mockSpots.where((s) => s.category == '골목' || s.name.contains('골목')).toList()
-            : mockSpots.where((s) => s.category == _selectedCategory).toList();
-    final swLat = _swLat, swLng = _swLng, neLat = _neLat, neLng = _neLng;
-    if (swLat == null || swLng == null || neLat == null || neLng == null) {
-      return byCategory;
-    }
-    return byCategory
-        .where((s) => s.lat >= swLat && s.lat <= neLat && s.lng >= swLng && s.lng <= neLng)
-        .toList();
-  }
-
   // 지금 지도에 실제로 그릴 스팟 — 코스 필터가 걸려 있으면 카테고리/뷰포트 필터를
-  // 전부 건너뛰고 그 코스의 스팟만, 아니면 기존처럼 목업+DB를 합쳐서 보여준다.
+  // 전부 건너뛰고 그 코스의 스팟만, 아니면 실제 DB 스팟(카테고리/뷰포트는 이미
+  // _fetchDbSpots가 서버 쪽에서 걸러서 채워둠)을 보여준다.
   List<MockSpot> get _visibleSpots {
     final course = courseMapFilter.value;
     if (course != null) return course.spots;
-    return [..._filteredSpots, ..._dbSpots.map(mockSpotFromDb)];
+    return _dbSpots.map(mockSpotFromDb).toList();
   }
 
   // 하단 "주변 스팟" 시트용 — 지도 마커와 동일한 기준으로 보여준다.
   List<MockSpot> get _nearbySheetSpots => _visibleSpots;
 
-  // 찜(저장) 상태는 map_mock_data.dart의 공유 savedSpotIds를 그대로 사용한다
-  // (스팟 상세 화면·MY탭과 동일한 상태를 공유해야 하므로 화면 로컬 State가 아님).
-  void _toggleSaved(String spotId) {
+  // 찜(저장) 상태는 map_mock_data.dart의 공유 likedSpotIds(실제 백엔드와 동기화)를
+  // 그대로 사용한다 (스팟 상세 화면·MY탭과 동일한 상태를 공유해야 하므로 화면 로컬
+  // State가 아님). 고정 데모 스팟은 찜 API가 없어 조용히 무시한다.
+  Future<void> _toggleSaved(String spotId) async {
+    final numId = dbSpotNumericId(spotId);
+    if (numId == null) return;
+    if (!requireLogin(context)) return;
+    final wasSaved = likedSpotIds.contains(numId);
     setState(() {
-      if (savedSpotIds.contains(spotId)) {
-        savedSpotIds.remove(spotId);
+      if (wasSaved) {
+        likedSpotIds.remove(numId);
       } else {
-        savedSpotIds.add(spotId);
+        likedSpotIds.add(numId);
       }
     });
+    try {
+      await toggleSpotLike(numId);
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        if (wasSaved) {
+          likedSpotIds.add(numId);
+        } else {
+          likedSpotIds.remove(numId);
+        }
+      });
+      if (isUnauthorized(e)) {
+        requireLogin(context);
+      } else {
+        debugPrint('[MapScreen] 찜 토글 실패: $e');
+      }
+    }
   }
 
   void _openSpotDetail(MockSpot spot) {
@@ -346,30 +345,13 @@ class _MapScreenState extends State<MapScreen> {
   }
 
   void _handleSaveCourse() {
-    if (savedSpotIds.isEmpty) {
+    if (savedSpots.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(AppLocalizations.of(context)!.mapSaveCourseEmptyWarning)),
       );
       return;
     }
-    // 찜한 id 순서대로 목업/DB 스팟을 각자의 출처에서 찾아 합친다.
-    // (DB 스팟은 dbSpotCache에서 — 지금 지도 화면에 안 보이는 곳이어도
-    // 예전에 한 번이라도 불러온 적 있으면 여기서 찾을 수 있다.)
-    final selectedStops = <MockSpot>[];
-    for (final id in savedSpotIds) {
-      if (id.startsWith('db-')) {
-        final dbSpot = dbSpotCache[id];
-        if (dbSpot != null) selectedStops.add(dbSpot);
-      } else {
-        for (final s in mockSpots) {
-          if (s.id == id) {
-            selectedStops.add(s);
-            break;
-          }
-        }
-      }
-    }
-    context.push('/map/route/new', extra: selectedStops);
+    context.push('/map/route/new', extra: savedSpots);
   }
 
   @override
@@ -404,17 +386,8 @@ class _MapScreenState extends State<MapScreen> {
                           subtitle: _categoryLabel(spot.category, l10n),
                           order: i + 1,
                         )
-                    else ...[
-                      for (final spot in _filteredSpots)
-                        KakaoMapMarker(
-                          id: spot.id,
-                          lat: spot.lat,
-                          lng: spot.lng,
-                          name: spot.name,
-                          subtitle: _categoryLabel(spot.category, l10n),
-                        ),
-                      // 실제 DB 스팟은 "db-" 접두어로 구분해서, 탭했을 때 목업 상세 화면이 아니라
-                      // 별도 미리보기 시트로 보내준다 (mockSpotById가 실제 id를 못 찾아 터지는 것 방지).
+                    else
+                      // 실제 DB 스팟만 "db-" 접두어로 마커 id를 만들어 그린다.
                       for (final spot in _dbSpots)
                         KakaoMapMarker(
                           id: 'db-${spot.id}',
@@ -425,11 +398,8 @@ class _MapScreenState extends State<MapScreen> {
                           isLocalPick: spot.isLocalPick,
                           trending: spot.trending,
                         ),
-                    ],
                   ],
-                  onMarkerTap: (spotId) => spotId.startsWith('db-')
-                      ? context.push('/map/spot/$spotId')
-                      : _openSpotDetail(mockSpotById(spotId)),
+                  onMarkerTap: (spotId) => context.push('/map/spot/$spotId'),
                   myLocationLat: _locationAvailable ? _myLat : null,
                   myLocationLng: _locationAvailable ? _myLng : null,
                   onBoundsChanged: _onBoundsChanged,
@@ -566,7 +536,9 @@ class _MapScreenState extends State<MapScreen> {
               _NearbySpotsSheet(
                 extentNotifier: _sheetExtent,
                 spots: _nearbySheetSpots,
-                savedSpotIds: savedSpotIds,
+                // likedSpotIds는 정수 집합이라, 이 위젯 트리가 기대하는 MockSpot.id
+                // 문자열('db-{id}') 모양으로 변환해서 넘긴다.
+                savedSpotIds: {for (final id in likedSpotIds) 'db-$id'},
                 onToggleSaved: _toggleSaved,
                 onSpotTap: _openSpotDetail,
                 onSaveCourse: _handleSaveCourse,

@@ -181,6 +181,10 @@
   "qnaPostDetailAnswerHint": "Leave an answer",
   "qnaAdoptedBadge": "✓ Adopted",
   "qnaAdoptButton": "Adopt this answer",
+  "qnaLoadFailedMessage": "Couldn't load the question",
+  "qnaAdoptForbiddenMessage": "Only the question author can adopt an answer",
+  "qnaComposerSubmitFailed": "Couldn't post your question",
+  "spotRegisterSubmitFailedMessage": "Couldn't submit your spot registration",
 
   "myPageMenuMyPosts": "My Posts",
   "myPageMenuSaved": "Saved & Liked",
@@ -218,6 +222,7 @@
   },
   "myPostsKindFeed": "Feed",
   "commonDeleteLabel": "Delete",
+  "commonLoginRequiredMessage": "Please log in first",
   "myPostsEmptyState": "No posts yet",
   "myPostsGoToFeedButton": "Go to Feed",
 
@@ -332,6 +337,7 @@
   "routeBuilderAddSpotButton": "+ Add Spot",
   "routeBuilderNameRequiredWarning": "Please enter a course name",
   "routeBuilderStopsRequiredWarning": "Add at least one spot",
+  "routeBuilderSaveFailedMessage": "Couldn't save the course",
   "routeBuilderSpotAddedToast": "{name} was added",
   "@routeBuilderSpotAddedToast": {
     "placeholders": { "name": { "type": "String" } }

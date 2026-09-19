@@ -1,19 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:provider/provider.dart';
+import '../../../core/locale/locale_controller.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../l10n/generated/app_localizations.dart';
 import '../../widgets/common/coco_mark.dart';
 
-class SplashScreen extends StatefulWidget {
+class SplashScreen extends StatelessWidget {
   const SplashScreen({super.key});
-
-  @override
-  State<SplashScreen> createState() => _SplashScreenState();
-}
-
-class _SplashScreenState extends State<SplashScreen> {
-  // 시각적 선택 표시만 반영. 실제 로케일 전환은 아직 미연동(설정 화면과 동일).
-  String _lang = 'ko';
 
   @override
   Widget build(BuildContext context) {
@@ -83,16 +77,31 @@ class _SplashScreenState extends State<SplashScreen> {
                     ),
                   ),
                   const SizedBox(height: 10),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      _LangOption(label: '한국어', selected: _lang == 'ko', onTap: () => setState(() => _lang = 'ko')),
-                      const SizedBox(width: 16),
-                      _LangOption(label: 'English', selected: _lang == 'en', onTap: () => setState(() => _lang = 'en')),
-                      const SizedBox(width: 16),
-                      _LangOption(label: '日本語', selected: _lang == 'ja', onTap: () => setState(() => _lang = 'ja')),
-                    ],
-                  ),
+                  Builder(builder: (context) {
+                    final currentCode = context.watch<LocaleController>().locale.languageCode;
+                    return Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        _LangOption(
+                          label: '한국어',
+                          selected: currentCode == 'ko',
+                          onTap: () => context.read<LocaleController>().setLocale(const Locale('ko')),
+                        ),
+                        const SizedBox(width: 16),
+                        _LangOption(
+                          label: 'English',
+                          selected: currentCode == 'en',
+                          onTap: () => context.read<LocaleController>().setLocale(const Locale('en')),
+                        ),
+                        const SizedBox(width: 16),
+                        _LangOption(
+                          label: '日本語',
+                          selected: currentCode == 'ja',
+                          onTap: () => context.read<LocaleController>().setLocale(const Locale('ja')),
+                        ),
+                      ],
+                    );
+                  }),
                 ],
               ),
             ),

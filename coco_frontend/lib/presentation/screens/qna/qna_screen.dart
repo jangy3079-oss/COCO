@@ -1,10 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart' show ScrollDirection;
 import 'package:go_router/go_router.dart';
+import '../../../core/network/login_guard.dart';
 import '../../../core/theme/app_theme.dart';
-import '../../../data/models/user_type.dart';
+import '../../../data/models/qna_post.dart';
+import '../../../data/repositories/qna_repository.dart';
 import '../../../l10n/generated/app_localizations.dart';
-import 'qna_mock_data.dart';
 
 class QnaScreen extends StatefulWidget {
   const QnaScreen({super.key});
@@ -14,16 +15,20 @@ class QnaScreen extends StatefulWidget {
 }
 
 class _QnaScreenState extends State<QnaScreen> {
-  String? _filter; // null=전체 | 'unanswered' | 'mine'
-  String _sort = 'latest'; // latest | unanswered_first
+  String? _filter; // null=전체 | 'unanswered' | 'mine' (백엔드 filter 파라미터: all|unanswered|mine)
+  String _sort = 'latest'; // latest | unanswered_first — 백엔드 sort 파라미터 값과 동일
   bool _filtersVisible = true;
 
   final _scrollController = ScrollController();
+  final _qnaRepository = QnaRepository();
+  List<QnaPost> _posts = [];
+  bool _loading = true;
 
   @override
   void initState() {
     super.initState();
     _scrollController.addListener(_onScroll);
+    _loadPosts();
   }
 
   @override
@@ -44,34 +49,48 @@ class _QnaScreenState extends State<QnaScreen> {
     }
   }
 
-  List<QnaPost> get _filteredSorted {
-    var list = qnaMockPosts.where((p) {
-      if (_filter == 'unanswered') return p.answers.isEmpty;
-      if (_filter == 'mine') return p.mine;
-      return true;
-    }).toList();
-
-    if (_sort == 'unanswered_first') {
-      list.sort((a, b) => a.answers.length - b.answers.length);
-    } else {
-      list.sort((a, b) => b.ts - a.ts);
+  Future<void> _loadPosts() async {
+    setState(() => _loading = true);
+    try {
+      final posts = await _qnaRepository.listPosts(filter: _filter ?? 'all', sort: _sort);
+      if (!mounted) return;
+      setState(() {
+        _posts = posts;
+        _loading = false;
+      });
+    } catch (e) {
+      debugPrint('[QnaScreen] 질문 목록 조회 실패: $e');
+      if (!mounted) return;
+      setState(() => _loading = false);
     }
-    return list;
+  }
+
+  void _selectFilter(String? filter) {
+    if (filter == 'mine' && !requireLogin(context)) return;
+    if (_filter == filter) return;
+    setState(() => _filter = filter);
+    _loadPosts();
+  }
+
+  void _toggleSort() {
+    setState(() => _sort = _sort == 'latest' ? 'unanswered_first' : 'latest');
+    _loadPosts();
   }
 
   Future<void> _openDetail(QnaPost post) async {
-    await context.push('/qna/post', extra: post);
-    if (mounted) setState(() {});
+    await context.push('/qna/post', extra: post.id);
+    if (mounted) _loadPosts();
   }
 
   Future<void> _openComposer() async {
+    if (!requireLogin(context)) return;
     await context.push('/qna/compose');
-    if (mounted) setState(() {});
+    if (mounted) _loadPosts();
   }
 
   @override
   Widget build(BuildContext context) {
-    final posts = _filteredSorted;
+    final posts = _posts;
     final l10n = AppLocalizations.of(context)!;
 
     return Scaffold(
@@ -123,11 +142,11 @@ class _QnaScreenState extends State<QnaScreen> {
                         padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
                         child: Row(
                           children: [
-                            _FilterChip(label: l10n.feedFilterAll, selected: _filter == null, onTap: () => setState(() => _filter = null)),
+                            _FilterChip(label: l10n.feedFilterAll, selected: _filter == null, onTap: () => _selectFilter(null)),
                             const SizedBox(width: 8),
-                            _FilterChip(label: l10n.qnaFilterUnanswered, selected: _filter == 'unanswered', onTap: () => setState(() => _filter = 'unanswered')),
+                            _FilterChip(label: l10n.qnaFilterUnanswered, selected: _filter == 'unanswered', onTap: () => _selectFilter('unanswered')),
                             const SizedBox(width: 8),
-                            _FilterChip(label: l10n.qnaFilterMine, selected: _filter == 'mine', onTap: () => setState(() => _filter = 'mine')),
+                            _FilterChip(label: l10n.qnaFilterMine, selected: _filter == 'mine', onTap: () => _selectFilter('mine')),
                           ],
                         ),
                       ),
@@ -137,9 +156,7 @@ class _QnaScreenState extends State<QnaScreen> {
                           mainAxisAlignment: MainAxisAlignment.end,
                           children: [
                             InkWell(
-                              onTap: () => setState(() {
-                                _sort = _sort == 'latest' ? 'unanswered_first' : 'latest';
-                              }),
+                              onTap: _toggleSort,
                               child: Text(
                                 '${_sort == 'latest' ? l10n.qnaSortLatest : l10n.qnaSortUnansweredFirst} ⌄',
                                 style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
@@ -154,17 +171,19 @@ class _QnaScreenState extends State<QnaScreen> {
               ),
             ),
             Expanded(
-              child: posts.isEmpty
-                  ? Center(
-                      child: Text(l10n.qnaEmptyState, style: TextStyle(fontSize: 14, color: Colors.grey.shade500)),
-                    )
-                  : ListView.separated(
-                      controller: _scrollController,
-                      padding: const EdgeInsets.only(bottom: 88),
-                      itemCount: posts.length,
-                      separatorBuilder: (_, __) => Divider(height: 1, color: Colors.black.withOpacity(0.05)),
-                      itemBuilder: (context, i) => _QuestionCard(post: posts[i], onTap: () => _openDetail(posts[i])),
-                    ),
+              child: _loading
+                  ? const Center(child: CircularProgressIndicator())
+                  : posts.isEmpty
+                      ? Center(
+                          child: Text(l10n.qnaEmptyState, style: TextStyle(fontSize: 14, color: Colors.grey.shade500)),
+                        )
+                      : ListView.separated(
+                          controller: _scrollController,
+                          padding: const EdgeInsets.only(bottom: 88),
+                          itemCount: posts.length,
+                          separatorBuilder: (_, __) => Divider(height: 1, color: Colors.black.withOpacity(0.05)),
+                          itemBuilder: (context, i) => _QuestionCard(post: posts[i], onTap: () => _openDetail(posts[i])),
+                        ),
             ),
           ],
         ),
@@ -212,8 +231,6 @@ class _QuestionCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
-    final isLocalAuthor = post.authorRole == UserType.local;
-    final roleLabel = isLocalAuthor ? l10n.feedLocalBadge : l10n.qnaRoleTourist;
 
     return InkWell(
       onTap: onTap,
@@ -224,17 +241,7 @@ class _QuestionCard extends StatelessWidget {
           children: [
             Row(
               children: [
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                  decoration: BoxDecoration(
-                    color: isLocalAuthor ? const Color(0xFFE6F1FB) : const Color(0xFFF4F4F2),
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: Text(
-                    roleLabel,
-                    style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: isLocalAuthor ? CocoTheme.primary : Colors.grey.shade700),
-                  ),
-                ),
+                Text(post.userNickname, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Colors.grey.shade600)),
                 if (post.solved) ...[
                   const SizedBox(width: 6),
                   Container(
@@ -244,7 +251,7 @@ class _QuestionCard extends StatelessWidget {
                   ),
                 ],
                 const Spacer(),
-                Text(post.timeLabel, style: TextStyle(fontSize: 11, color: Colors.grey.shade400)),
+                Text(_relativeTimeLabel(post.createdAt), style: TextStyle(fontSize: 11, color: Colors.grey.shade400)),
               ],
             ),
             const SizedBox(height: 8),
@@ -271,10 +278,10 @@ class _QuestionCard extends StatelessWidget {
                   const SizedBox(width: 10),
                 ],
                 Text(
-                  post.answers.isEmpty ? l10n.qnaAnswerCountZero : l10n.qnaAnswerCount(post.answers.length),
+                  post.answerCount == 0 ? l10n.qnaAnswerCountZero : l10n.qnaAnswerCount(post.answerCount),
                   style: TextStyle(
                     fontSize: 12,
-                    color: post.answers.isEmpty ? CocoTheme.primary : Colors.grey.shade600,
+                    color: post.answerCount == 0 ? CocoTheme.primary : Colors.grey.shade600,
                   ),
                 ),
               ],
@@ -284,4 +291,15 @@ class _QuestionCard extends StatelessWidget {
       ),
     );
   }
+}
+
+// feed_mock_data.dart의 _relativeTimeLabel과 동일한 로직 — 화면 파일마다 필요한
+// 만큼만 갖는 기존 코드베이스 패턴을 그대로 따랐다(공용 유틸로 뺄 만큼 쓰이진 않음).
+String _relativeTimeLabel(DateTime dt) {
+  final diff = DateTime.now().difference(dt);
+  if (diff.inMinutes < 1) return '방금';
+  if (diff.inMinutes < 60) return '${diff.inMinutes}분 전';
+  if (diff.inHours < 24) return '${diff.inHours}시간 전';
+  if (diff.inDays < 2) return '어제';
+  return '${diff.inDays}일 전';
 }

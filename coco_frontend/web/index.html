@@ -19,6 +19,11 @@
   <meta charset="UTF-8">
   <meta content="IE=Edge" http-equiv="X-UA-Compatible">
   <meta name="description" content="A new Flutter project.">
+  <!-- viewport 메타가 없으면 지도 위에서 두 손가락으로 줌(핀치)할 때 카카오맵 자체의 줌이
+       아니라 브라우저의 네이티브 페이지 줌으로 인식돼서, 줌이 끝난 뒤 주소창이 접히거나
+       페이지가 재배치되며 화면 전체가 아래로 밀려 보이는 문제가 있었다 — maximum-scale과
+       user-scalable=no로 페이지 자체의 핀치줌을 막아서 지도 확대만 반응하게 한다. -->
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 
   <!-- iOS meta tags & icons -->
   <meta name="mobile-web-app-capable" content="yes">
@@ -48,6 +53,7 @@
     window.__cocoKakaoMarkers = {}; // divId -> kakao.maps.CustomOverlay[] 배열 (핀 또는 클러스터 버블)
     window.__cocoKakaoOverlays = {}; // divId -> kakao.maps.CustomOverlay[] 배열 (마커 위 이름 태그)
     window.__cocoKakaoMarkersRaw = {}; // divId -> 마지막으로 받은 원본 마커 데이터(재클러스터링용)
+    window.__cocoKakaoPolyline = {}; // divId -> 코스 순서 핀을 잇는 kakao.maps.Polyline (없으면 null)
     window.__cocoClusteringDisabled = {}; // divId -> true면 핀이 겹쳐도 뭉치지 않고 각자 그대로 그린다
     window.__cocoMarkerClickHandlers = {}; // divId -> onMarkerClick 콜백
     window.__cocoBoundsChangedHandlers = {}; // divId -> onBoundsChanged 콜백 (뷰포트 쿼리용)
@@ -183,6 +189,9 @@
     var COCO_SMALL_PIN_PX = 8; // 평범한 스팟 핀 지름 — 눈에 덜 띄게 아주 작게
     var COCO_BIG_PIN_PX = 20; // 로컬픽/인기 핀 지름
     var COCO_OVERLAP_SLACK_PX = 4; // 테두리(2~3px)까지 감안해 이 정도 겹치면 "겹친다"로 간주
+    var COCO_CLUSTER_MIN_LEVEL = 4; // 카카오맵 레벨(작을수록 확대). 이 레벨보다 더 확대하면
+    // 스팟이 많아도 클러스터링 자체를 끄고 낱개 핀을 그대로 보여준다 — 기본 줌(레벨 4)처럼
+    // 밀집도가 높을 땐 큰 뭉치 버블이 계속 새로 생겨 지저분해 보이는 걸 막기 위함.
 
     function cocoPinRadiusPx(m) {
       var hasOrder = m.order !== null && m.order !== undefined;
@@ -234,7 +243,7 @@
       // 수 있는 걸 다 합치고 넘어가게 했다 — 결과(겹치면 합친다)는 동일하고 속도만 개선.
       // 코스 순서 핀(order)처럼 개수가 적고 각 핀 번호가 꼭 보여야 하는 경우엔
       // __cocoClusteringDisabled로 이 병합 자체를 건너뛴다.
-      var clusteringDisabled = !!window.__cocoClusteringDisabled[divId];
+      var clusteringDisabled = !!window.__cocoClusteringDisabled[divId] || map.getLevel() <= COCO_CLUSTER_MIN_LEVEL;
       var mergedAny = !clusteringDisabled;
       while (mergedAny) {
         mergedAny = false;
@@ -260,15 +269,31 @@
       var newMarkers = [];
       var newOverlays = [];
 
+      // 코스 순서 핀(order)은 클러스터링이 꺼져 있어서(위 clusteringDisabled) 아무리
+      // 다닥다닥 붙어 있어도 뭉쳐지지 않는다 — 번호가 항상 낱개로 보여야 하기 때문.
+      // 개별 핀 밀집도가 아니라 지도 줌 레벨에 맞춰 전부 같은 배율로 통일한다 —
+      // 기본(넓게 보기)에선 겹침 방지용으로 작게, 사용자가 확대할수록 핀 사이
+      // 간격이 넓어지니 원래 크기까지 점점 커지게(bounds_changed가 줌마다
+      // cocoRenderClusters를 다시 불러주므로 여기만 레벨을 읽으면 됨).
+      var COCO_ORDER_PIN_MIN_SCALE = 0.6;
+      var COCO_ORDER_PIN_MAX_SCALE = 1.2; // 확대했을 때 원래 크기보다 더 커 보이게(공격적으로) 상한을 올림
+      var COCO_ORDER_PIN_MAX_LEVEL = 5; // 이 레벨(넓게 보기)보다 더 축소하면 항상 최소 크기
+      var COCO_ORDER_PIN_MIN_LEVEL = 3; // 예전엔 레벨 2에서 최대였는데, 한 단계만 확대해도
+      // 빨리 커지도록(공격적으로) 범위를 3levels→2levels로 좁힘
+      var orderPinZoomT = (COCO_ORDER_PIN_MAX_LEVEL - map.getLevel()) / (COCO_ORDER_PIN_MAX_LEVEL - COCO_ORDER_PIN_MIN_LEVEL);
+      orderPinZoomT = Math.max(0, Math.min(1, orderPinZoomT));
+      var COCO_ORDER_PIN_SCALE = COCO_ORDER_PIN_MIN_SCALE + (COCO_ORDER_PIN_MAX_SCALE - COCO_ORDER_PIN_MIN_SCALE) * orderPinZoomT;
+
       nodes.forEach(function (node) {
         if (node.members.length === 1) {
-          renderSinglePin(node.members[0]);
+          var hasOrder = node.members[0].order !== null && node.members[0].order !== undefined;
+          renderSinglePin(node.members[0], hasOrder ? COCO_ORDER_PIN_SCALE : 1);
         } else {
           renderClusterBubble(node.members);
         }
       });
 
-      function renderSinglePin(m) {
+      function renderSinglePin(m, shrinkScale) {
         var position = new kakao.maps.LatLng(m.lat, m.lng);
         // 코스("지도에서 보기")로 들어온 스팟은 순서 번호(order)가 있다 — 이 경우
         // 로컬 픽(2단계)과 동일한 크기/색으로 통일하고, 안에 그 번호를 적는다.
@@ -277,8 +302,9 @@
         // 색은 로컬 픽/코스 순서 핀일 때만 강조색(주황) — trending만 있는 건
         // "큰 점"(색은 기본), 아무것도 없으면 "작은 점".
         var isBig = hasOrder || m.trending || m.isLocalPick;
-        var size = isBig ? COCO_BIG_PIN_PX : COCO_SMALL_PIN_PX;
-        var borderWidth = isBig ? 3 : 2; // 점이 워낙 작아져서 두꺼운 테두리는 비율이 안 맞음
+        var scale = shrinkScale || 1;
+        var size = (isBig ? COCO_BIG_PIN_PX : COCO_SMALL_PIN_PX) * scale;
+        var borderWidth = (isBig ? 3 : 2) * scale; // 점이 워낙 작아져서 두꺼운 테두리는 비율이 안 맞음
         var color = (hasOrder || m.isLocalPick) ? '#FF7A33' : '#2F8FE0';
         var pin = document.createElement('div');
         pin.style.cssText =
@@ -286,7 +312,7 @@
           'border:' + borderWidth + 'px solid #fff;box-shadow:0 2px 6px rgba(0,0,0,0.35);cursor:pointer;' +
           (hasOrder
             ? 'display:flex;align-items:center;justify-content:center;color:#fff;' +
-              'font-family:NotoSansKR,sans-serif;font-weight:800;font-size:11px;line-height:1;'
+              'font-family:NotoSansKR,sans-serif;font-weight:800;font-size:' + (11 * scale) + 'px;line-height:1;'
             : '');
         if (hasOrder) pin.textContent = String(m.order);
         // 바로 이동하지 않고, 지도를 이 핀 중심으로 부드럽게 옮긴 뒤 이름/카테고리
@@ -297,7 +323,7 @@
           cocoShowCalloutAfterPan(divId, map, m, onMarkerClick);
         });
         var pinOverlay = new kakao.maps.CustomOverlay({
-          position: position, content: pin, xAnchor: 0.5, yAnchor: 0.5, clickable: true,
+          position: position, content: pin, xAnchor: 0.5, yAnchor: 0.5, clickable: true, zIndex: 1,
         });
         pinOverlay.setMap(map);
         newMarkers.push(pinOverlay);
@@ -308,15 +334,17 @@
           var tag = document.createElement('div');
           tag.textContent = m.name;
           tag.style.cssText =
-            'background:#fff;border-radius:12px;padding:3px 10px;' +
-            'font-family:NotoSansKR,sans-serif;font-size:12px;font-weight:700;color:#1A1A1A;' +
+            'background:#fff;border-radius:12px;padding:' + (3 * scale) + 'px ' + (10 * scale) + 'px;' +
+            'font-family:NotoSansKR,sans-serif;font-size:' + (12 * scale) + 'px;font-weight:700;color:#1A1A1A;' +
             'box-shadow:0 1px 4px rgba(0,0,0,0.25);white-space:nowrap;cursor:pointer;';
           tag.addEventListener('click', function (e) {
             e.stopPropagation();
             cocoShowCalloutAfterPan(divId, map, m, onMarkerClick);
           });
+          // 이름표는 다른 핀이 뒤늦게 그려져도 항상 그 핀보다 위에 보이도록 zIndex를
+          // 핀(1)보다 높게 줘서, 겹쳤을 때 이름표가 가려지지 않고 앞으로 오게 한다.
           var overlay = new kakao.maps.CustomOverlay({
-            position: position, content: tag, yAnchor: 1.9, clickable: true,
+            position: position, content: tag, yAnchor: 1.9, clickable: true, zIndex: 3,
           });
           overlay.setMap(map);
           newOverlays.push(overlay);
@@ -352,6 +380,29 @@
 
       window.__cocoKakaoMarkers[divId] = newMarkers;
       window.__cocoKakaoOverlays[divId] = newOverlays;
+
+      // 코스 순서 핀(order)이 있으면 번호 순서대로 선으로 이어준다 — 일반 지도
+      // 탐색에서는 order가 없는 마커뿐이라 아무 선도 그려지지 않는다.
+      var existingPolyline = window.__cocoKakaoPolyline[divId];
+      if (existingPolyline) {
+        existingPolyline.setMap(null);
+        window.__cocoKakaoPolyline[divId] = null;
+      }
+      var orderedRaw = raw
+        .filter(function (m) { return m.order !== null && m.order !== undefined; })
+        .sort(function (a, b) { return a.order - b.order; });
+      if (orderedRaw.length >= 2) {
+        var path = orderedRaw.map(function (m) { return new kakao.maps.LatLng(m.lat, m.lng); });
+        var polyline = new kakao.maps.Polyline({
+          path: path,
+          strokeWeight: 3,
+          strokeColor: '#FF7A33',
+          strokeOpacity: 0.85,
+          strokeStyle: 'shortdash',
+        });
+        polyline.setMap(map);
+        window.__cocoKakaoPolyline[divId] = polyline;
+      }
     }
 
     window.cocoLoadKakaoSdk = function (appKey) {
@@ -378,6 +429,7 @@
       window.__cocoKakaoMarkers[divId] = [];
       window.__cocoKakaoOverlays[divId] = [];
       window.__cocoKakaoMarkersRaw[divId] = [];
+      window.__cocoKakaoPolyline[divId] = null;
 
       // 지도 빈 곳을 탭하면 열려있던 핀 정보 말풍선을 닫는다.
       kakao.maps.event.addListener(map, 'click', function () {
