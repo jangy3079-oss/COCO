@@ -2,11 +2,27 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import '../../../core/locale/locale_controller.dart';
+import '../../../core/network/dio_client.dart';
 import '../../../core/network/login_guard.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../data/repositories/spot_repository.dart';
 import '../../../l10n/generated/app_localizations.dart';
 import 'map_mock_data.dart';
+
+String _resolveSpotImageUrl(String rawUrl) {
+  final value = rawUrl.trim();
+  if (value.isEmpty) return '';
+  if (value.startsWith('//')) return 'https:$value';
+
+  final uri = Uri.tryParse(value);
+  if (uri != null && uri.hasScheme) {
+    // TourAPI의 http 이미지가 HTTPS 웹에서 차단되지 않도록 보안 주소로 정규화한다.
+    return uri.scheme == 'http' ? uri.replace(scheme: 'https').toString() : value;
+  }
+
+  final baseUrl = DioClient.baseUrl.replaceFirst(RegExp(r'/+$'), '');
+  return '$baseUrl/${value.replaceFirst(RegExp(r'^/+'), '')}';
+}
 
 // map_screen.dart의 _categoryLabel()과 동일한 원칙: category 원본 값(백엔드/필터링에 쓰이는
 // 한국어 키)은 그대로 두고, 화면에 보여줄 라벨만 다국어로 바꾼다.
@@ -55,13 +71,36 @@ class _SpotDetailScreenState extends State<SpotDetailScreen> {
   void initState() {
     super.initState();
     if (dbSpotCache.containsKey(widget.spotId)) {
-      _loadRelatedSpots(dbSpotCache[widget.spotId]!);
+      final cached = dbSpotCache[widget.spotId]!;
+      _loadRelatedSpots(cached);
+      if (cached.images.isEmpty) {
+        _refreshImagesInBackground();
+      }
     } else {
       _loadDbSpot();
     }
     // 이 화면에 직접 딥링크로 들어오는 등 likedSpotIds가 아직 한 번도 안 채워졌을
     // 수 있어서, 하트 상태를 정확히 보여주려면 여기서도 한 번 갱신해둔다.
     refreshLikedSpots(locale: context.read<LocaleController>().locale.languageCode);
+  }
+
+  // 지도/목록에서 캐시된 스팟은 images가 항상 비어있어서, 상세 화면에 들어왔을
+  // 때만 단건 조회로 캐러셀 이미지를 조용히 보강한다.
+  Future<void> _refreshImagesInBackground() async {
+    final numId = dbSpotNumericId(widget.spotId);
+    if (numId == null) return;
+    try {
+      final fresh = await _spotRepository.fetchById(
+        numId,
+        locale: context.read<LocaleController>().locale.languageCode,
+      );
+      if (!mounted || fresh == null || fresh.images.isEmpty) return;
+      final updated = mockSpotFromDb(fresh);
+      dbSpotCache[widget.spotId] = updated;
+      setState(() {});
+    } catch (e) {
+      debugPrint('[SpotDetailScreen] 이미지 보강 조회 실패: $e');
+    }
   }
 
   Future<void> _loadDbSpot() async {
@@ -289,13 +328,8 @@ class _SpotPhotoHeader extends StatelessWidget {
       height: 240,
       child: Stack(
         children: [
-          // TODO: spot.imageUrl(TourAPI 관광사진) 연동 전까지의 사진 플레이스홀더
           Positioned.fill(
-            child: Container(
-              color: spot.pinColor.withOpacity(0.10),
-              alignment: Alignment.center,
-              child: Icon(Icons.photo_camera_outlined, size: 40, color: spot.pinColor.withOpacity(0.4)),
-            ),
+            child: _PhotoCarousel(spot: spot),
           ),
           Positioned(
             left: 16,
@@ -340,6 +374,142 @@ class _SpotPhotoHeader extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+class _PhotoCarousel extends StatefulWidget {
+  final MockSpot spot;
+
+  const _PhotoCarousel({required this.spot});
+
+  @override
+  State<_PhotoCarousel> createState() => _PhotoCarouselState();
+}
+
+class _PhotoCarouselState extends State<_PhotoCarousel> {
+  final PageController _controller = PageController();
+  int _currentPage = 0;
+
+  List<String> _imageUrls(MockSpot spot) {
+    final gallery = spot.images
+        .map(_resolveSpotImageUrl)
+        .where((url) => url.isNotEmpty)
+        .toSet()
+        .toList();
+    if (gallery.isNotEmpty) return gallery;
+
+    final representative = _resolveSpotImageUrl(spot.imageUrl);
+    return representative.isEmpty ? const [] : [representative];
+  }
+
+  @override
+  void didUpdateWidget(covariant _PhotoCarousel oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.spot.images != widget.spot.images ||
+        oldWidget.spot.imageUrl != widget.spot.imageUrl) {
+      _currentPage = 0;
+      if (_controller.hasClients) {
+        _controller.jumpToPage(0);
+      }
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final urls = _imageUrls(widget.spot);
+    if (urls.isEmpty) return _SpotPhotoPlaceholder(spot: widget.spot);
+    if (urls.length == 1) {
+      return _SpotNetworkImage(url: urls.first, spot: widget.spot);
+    }
+
+    return Stack(
+      children: [
+        Positioned.fill(
+          child: PageView.builder(
+            controller: _controller,
+            itemCount: urls.length,
+            onPageChanged: (index) => setState(() => _currentPage = index),
+            itemBuilder: (_, index) => _SpotNetworkImage(
+              key: ValueKey(urls[index]),
+              url: urls[index],
+              spot: widget.spot,
+            ),
+          ),
+        ),
+        Positioned(
+          left: 0,
+          right: 0,
+          bottom: 17,
+          child: Center(
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 5),
+              decoration: BoxDecoration(
+                color: Colors.black.withOpacity(0.35),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: List.generate(
+                  urls.length,
+                  (index) => AnimatedContainer(
+                    duration: const Duration(milliseconds: 180),
+                    width: index == _currentPage ? 7 : 5,
+                    height: index == _currentPage ? 7 : 5,
+                    margin: const EdgeInsets.symmetric(horizontal: 2),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(index == _currentPage ? 1 : 0.55),
+                      shape: BoxShape.circle,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _SpotNetworkImage extends StatelessWidget {
+  final String url;
+  final MockSpot spot;
+
+  const _SpotNetworkImage({super.key, required this.url, required this.spot});
+
+  @override
+  Widget build(BuildContext context) {
+    return Image.network(
+      url,
+      fit: BoxFit.cover,
+      // TourAPI 이미지 CDN은 CORS 허용 헤더가 없어 Flutter Web의 기본 바이트
+      // 디코딩이 실패한다. 웹에서는 HTML <img>로 폴백해 표시한다.
+      webHtmlElementStrategy: WebHtmlElementStrategy.fallback,
+      errorBuilder: (_, __, ___) => _SpotPhotoPlaceholder(spot: spot),
+      loadingBuilder: (context, child, progress) =>
+          progress == null ? child : _SpotPhotoPlaceholder(spot: spot),
+    );
+  }
+}
+
+class _SpotPhotoPlaceholder extends StatelessWidget {
+  final MockSpot spot;
+
+  const _SpotPhotoPlaceholder({required this.spot});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      color: spot.pinColor.withOpacity(0.10),
+      alignment: Alignment.center,
+      child: Icon(Icons.photo_camera_outlined, size: 40, color: spot.pinColor.withOpacity(0.4)),
     );
   }
 }

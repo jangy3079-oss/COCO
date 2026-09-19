@@ -332,7 +332,7 @@
   },
   "mapSaveCourseButton": "コースを保存",
   "mapSaveCourseEmptyWarning": "まず保存したいスポットをブックマークしてください",
-  "mapCategoryAll": "全体",
+  "mapCategoryAll": "地図",
   "mapCategoryOldStore": "老舗",
   "mapCategoryAlley": "路地",
   "mapCategoryPark": "公園",

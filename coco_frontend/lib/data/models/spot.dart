@@ -9,6 +9,7 @@ class Spot {
   final double lng;
   final String category; // 노포 | 공원 | 카페 | 골목
   final String imageUrl;
+  final List<String> images; // 상세 조회(GET /api/spot/{id})에서만 채워짐. 목록 조회는 항상 빈 배열.
   final String address;
   final String? description; // 카카오 로컬 소스는 소개글이 없어 null일 수 있음
   // 지도 핀 크기/색 차별화용 — SpotResponse가 내려주는데도 이 모델이 안 받아서
@@ -23,6 +24,7 @@ class Spot {
     required this.lng,
     required this.category,
     required this.imageUrl,
+    this.images = const [],
     required this.address,
     this.description,
     this.isLocalPick = false,
@@ -36,6 +38,10 @@ class Spot {
         lng: (json['lng'] as num).toDouble(),
         category: json['category'] as String? ?? '',
         imageUrl: json['imageUrl'] as String? ?? '',
+        images: (json['images'] as List<dynamic>?)
+                ?.map((e) => e as String)
+                .toList() ??
+            const [],
         address: json['address'] as String? ?? '',
         description: json['description'] as String?,
         isLocalPick: json['isLocalPick'] as bool? ?? false,

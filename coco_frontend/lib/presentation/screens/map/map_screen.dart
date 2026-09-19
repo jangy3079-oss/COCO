@@ -55,6 +55,7 @@ class MapScreen extends StatefulWidget {
 
 class _MapScreenState extends State<MapScreen> {
   // 실제 스팟 category 값(spots.category: 음식점|공원|카페|골목|명소|문화시설)에 맞춘 필터
+  static const _pinCategories = {'음식점', '골목', '공원', '카페', '명소', '문화시설'};
   static const _categories = ['전체', '음식점', '골목', '공원', '카페', '명소', '문화시설'];
   String _selectedCategory = '전체';
 
@@ -115,26 +116,39 @@ class _MapScreenState extends State<MapScreen> {
 
   Future<void> _fetchDbSpots() async {
     final swLat = _swLat, swLng = _swLng, neLat = _neLat, neLng = _neLng;
-    if (swLat == null || swLng == null || neLat == null || neLng == null) return;
+    if (swLat == null || swLng == null || neLat == null || neLng == null) {
+      return;
+    }
     // 지도가 빠르게 여러 번 움직이면(검색 결과 탭 → panTo 등) 이전 요청의 응답이
     // 나중에 도착할 수 있어, 그 순간의 요청 번호를 찍어두고 응답 시점에 비교한다.
     final requestSeq = ++_dbSpotsRequestSeq;
-    // "골목"은 category 태그뿐 아니라 이름에 "골목"이 들어간 곳도 잡아야 해서, 서버에는
-    // 카테고리 필터 없이 전체를 요청한 뒤 클라이언트에서 한 번 더 걸러낸다. 그 외
-    // 카테고리는 지금처럼 서버 쪽 category 파라미터로 정확히 걸러진다.
+    // "전체"는 카테고리를 고르기 전 상태이므로 핀을 비우고 서버를 호출하지 않는다.
+    if (_selectedCategory == '전체') {
+      setState(() => _dbSpots = []);
+      return;
+    }
+
     final isAlleyFilter = _selectedCategory == '골목';
+    final locale = context.read<LocaleController>().locale.languageCode;
     try {
-      final spots = await _spotRepository.fetchSpotsInViewport(
-        swLat: swLat,
-        neLat: neLat,
-        swLng: swLng,
-        neLng: neLng,
-        category: (_selectedCategory == '전체' || isAlleyFilter) ? null : _selectedCategory,
-        locale: context.read<LocaleController>().locale.languageCode,
-      );
-      if (!mounted) return;
-      // 그 사이 더 최신 요청이 나갔다면 이 응답은 오래된 뷰포트 것이므로 버린다.
-      if (requestSeq != _dbSpotsRequestSeq) return;
+      final spots = isAlleyFilter
+          ? await _spotRepository.fetchSpotsInViewport(
+              swLat: swLat,
+              neLat: neLat,
+              swLng: swLng,
+              neLng: neLng,
+              category: null,
+              locale: locale,
+            )
+          : await _spotRepository.fetchMapSpots(
+              swLat: swLat,
+              neLat: neLat,
+              swLng: swLng,
+              neLng: neLng,
+              category: _selectedCategory,
+              locale: locale,
+            );
+      if (!mounted || requestSeq != _dbSpotsRequestSeq) return;
       final filtered = isAlleyFilter
           ? spots.where((s) => s.category == '골목' || s.title.contains('골목')).toList()
           : spots;
@@ -246,6 +260,8 @@ class _MapScreenState extends State<MapScreen> {
   void _openSearchResult(MockSpot spot) {
     _clearSearch();
     setState(() {
+      // 검색 결과도 해당 카테고리 선택 상태에서만 핀으로 표시한다.
+      _selectedCategory = spot.category;
       _focusTarget = MapFocusTarget(
         id: spot.id,
         lat: spot.lat,
@@ -257,7 +273,10 @@ class _MapScreenState extends State<MapScreen> {
   }
 
   // 검색창 드롭다운에 보여줄 결과 — DB 검색(디바운스) 결과.
-  List<MockSpot> get _searchResults => _searchDbResults.map(mockSpotFromDb).toList();
+  List<MockSpot> get _searchResults => _searchDbResults
+      .where((spot) => _pinCategories.contains(spot.category))
+      .map(mockSpotFromDb)
+      .toList();
 
   // auto=true: 화면 진입 시 자동으로 한 번 호출되는 경우 — 코스 필터를 보러 막
   // 들어온 직후라면(코스 중심으로 카메라를 이미 맞춰둔 상태) GPS 조회가 뒤늦게 끝나면서

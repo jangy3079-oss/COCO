@@ -33,6 +33,32 @@ class SpotRepository {
         .toList();
   }
 
+  /// 지도 전용 조회 — 6개 카테고리 중 하나를 반드시 지정해야 한다("전체"/누락 호출 금지,
+  /// 그런 경우는 프론트에서 API를 아예 안 부르고 빈 리스트로 처리해야 함).
+  Future<List<Spot>> fetchMapSpots({
+    required double swLat,
+    required double neLat,
+    required double swLng,
+    required double neLng,
+    required String category,
+    String locale = 'ko',
+  }) async {
+    final response = await _dio.get(
+      '/api/spot/map',
+      queryParameters: {
+        'swLat': swLat,
+        'neLat': neLat,
+        'swLng': swLng,
+        'neLng': neLng,
+        'category': category,
+        'locale': locale,
+      },
+    );
+    return (response.data as List)
+        .map((e) => Spot.fromJson(e as Map<String, dynamic>))
+        .toList();
+  }
+
   /// 스팟 상세 화면용 단건 조회. 없으면 null.
   Future<Spot?> fetchById(int id, {String locale = 'ko'}) async {
     try {

@@ -27,6 +27,7 @@ class MockSpot {
   // 코스를 피드에 공유할 때(feed_route_compose_screen) 대표 스팟의 사진을 게시물
   // 사진으로 쓴다 — 사진이 없는 스팟(카카오 로컬 소스 등)은 빈 문자열.
   final String imageUrl;
+  final List<String> images;
 
   const MockSpot({
     required this.id,
@@ -41,6 +42,7 @@ class MockSpot {
     required this.lat,
     required this.lng,
     this.imageUrl = '',
+    this.images = const [],
   });
 
   Color get pinColor => switch (category) {
@@ -247,6 +249,7 @@ MockSpot mockSpotFromDb(db.Spot spot) {
     lat: spot.lat,
     lng: spot.lng,
     imageUrl: spot.imageUrl,
+    images: spot.images,
   );
 }
 
