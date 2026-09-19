@@ -2,6 +2,7 @@ package com.coco.backend.service;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -48,6 +49,17 @@ public class TourApiService {
 
     @Value("${tour-api.key}")
     private String serviceKey;
+
+    // Render 등 일부 배포 환경에서 환경변수 값 끝에 개행 문자가 섞여 들어와 URL에 그대로
+    // 붙이면 "Illegal character in query" 예외가 났다 — 키를 쓰는 모든 호출부(areaBasedList2/
+    // detailCommon2/detailImage2)가 이 필드를 공유하니, 주입 직후 여기 한 곳에서만 trim하면
+    // 전체가 해결된다.
+    @PostConstruct
+    private void trimServiceKey() {
+        if (serviceKey != null) {
+            serviceKey = serviceKey.trim();
+        }
+    }
 
     // TourAPI가 버전을 올릴 때 여기 값만 바꾸면 되도록 코드에서 분리 — application.yml 참고.
     @Value("${tour-api.kor-service-path:KorService2}")
