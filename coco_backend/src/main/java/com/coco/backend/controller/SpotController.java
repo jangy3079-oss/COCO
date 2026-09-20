@@ -92,9 +92,8 @@ public class SpotController {
 
     /** 카카오 로컬 API에서 관광 관련 카테고리로 좁힌 후보를 가져와 DB에 채워 넣는 수동 배치 트리거. */
     @PostMapping("/import/kakao")
-    public ResponseEntity<Map<String, Integer>> importFromKakaoLocal() {
-        int inserted = spotService.importFromKakaoLocal();
-        return ResponseEntity.ok(Map.of("inserted", inserted));
+    public ResponseEntity<Map<String, Object>> importFromKakaoLocal() {
+        return ResponseEntity.ok(spotService.importFromKakaoLocal());
     }
 
     /**

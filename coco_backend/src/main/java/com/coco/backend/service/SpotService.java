@@ -16,7 +16,9 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -211,7 +213,7 @@ public class SpotService {
      * TourAPI 임포트와 데이터 소스만 다를 뿐 흐름은 동일 — kakao_place_id 중복 체크에 더해,
      * TourAPI로 이미 저장된 동일 실제 장소도 걸러낸다(TourAPI 우선).
      */
-    public int importFromKakaoLocal() {
+    public Map<String, Object> importFromKakaoLocal() {
         List<KakaoLocalService.KakaoLocalCandidate> candidates = kakaoLocalService.fetchCandidates();
 
         // TourAPI 출처 스팟을 정규화된 제목 기준으로 그룹핑해두고, 후보를 순회하는 동안
@@ -221,12 +223,23 @@ public class SpotService {
                 .collect(Collectors.groupingBy(s -> normalizeTitle(s.getTitleKo())));
 
         int inserted = 0;
+        int alreadyInDb = 0;
+        int duplicateOfTourApi = 0;
+        int failed = 0;
+        // 임시 디버그용 — 저장 실패 원인을 로그 없이 응답으로 바로 보기 위해 처음 5건만 모아둔다.
+        List<String> failureSamples = new ArrayList<>();
 
         for (var c : candidates) {
             try {
-                if (spotRepository.findFirstByKakaoPlaceId(c.kakaoPlaceId()).isPresent()) continue;
+                if (spotRepository.findFirstByKakaoPlaceId(c.kakaoPlaceId()).isPresent()) {
+                    alreadyInDb++;
+                    continue;
+                }
 
-                if (isDuplicateOfTourApiSpot(c, tourApiSpotsByNormalizedTitle)) continue;
+                if (isDuplicateOfTourApiSpot(c, tourApiSpotsByNormalizedTitle)) {
+                    duplicateOfTourApi++;
+                    continue;
+                }
 
                 // 카카오 로컬 소스는 description 자체가 없으니 title 번역만 받는다(rewriteAndTranslate에
                 // description=null을 넘기면 프롬프트가 description 관련 필드를 전부 null로 응답한다).
@@ -245,11 +258,24 @@ public class SpotService {
                 spotRepository.save(spot);
                 inserted++;
             } catch (Exception e) {
+                failed++;
                 log.error("카카오 로컬 스팟 저장 실패 (kakaoPlaceId={}), 건너뜀", c.kakaoPlaceId(), e);
+                if (failureSamples.size() < 5) {
+                    failureSamples.add(c.kakaoPlaceId() + " / " + c.title() + " -> "
+                            + e.getClass().getSimpleName() + ": " + e.getMessage());
+                }
             }
         }
         log.info("카카오 로컬 스팟 임포트 완료: 후보 {}건 중 신규 {}건 저장", candidates.size(), inserted);
-        return inserted;
+
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("candidates", candidates.size());
+        result.put("inserted", inserted);
+        result.put("alreadyInDb", alreadyInDb);
+        result.put("duplicateOfTourApi", duplicateOfTourApi);
+        result.put("failed", failed);
+        result.put("failureSamples", failureSamples);
+        return result;
     }
 
     private String truncate(String value, int maxLength) {
