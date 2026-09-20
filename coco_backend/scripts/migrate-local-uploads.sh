@@ -27,11 +27,14 @@ if [[ "$SUPABASE_STORAGE_KEY" != sb_secret_* ]]; then
   auth_headers+=(-H "Authorization: Bearer ${SUPABASE_STORAGE_KEY}")
 fi
 
-bucket_status="$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' \
+bucket_response_file="$(mktemp)"
+trap 'rm -f "$bucket_response_file"' EXIT
+bucket_status="$(curl --silent --show-error --output "$bucket_response_file" --write-out '%{http_code}' \
   "${auth_headers[@]}" \
   "${supabase_url}/storage/v1/bucket/${bucket}")"
 
-if [[ "$bucket_status" == "404" ]]; then
+if [[ "$bucket_status" == "404" ]] || \
+  { [[ "$bucket_status" == "400" ]] && grep -Eq 'NoSuchBucket|Bucket not found' "$bucket_response_file"; }; then
   create_status="$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' \
     -X POST "${auth_headers[@]}" -H 'Content-Type: application/json' \
     --data "{\"id\":\"${bucket}\",\"name\":\"${bucket}\",\"public\":false,\"file_size_limit\":5242880,\"allowed_mime_types\":[\"image/jpeg\",\"image/png\",\"image/webp\",\"image/gif\"]}" \

@@ -64,7 +64,8 @@ class FileStorageServiceTest {
         String path = exchange.getRequestURI().getPath();
 
         if (method.equals("GET") && path.equals("/storage/v1/bucket/coco-uploads")) {
-            respond(exchange, bucketCreated.get() ? 200 : 404, "{}");
+            respond(exchange, bucketCreated.get() ? 200 : 400,
+                    bucketCreated.get() ? "{}" : "{\"code\":\"NoSuchBucket\",\"message\":\"Bucket not found\"}");
             return;
         }
         if (method.equals("POST") && path.equals("/storage/v1/bucket")) {

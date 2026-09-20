@@ -138,7 +138,7 @@ public class FileStorageService {
                 bucketReady.set(true);
                 return;
             }
-            if (findResponse.statusCode() != 404) {
+            if (!isMissingBucket(findResponse)) {
                 throw storageFailure("Storage 버킷 확인", findResponse);
             }
 
@@ -248,6 +248,16 @@ public class FileStorageService {
 
     private static boolean isSuccess(int statusCode) {
         return statusCode >= 200 && statusCode < 300;
+    }
+
+    /** Supabase Storage는 없는 버킷을 HTTP 400 + NoSuchBucket으로 응답할 수 있다. */
+    private static boolean isMissingBucket(HttpResponse<String> response) {
+        if (response.statusCode() == 404) {
+            return true;
+        }
+        String body = response.body();
+        return response.statusCode() == 400 && body != null
+                && (body.contains("NoSuchBucket") || body.contains("Bucket not found"));
     }
 
     private static String stripTrailingSlash(String value) {
