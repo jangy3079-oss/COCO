@@ -1,6 +1,8 @@
 import 'dart:convert';
 import 'dart:typed_data';
 
+import '../../core/utils/backend_datetime.dart';
+
 const _feedUploadPrefix = '/uploads/feed/';
 const _imageListMarker = '~';
 const _extensionCodes = {
@@ -117,7 +119,7 @@ class FeedPost {
       lng: (json['lng'] as num?)?.toDouble(),
       routeId: json['routeId'] as int?,
       likeCount: json['likeCount'] as int? ?? 0,
-      createdAt: DateTime.parse(json['createdAt'] as String),
+      createdAt: parseBackendDateTime(json['createdAt'] as String),
       trending: json['trending'] as bool? ?? false,
       liked: json['liked'] as bool? ?? false,
       saved: json['saved'] as bool? ?? false,
@@ -145,7 +147,7 @@ class FeedCommentDto {
       id: json['id'] as int,
       userNickname: json['userNickname'] as String? ?? '',
       content: json['content'] as String? ?? '',
-      createdAt: DateTime.parse(json['createdAt'] as String),
+      createdAt: parseBackendDateTime(json['createdAt'] as String),
     );
   }
 }

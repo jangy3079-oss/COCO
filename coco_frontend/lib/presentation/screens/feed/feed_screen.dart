@@ -1224,6 +1224,23 @@ class _FeedCardPhoto extends StatelessWidget {
     final isRoute = item.type == FeedPostType.route;
     final color = isRoute ? CocoTheme.primary : categoryColor(item.category);
 
+    // 캐러셀 화살표를 누르면 그제서야 다음 사진을 요청해서 느리게 느껴졌던
+    // 문제 — 바로 옆(이전/다음) 사진을 미리 캐시해둬서 눌렀을 때 이미 로드된
+    // 상태로 바로 넘어가게 한다.
+    if (item.imgCount > 1) {
+      final urls = item.imageUrls;
+      final neighborIndexes = {
+        (item.imgIndex + 1) % item.imgCount,
+        (item.imgIndex - 1 + item.imgCount) % item.imgCount,
+      };
+      for (final idx in neighborIndexes) {
+        if (idx < urls.length) {
+          precacheImage(
+              NetworkImage('${DioClient.baseUrl}${urls[idx]}'), context);
+        }
+      }
+    }
+
     return AspectRatio(
       aspectRatio: 16 / 9,
       child: ClipRRect(
@@ -1238,7 +1255,21 @@ class _FeedCardPhoto extends StatelessWidget {
                 child: item.currentImageUrl != null
                     ? Image.network(
                         '${DioClient.baseUrl}${item.currentImageUrl}',
-                        fit: BoxFit.cover)
+                        fit: BoxFit.cover,
+                        loadingBuilder: (context, child, progress) {
+                          if (progress == null) return child;
+                          return Container(
+                            color: color.withOpacity(0.08),
+                            alignment: Alignment.center,
+                            child: const SizedBox(
+                              width: 22,
+                              height: 22,
+                              child:
+                                  CircularProgressIndicator(strokeWidth: 2.4),
+                            ),
+                          );
+                        },
+                      )
                     : Container(
                         color: color.withOpacity(0.12),
                         alignment: Alignment.center,

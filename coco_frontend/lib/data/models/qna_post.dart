@@ -1,5 +1,7 @@
 // Q&A 게시글/답변 모델 — coco_backend QnaPostResponse/QnaAnswerResponse/
 // QnaPostDetailResponse와 1:1 매칭.
+import '../../core/utils/backend_datetime.dart';
+
 class QnaPost {
   final int id;
   final String userNickname;
@@ -34,7 +36,7 @@ class QnaPost {
         spotName: json['spotName'] as String?,
         adoptedAnswerId: json['adoptedAnswerId'] as int?,
         answerCount: json['answerCount'] as int? ?? 0,
-        createdAt: DateTime.parse(json['createdAt'] as String),
+        createdAt: parseBackendDateTime(json['createdAt'] as String),
       );
 }
 
@@ -63,7 +65,7 @@ class QnaAnswer {
         isLocal: json['isLocal'] as bool? ?? false,
         content: json['content'] as String? ?? '',
         adopted: json['adopted'] as bool? ?? false,
-        createdAt: DateTime.parse(json['createdAt'] as String),
+        createdAt: parseBackendDateTime(json['createdAt'] as String),
       );
 }
 

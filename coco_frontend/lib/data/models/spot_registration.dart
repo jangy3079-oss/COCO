@@ -1,4 +1,6 @@
 // 스팟 등록 신청 — coco_backend SpotRegistrationResponse 매핑.
+import '../../core/utils/backend_datetime.dart';
+
 class SpotRegistration {
   final int id;
   final String name;
@@ -31,6 +33,6 @@ class SpotRegistration {
         lng: (json['lng'] as num).toDouble(),
         description: json['description'] as String?,
         status: json['status'] as String,
-        createdAt: DateTime.parse(json['createdAt'] as String),
+        createdAt: parseBackendDateTime(json['createdAt'] as String),
       );
 }

@@ -1,6 +1,8 @@
 // 코스(골목지도) — coco_backend RouteResponse/RouteSpotResponse 매핑.
 // 클래스명은 RouteMap/RouteMapSpot으로 뒀다 — "Route"는 flutter/material.dart가
 // 이미 내보내는 이름이라 그대로 쓰면 충돌한다(백엔드 엔티티명도 RouteMap이라 자연스럽게 맞춤).
+import '../../core/utils/backend_datetime.dart';
+
 class RouteMapSpot {
   final int spotId;
   final String title;
@@ -71,6 +73,6 @@ class RouteMap {
         shareCount: json['shareCount'] as int? ?? 0,
         liked: json['liked'] as bool? ?? false,
         saved: json['saved'] as bool? ?? false,
-        createdAt: DateTime.parse(json['createdAt'] as String),
+        createdAt: parseBackendDateTime(json['createdAt'] as String),
       );
 }

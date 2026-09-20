@@ -34,11 +34,16 @@ class _FeedPostDetailScreenState extends State<FeedPostDetailScreen> {
   final _routeRepository = RouteRepository();
   int _slide = 0;
   bool _submittingComment = false;
+  // 실제 게시물(routeStops가 안 채워진 상태)의 골목지도 지도 슬라이드용으로
+  // 지연 조회한 코스 스팟 — routeStops가 이미 있으면(목업 데이터) 안 쓰인다.
+  List<MockSpot>? _fetchedRouteStops;
 
   bool get _isRoute => widget.item.type == FeedPostType.route;
   int get _totalSlides =>
       (_isRoute ? widget.item.imgCount + 1 : widget.item.imgCount).clamp(1, 99);
   bool get _onMapSlide => _isRoute && _slide == _totalSlides - 1;
+  List<MockSpot> get _effectiveRouteStops =>
+      widget.item.routeStops ?? _fetchedRouteStops ?? const [];
 
   @override
   void initState() {
@@ -46,6 +51,27 @@ class _FeedPostDetailScreenState extends State<FeedPostDetailScreen> {
     // 실제 게시물이면 댓글은 목록 조회 응답에 안 담겨있어서 상세 화면 진입 시 따로 가져온다.
     final postId = widget.item.realPostId;
     if (postId != null) _loadComments(postId);
+    // FeedPostResponse는 코스 스팟 목록을 안 내려줘서(feed_mock_data.dart 주석 참고)
+    // routeStops가 비어있다 — 그대로 두면 골목지도 슬라이드가 스팟 좌표를 못 찾아
+    // 기본 좌표(남포동)를 지도 중심으로 써버린다. routeId로 실제 스팟을 따로 가져온다.
+    if (_isRoute &&
+        (widget.item.routeStops == null || widget.item.routeStops!.isEmpty)) {
+      _loadRouteStops();
+    }
+  }
+
+  Future<void> _loadRouteStops() async {
+    final numId = int.tryParse(widget.item.routeId ?? '');
+    if (numId == null) return;
+    try {
+      final route = await _routeRepository.getById(numId);
+      if (!mounted) return;
+      setState(() {
+        _fetchedRouteStops = route.spots.map(mockSpotFromRouteStop).toList();
+      });
+    } catch (e) {
+      debugPrint('[FeedPostDetailScreen] 코스 스팟 조회 실패(지도 미리보기): $e');
+    }
   }
 
   Future<void> _loadComments(int postId) async {
@@ -65,19 +91,23 @@ class _FeedPostDetailScreenState extends State<FeedPostDetailScreen> {
   // 목업 코스(routeStops가 이미 있음)는 그대로 쓰고, 실제 게시물(routeId만 있고
   // FeedPostResponse엔 스팟 목록이 없음)은 여기서 코스 상세를 조회해 스팟 목록을 채운다.
   Future<void> _openRoutePreview(FeedItem item) async {
-    var stops = item.routeStops;
+    // 초기 진입 시 이미 지도 슬라이드용으로 스팟을 가져와뒀으면(_loadRouteStops)
+    // 그걸 그대로 쓰고, 아니면(목업이 아닌데 아직 못 가져왔으면) 여기서 조회한다.
+    var stops = _effectiveRouteStops;
     // 실제 게시물이면(item.author == 백엔드 userNickname) 로그인한 나와 닉네임이
     // 같은지로 진짜 소유권을 판단하고, 목업 데이터는 예전처럼 source로만 판단한다
     // (목업 작성자는 실제 로그인 계정과 무관해서 닉네임 비교가 의미가 없음).
-    var isOwner = item.source == FeedSource.user;
-    if (stops == null || stops.isEmpty) {
+    final isRealRoute = item.routeId != null;
+    var isOwner = isRealRoute
+        ? (AuthTokenStore.nickname != null &&
+            AuthTokenStore.nickname == item.author)
+        : item.source == FeedSource.user;
+    if (stops.isEmpty) {
       final numId = int.tryParse(item.routeId ?? '');
       if (numId == null) return;
       try {
         final route = await _routeRepository.getById(numId);
         stops = route.spots.map(mockSpotFromRouteStop).toList();
-        isOwner = AuthTokenStore.nickname != null &&
-            AuthTokenStore.nickname == item.author;
       } catch (e) {
         debugPrint('[FeedPostDetailScreen] 코스 조회 실패: $e');
         return;
@@ -183,6 +213,20 @@ class _FeedPostDetailScreenState extends State<FeedPostDetailScreen> {
     final color = categoryColor(item.category);
     final l10n = AppLocalizations.of(context)!;
 
+    // 캐러셀 화살표로 다음/이전 사진 넘길 때 로딩이 느껴지지 않도록 바로 옆
+    // 사진을 미리 캐시해둔다(feed_screen.dart 카드 캐러셀과 동일한 처리).
+    if (!_isRoute && item.imageUrls.length > 1) {
+      final urls = item.imageUrls;
+      final neighborIndexes = {
+        (_slide + 1) % urls.length,
+        (_slide - 1 + urls.length) % urls.length,
+      };
+      for (final idx in neighborIndexes) {
+        precacheImage(
+            NetworkImage('${DioClient.baseUrl}${urls[idx]}'), context);
+      }
+    }
+
     return Scaffold(
       backgroundColor: Colors.white,
       body: SafeArea(
@@ -247,11 +291,29 @@ class _FeedPostDetailScreenState extends State<FeedPostDetailScreen> {
                               Positioned.fill(
                                 child: _onMapSlide
                                     ? _RouteMapSlide(
-                                        stops: item.routeStops ?? const [])
+                                        stops: _effectiveRouteStops)
                                     : item.imageUrls.isNotEmpty
                                         ? Image.network(
                                             '${DioClient.baseUrl}${item.imageUrls[_slide.clamp(0, item.imageUrls.length - 1)]}',
-                                            fit: BoxFit.cover)
+                                            fit: BoxFit.cover,
+                                            loadingBuilder:
+                                                (context, child, progress) {
+                                              if (progress == null) {
+                                                return child;
+                                              }
+                                              return Container(
+                                                color: color.withOpacity(0.08),
+                                                alignment: Alignment.center,
+                                                child: const SizedBox(
+                                                  width: 22,
+                                                  height: 22,
+                                                  child:
+                                                      CircularProgressIndicator(
+                                                          strokeWidth: 2.4),
+                                                ),
+                                              );
+                                            },
+                                          )
                                         : Container(
                                             color: color.withOpacity(0.12),
                                             alignment: Alignment.center,
@@ -361,7 +423,9 @@ class _FeedPostDetailScreenState extends State<FeedPostDetailScreen> {
                       Padding(
                         padding: const EdgeInsets.fromLTRB(20, 14, 20, 0),
                         child: _RouteSummaryCard(
-                            item: item, onView: _openRoutePreview),
+                            item: item,
+                            stops: _effectiveRouteStops,
+                            onView: _openRoutePreview),
                       ),
                     Padding(
                       padding: const EdgeInsets.fromLTRB(20, 18, 20, 4),
@@ -612,10 +676,15 @@ class _RouteMapSlide extends StatelessWidget {
 }
 
 /// 골목지도 마지막 슬라이드 아래에 붙는 요약 카드 — 골목지도 보기/저장.
+/// stops는 실제 코스 스팟 목록(_effectiveRouteStops) — item.stopCount는 실제
+/// 백엔드 게시물엔 채워지지 않아서(FeedPostResponse가 안 내려줌) 대신 이 목록의
+/// 길이로 스팟 개수/거리/시간을 계산한다.
 class _RouteSummaryCard extends StatefulWidget {
   final FeedItem item;
+  final List<MockSpot> stops;
   final ValueChanged<FeedItem> onView;
-  const _RouteSummaryCard({required this.item, required this.onView});
+  const _RouteSummaryCard(
+      {required this.item, required this.stops, required this.onView});
 
   @override
   State<_RouteSummaryCard> createState() => _RouteSummaryCardState();
@@ -625,6 +694,7 @@ class _RouteSummaryCardState extends State<_RouteSummaryCard> {
   @override
   Widget build(BuildContext context) {
     final item = widget.item;
+    final stopCount = widget.stops.length;
     final l10n = AppLocalizations.of(context)!;
     return Container(
       padding: const EdgeInsets.all(14),
@@ -661,8 +731,8 @@ class _RouteSummaryCardState extends State<_RouteSummaryCard> {
                   color: CocoTheme.secondary)),
           const SizedBox(height: 4),
           Text(
-            l10n.feedRouteSummaryStats(item.stopCount ?? 0,
-                item.distanceKm.toStringAsFixed(1), item.durationMin),
+            l10n.feedRouteSummaryStats(stopCount,
+                (stopCount * 0.3).toStringAsFixed(1), stopCount * 10),
             style:
                 TextStyle(fontSize: 12, color: Colors.black.withOpacity(0.45)),
           ),
@@ -679,11 +749,9 @@ class _RouteSummaryCardState extends State<_RouteSummaryCard> {
                   ),
                   // 코스 상세(route_preview_screen)로 이동 — 내가 올린 코스면(routeId 있음)
                   // 편집도 가능하고, 다른 로컬이 올린 코스면 보기 전용으로 뜬다.
-                  onPressed:
-                      (item.routeStops == null || item.routeStops!.isEmpty) &&
-                              item.routeId == null
-                          ? null
-                          : () => widget.onView(item),
+                  onPressed: widget.stops.isEmpty && item.routeId == null
+                      ? null
+                      : () => widget.onView(item),
                   child: Text(l10n.feedRouteSummaryViewButton,
                       style: const TextStyle(
                           color: CocoTheme.secondary,

@@ -8,6 +8,7 @@ import '../../../core/network/login_guard.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../data/repositories/route_repository.dart';
 import '../../../l10n/generated/app_localizations.dart';
+import '../../widgets/map/kakao_map_view.dart';
 import 'map_mock_data.dart';
 
 /// 골목지도(코스) 만들기 화면.
@@ -154,7 +155,10 @@ class _RouteBuilderScreenState extends State<RouteBuilderScreen> {
       }
       await refreshMyRoutes();
       if (!mounted) return;
-      context.push('/map/route/preview', extra: {
+      // push가 아니라 pushReplacement — 코스 작성 화면을 스택에서 제거해야
+      // 미리보기에서 뒤로가기 했을 때 작성 화면(같은 코스로 완료를 또 누르면
+      // 중복 생성되던 화면)으로 안 돌아가고 코스 목록으로 바로 돌아간다.
+      context.pushReplacement('/map/route/preview', extra: {
         'name': name,
         'stops': _stops,
         'routeId': 'route-$backendId',
@@ -553,8 +557,10 @@ class _StopRow extends StatelessWidget {
   }
 }
 
-/// 담은 스팟들을 순서대로 잇는 작은 경로 미리보기.
-/// TODO: 실제 지도 SDK 연동 후 진짜 경로 폴리라인으로 교체.
+/// 담은 스팟들을 순서대로 잇는 경로 미리보기.
+/// 코스상세(route_preview_screen.dart의 _CoverHeader)와 동일하게 실제
+/// 카카오 지도 위에 순서 번호 핀을 올린다 — 핀 사이 점선과 핀 탭 시 말풍선은
+/// KakaoMapView(JS 브리지)가 order 값이 있는 마커에 대해 알아서 그려준다.
 class _RouteMiniMap extends StatelessWidget {
   final List<MockSpot> stops;
   const _RouteMiniMap({required this.stops});
@@ -572,68 +578,28 @@ class _RouteMiniMap extends StatelessWidget {
           ? Center(
               child: Text(AppLocalizations.of(context)!.routeBuilderEmptyMiniMap, style: TextStyle(fontSize: 12, color: Colors.grey.shade500)),
             )
-          : LayoutBuilder(
-              builder: (context, constraints) {
-                final points = stops
-                    .map((s) => Offset(s.left * constraints.maxWidth, s.top * constraints.maxHeight))
-                    .toList();
-                return Stack(
-                  children: [
-                    CustomPaint(
-                      size: Size(constraints.maxWidth, constraints.maxHeight),
-                      painter: _DashedPathPainter(points),
+          : Builder(builder: (context) {
+              final center = spotsCenter(stops);
+              return Stack(
+                children: [
+                  Positioned.fill(
+                    child: KakaoMapView(
+                      centerLat: center.$1,
+                      centerLng: center.$2,
+                      level: 6,
+                      clusteringEnabled: false,
+                      markers: [
+                        for (final (i, spot) in stops.indexed)
+                          KakaoMapMarker(id: spot.id, lat: spot.lat, lng: spot.lng, name: spot.name, order: i + 1),
+                      ],
                     ),
-                    for (int i = 0; i < points.length; i++)
-                      Positioned(
-                        left: points[i].dx - 10,
-                        top: points[i].dy - 10,
-                        child: Container(
-                          width: 20,
-                          height: 20,
-                          alignment: Alignment.center,
-                          decoration: const BoxDecoration(color: CocoTheme.primary, shape: BoxShape.circle),
-                          child: Text('${i + 1}', style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w700)),
-                        ),
-                      ),
-                  ],
-                );
-              },
-            ),
+                  ),
+                  // 미리보기일 뿐 조작할 필요가 없어 드래그·카카오 로고 클릭 등
+                  // 실제 지도 DOM 조작을 막는 투명 오버레이(_CoverHeader와 동일).
+                  const Positioned.fill(child: ColoredBox(color: Colors.transparent)),
+                ],
+              );
+            }),
     );
   }
-}
-
-class _DashedPathPainter extends CustomPainter {
-  final List<Offset> points;
-  _DashedPathPainter(this.points);
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    if (points.length < 2) return;
-    final paint = Paint()
-      ..color = Colors.white
-      ..strokeWidth = 3
-      ..strokeCap = StrokeCap.round;
-
-    for (int i = 0; i < points.length - 1; i++) {
-      _drawDashedLine(canvas, points[i], points[i + 1], paint);
-    }
-  }
-
-  void _drawDashedLine(Canvas canvas, Offset a, Offset b, Paint paint) {
-    const dashWidth = 6.0;
-    const gapWidth = 5.0;
-    final total = (b - a).distance;
-    final direction = (b - a) / total;
-    double covered = 0;
-    while (covered < total) {
-      final start = a + direction * covered;
-      final end = a + direction * (covered + dashWidth).clamp(0.0, total).toDouble();
-      canvas.drawLine(start, end, paint);
-      covered += dashWidth + gapWidth;
-    }
-  }
-
-  @override
-  bool shouldRepaint(covariant _DashedPathPainter oldDelegate) => oldDelegate.points != points;
 }
