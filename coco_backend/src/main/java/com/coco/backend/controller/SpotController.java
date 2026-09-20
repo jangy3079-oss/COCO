@@ -6,6 +6,7 @@ import com.coco.backend.dto.response.SpotResponse;
 import com.coco.backend.service.KakaoLocalService;
 import com.coco.backend.service.SpotService;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -20,6 +21,7 @@ import java.util.Map;
 @RestController
 @RequestMapping("/api/spot")
 @RequiredArgsConstructor
+@Slf4j
 public class SpotController {
 
     private final SpotService spotService;
@@ -130,6 +132,7 @@ public class SpotController {
         } catch (IllegalArgumentException | IllegalStateException e) {
             return ResponseEntity.badRequest().body(new ErrorResponse(e.getMessage()));
         } catch (IOException e) {
+            log.error("스팟 이미지 Storage 업로드 실패: spotId={}", id, e);
             return ResponseEntity.internalServerError().body(new ErrorResponse("이미지 업로드에 실패했습니다."));
         }
     }

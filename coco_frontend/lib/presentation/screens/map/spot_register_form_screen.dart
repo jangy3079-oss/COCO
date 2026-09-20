@@ -245,11 +245,9 @@ class _SpotRegisterFormScreenState extends State<SpotRegisterFormScreen> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text(
-                              _category.forcePeriod
-                                  ? '팝업스토어는 운영 기간을 꼭 입력해야 해요'
-                                  : '기간 한정 스팟은 시작일과 종료일을 입력해 주세요',
-                              style: const TextStyle(
+                            const Text(
+                              '기간 한정 스팟은 시작일과 종료일을 입력해 주세요',
+                              style: TextStyle(
                                   fontSize: 11,
                                   height: 1.5,
                                   color: CocoTheme.primary),

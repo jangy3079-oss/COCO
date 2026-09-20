@@ -11,6 +11,7 @@ import com.coco.backend.service.FeedService;
 import com.coco.backend.service.FileStorageService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -25,6 +26,7 @@ import java.util.Map;
 @RestController
 @RequestMapping("/api/feed")
 @RequiredArgsConstructor
+@Slf4j
 public class FeedController {
 
     private final FeedService feedService;
@@ -58,6 +60,7 @@ public class FeedController {
         } catch (IllegalArgumentException e) {
             return ResponseEntity.badRequest().body(new ErrorResponse(e.getMessage()));
         } catch (IOException e) {
+            log.error("피드 이미지 Storage 업로드 실패", e);
             return ResponseEntity.internalServerError().body(new ErrorResponse("이미지 업로드에 실패했습니다."));
         }
     }

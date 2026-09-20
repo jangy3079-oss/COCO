@@ -35,18 +35,29 @@ class SpotSearchCandidate {
 
 
 
-/// 등록 폼의 카테고리 옵션. code는 기존 MockSpot.category 체계(노포/골목/공원/카페)에
-/// "팝업"을 더한 저장용 값이고, label은 등록 폼에 보여줄 레퍼런스 원문 라벨이다.
+/// 등록 폼의 카테고리 옵션. label은 등록 폼에 보여줄 레퍼런스 원문 라벨(노포식당/동네공원
+/// 등 정감 있는 문구)이고, code는 실제로 저장되는 값이다.
+///
+/// code는 반드시 백엔드 SpotService.MAP_CATEGORIES(음식점/골목/공원/카페/명소/문화시설)
+/// 중 하나여야 한다 — 지도 탭의 카테고리 칩(GET /api/spot/map?category=...)이 이 6개
+/// 값으로만 정확히 일치 조회하기 때문에, 여기 안 속하는 값(예전엔 '노포'/'팝업')으로
+/// 등록하면 스팟은 실제로 생성돼도 "전체" 탭 외 어떤 카테고리 필터에서도 안 보이는
+/// "핀이 안 찍히는" 버그가 생긴다. (예전엔 MockSpot.category 체계인 노포/골목/공원/카페를
+/// 그대로 썼는데, 그 체계와 백엔드 지도 필터 체계가 서로 다르다는 걸 놓쳤던 것.)
+/// 6개를 전부 옵션으로 두는 게 안전하다 — 하나라도 빠지면 그 카테고리로는 유저가
+/// 아예 등록을 못 하게 된다.
 class SpotRegisterCategory {
   final String code;
   final String label;
-  final bool forcePeriod; // true면 노출 기간이 "기간 한정"으로 강제됨 (예: 팝업스토어)
+  final bool forcePeriod; // true면 노출 기간이 "기간 한정"으로 강제됨
   const SpotRegisterCategory({required this.code, required this.label, this.forcePeriod = false});
 }
 
 const spotRegisterCategories = [
-  SpotRegisterCategory(code: '노포', label: '노포식당'),
+  SpotRegisterCategory(code: '음식점', label: '노포식당'),
+  SpotRegisterCategory(code: '골목', label: '동네골목'),
   SpotRegisterCategory(code: '공원', label: '동네공원'),
-  SpotRegisterCategory(code: '카페', label: '카페골목'),
-  SpotRegisterCategory(code: '팝업', label: '팝업스토어', forcePeriod: true),
+  SpotRegisterCategory(code: '카페', label: '동네카페'),
+  SpotRegisterCategory(code: '명소', label: '로컬명소'),
+  SpotRegisterCategory(code: '문화시설', label: '문화공간'),
 ];
