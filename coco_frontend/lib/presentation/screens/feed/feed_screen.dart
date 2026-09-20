@@ -1,8 +1,9 @@
 import 'dart:async';
 import 'dart:math';
 import 'package:flutter/material.dart';
-import 'package:geolocator/geolocator.dart';
 import 'package:go_router/go_router.dart';
+import 'package:provider/provider.dart';
+import '../../../core/locale/locale_controller.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/network/dio_client.dart';
 import '../../../data/reference/busan_dong_data.dart';
@@ -63,17 +64,78 @@ String _localizedDongLabel(
 
 String _romanizeAdministrativeName(String name) {
   const initials = <String>[
-    'g', 'kk', 'n', 'd', 'tt', 'r', 'm', 'b', 'pp', 's', 'ss', '',
-    'j', 'jj', 'ch', 'k', 't', 'p', 'h'
+    'g',
+    'kk',
+    'n',
+    'd',
+    'tt',
+    'r',
+    'm',
+    'b',
+    'pp',
+    's',
+    'ss',
+    '',
+    'j',
+    'jj',
+    'ch',
+    'k',
+    't',
+    'p',
+    'h'
   ];
   const vowels = <String>[
-    'a', 'ae', 'ya', 'yae', 'eo', 'e', 'yeo', 'ye', 'o', 'wa', 'wae',
-    'oe', 'yo', 'u', 'wo', 'we', 'wi', 'yu', 'eu', 'ui', 'i'
+    'a',
+    'ae',
+    'ya',
+    'yae',
+    'eo',
+    'e',
+    'yeo',
+    'ye',
+    'o',
+    'wa',
+    'wae',
+    'oe',
+    'yo',
+    'u',
+    'wo',
+    'we',
+    'wi',
+    'yu',
+    'eu',
+    'ui',
+    'i'
   ];
   const finals = <String>[
-    '', 'k', 'k', 'ks', 'n', 'nj', 'nh', 't', 'l', 'lk', 'lm', 'lb',
-    'ls', 'lt', 'lp', 'lh', 'm', 'p', 'ps', 't', 't', 'ng', 't', 't',
-    'k', 't', 'p', 'h'
+    '',
+    'k',
+    'k',
+    'ks',
+    'n',
+    'nj',
+    'nh',
+    't',
+    'l',
+    'lk',
+    'lm',
+    'lb',
+    'ls',
+    'lt',
+    'lp',
+    'lh',
+    'm',
+    'p',
+    'ps',
+    't',
+    't',
+    'ng',
+    't',
+    't',
+    'k',
+    't',
+    'p',
+    'h'
   ];
   const suffixes = <String, String>{
     '동': '-dong',
@@ -114,6 +176,12 @@ String _localizedSortLabel(String sortBy, AppLocalizations l10n) =>
       _ => l10n.feedFilterSortLatest,
     };
 
+// BottomNavShell은 지도 외 탭을 전환할 때 화면 State를 다시 만들 수 있으므로,
+// 사용자가 고른 피드 필터를 앱 실행 세션 동안 별도로 보관한다.
+FeedPostType? _persistedFeedTypeFilter;
+String _persistedFeedDongId = kAllDongId;
+String _persistedFeedSortBy = 'latest';
+
 class FeedScreen extends StatefulWidget {
   const FeedScreen({super.key});
 
@@ -122,12 +190,11 @@ class FeedScreen extends StatefulWidget {
 }
 
 class _FeedScreenState extends State<FeedScreen> {
-  FeedPostType? _typeFilter; // null = 전체
-  String _dongId = kAllDongId; // busanGuList 기반 dongId. 기본은 부산 전체이고
-  // GPS 조회에 성공하면 _resolveDefaultDong()이 가장 가까운 동으로 바꿔준다.
-  String _defaultDongId = kAllDongId; // "초기화" 버튼이 되돌아갈 기본값
-  String? _myNearestDongId; // 필터 시트에서 "내 위치 기준" 배지를 붙일 동
-  String _sortBy = 'latest'; // latest | likes | saves
+  FeedPostType? _typeFilter = _persistedFeedTypeFilter; // null = 전체
+  // 위치 조회 결과로 사용자의 선택을 덮어쓰지 않는다. 최초값과 초기화 기준은
+  // 항상 부산 전체이며, 사용자가 고른 값은 이 화면 State가 살아있는 동안 유지된다.
+  String _dongId = _persistedFeedDongId;
+  String _sortBy = _persistedFeedSortBy; // latest | likes | saves
   int _visibleCount = 5;
   bool _loadingMore = false;
 
@@ -141,38 +208,6 @@ class _FeedScreenState extends State<FeedScreen> {
     super.initState();
     _scrollController.addListener(_onScroll);
     _loadRealPosts();
-    _resolveDefaultDong();
-  }
-
-  // 위치 권한이 있으면 내 위치에서 가장 가까운 동을 기본 동네 필터로 쓰고,
-  // 권한이 없거나 조회에 실패하면 "부산 전체"를 기본값으로 유지한다
-  // (map_screen.dart의 _loadCurrentLocation과 동일한 패턴).
-  Future<void> _resolveDefaultDong() async {
-    try {
-      final serviceEnabled = await Geolocator.isLocationServiceEnabled();
-      if (!serviceEnabled) return;
-
-      var permission = await Geolocator.checkPermission();
-      if (permission == LocationPermission.denied) {
-        permission = await Geolocator.requestPermission();
-      }
-      if (permission == LocationPermission.denied ||
-          permission == LocationPermission.deniedForever) {
-        return;
-      }
-
-      final position = await Geolocator.getCurrentPosition(
-          desiredAccuracy: LocationAccuracy.medium);
-      final nearest = nearestDongId(position.latitude, position.longitude);
-      if (!mounted || nearest == null) return;
-      setState(() {
-        _myNearestDongId = nearest;
-        _dongId = nearest;
-        _defaultDongId = nearest;
-      });
-    } catch (_) {
-      // 위치 조회 실패 시 "부산 전체" 기본값 유지 — 조용히 무시.
-    }
   }
 
   @override
@@ -184,7 +219,9 @@ class _FeedScreenState extends State<FeedScreen> {
 
   Future<void> _loadRealPosts() async {
     try {
-      final posts = await _feedRepository.fetchFeed();
+      final posts = await _feedRepository.fetchFeed(
+        locale: context.read<LocaleController>().locale.languageCode,
+      );
       if (!mounted) return;
       setState(() => _realItems = posts.map(feedItemFromPost).toList());
     } catch (e) {
@@ -254,12 +291,20 @@ class _FeedScreenState extends State<FeedScreen> {
           dongId: _dongId,
           sortBy: _sortBy,
           resultCount: _filteredSorted.length,
-          myNearestDongId: _myNearestDongId,
-          onDongSelected: (id) => setSheetState(() => _dongId = id),
-          onSortSelected: (v) => setSheetState(() => _sortBy = v),
+          myNearestDongId: null,
+          onDongSelected: (id) => setSheetState(() {
+            _dongId = id;
+            _persistedFeedDongId = id;
+          }),
+          onSortSelected: (v) => setSheetState(() {
+            _sortBy = v;
+            _persistedFeedSortBy = v;
+          }),
           onReset: () => setSheetState(() {
-            _dongId = _defaultDongId;
+            _dongId = kAllDongId;
             _sortBy = 'latest';
+            _persistedFeedDongId = kAllDongId;
+            _persistedFeedSortBy = 'latest';
           }),
           onApply: () => Navigator.of(sheetContext).pop(),
         ),
@@ -324,7 +369,7 @@ class _FeedScreenState extends State<FeedScreen> {
     final l10n = AppLocalizations.of(context)!;
     final languageCode = Localizations.localeOf(context).languageCode;
     final visibleItems = _filteredSorted.take(_visibleCount).toList();
-    final isDefaultFilter = _dongId == _defaultDongId && _sortBy == 'latest';
+    final isDefaultFilter = _dongId == kAllDongId && _sortBy == 'latest';
 
     return Scaffold(
       backgroundColor: Colors.white,
@@ -348,6 +393,7 @@ class _FeedScreenState extends State<FeedScreen> {
                 typeFilter: _typeFilter,
                 onTypeSelected: (v) => setState(() {
                   _typeFilter = v;
+                  _persistedFeedTypeFilter = v;
                   _visibleCount = 5;
                 }),
               ),
@@ -646,6 +692,7 @@ class _TypeChip extends StatelessWidget {
           duration: const Duration(milliseconds: 180),
           curve: Curves.easeOut,
           style: TextStyle(
+            fontFamily: 'NotoSansKR',
             fontSize: 13,
             fontWeight: FontWeight.w600,
             color: selected ? Colors.white : CocoTheme.secondary,
@@ -736,7 +783,10 @@ class _FilterSheetState extends State<_FilterSheet> {
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 420),
         curve: Curves.easeOutCubic,
-        height: screenHeight * (_sheetExpanded ? 0.90 : 0.64),
+        // 구를 아직 고르지 않은 기본 상태에서도 부산 지도 전체와 하단 정렬/적용
+        // 영역이 한 화면 안에 들어오게 충분한 높이를 확보한다. 0.64에서는 지도
+        // 남쪽이 고정 하단 영역에 가려져 잘려 보였다.
+        height: screenHeight * (_sheetExpanded ? 0.94 : 0.90),
         child: Padding(
           padding: const EdgeInsets.only(top: 14),
           child: Column(
@@ -844,7 +894,10 @@ class _FilterSheetState extends State<_FilterSheet> {
                                 ),
                                 for (final dong in _dongsOf(expandedGu))
                                   _SheetChip(
-                                    label: dong,
+                                    label: _localizedDongLabel(
+                                        makeDongId(expandedGu, dong),
+                                        l10n,
+                                        languageCode),
                                     selected: widget.dongId ==
                                         makeDongId(expandedGu, dong),
                                     icon: widget.myNearestDongId ==
@@ -954,6 +1007,7 @@ class _SheetChip extends StatelessWidget {
               duration: const Duration(milliseconds: 180),
               curve: Curves.easeOut,
               style: TextStyle(
+                  fontFamily: 'NotoSansKR',
                   fontSize: 13,
                   fontWeight: FontWeight.w600,
                   color: selected ? Colors.white : CocoTheme.secondary),

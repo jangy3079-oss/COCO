@@ -179,6 +179,14 @@ class _QnaPostDetailScreenState extends State<QnaPostDetailScreen> {
                         children: [
                           Row(
                             children: [
+                              if (post.isSos) ...[
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                  decoration: BoxDecoration(color: const Color(0xFFE53935), borderRadius: BorderRadius.circular(10)),
+                                  child: const Text('SOS', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: Colors.white)),
+                                ),
+                                const SizedBox(width: 6),
+                              ],
                               Text(post.userNickname, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Colors.grey.shade600)),
                               if (post.solved) ...[
                                 const SizedBox(width: 6),
@@ -193,7 +201,7 @@ class _QnaPostDetailScreenState extends State<QnaPostDetailScreen> {
                             ],
                           ),
                           const SizedBox(height: 10),
-                          Text(post.title, style: const TextStyle(fontSize: 19, fontWeight: FontWeight.w700, height: 1.4, color: CocoTheme.secondary)),
+                          Text(post.displayTitle, style: const TextStyle(fontSize: 19, fontWeight: FontWeight.w700, height: 1.4, color: CocoTheme.secondary)),
                           const SizedBox(height: 10),
                           Text(post.content, style: TextStyle(fontSize: 14, height: 1.7, color: Colors.grey.shade800)),
                           if (post.spotId != null) ...[

@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:provider/provider.dart';
+import '../../../core/locale/locale_controller.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../data/models/qna_post.dart';
 import '../../../data/repositories/feed_repository.dart';
@@ -35,7 +37,9 @@ class _MyPostsScreenState extends State<MyPostsScreen> {
 
   Future<void> _load() async {
     // 두 요청을 동시에 시작해두고(await는 따로) 순서와 무관하게 병렬로 기다린다.
-    final feedFuture = _feedRepository.fetchFeed();
+    final feedFuture = _feedRepository.fetchFeed(
+      locale: context.read<LocaleController>().locale.languageCode,
+    );
     final qnaFuture = _qnaRepository.listPosts(filter: 'mine');
     try {
       final posts = await feedFuture;
@@ -182,7 +186,7 @@ class _FilterChip extends StatelessWidget {
         child: AnimatedDefaultTextStyle(
           duration: const Duration(milliseconds: 180),
           curve: Curves.easeOut,
-          style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: selected ? Colors.white : CocoTheme.secondary),
+          style: TextStyle(fontFamily: 'NotoSansKR', fontSize: 12, fontWeight: FontWeight.w600, color: selected ? Colors.white : CocoTheme.secondary),
           child: Text(label),
         ),
       ),

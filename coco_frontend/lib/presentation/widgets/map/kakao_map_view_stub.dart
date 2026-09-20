@@ -11,7 +11,11 @@ class KakaoMapMarker {
   final String? subtitle; // 핀 탭 시 뜨는 말풍선의 보조 정보(카테고리 등)
   final bool isLocalPick;
   final bool trending;
+  final bool alwaysShowLabel;
+  final String? actionLabel;
+  final String? secondaryActionLabel;
   final int? order;
+  final bool compactOrder;
   const KakaoMapMarker({
     required this.id,
     required this.lat,
@@ -20,7 +24,11 @@ class KakaoMapMarker {
     this.subtitle,
     this.isLocalPick = false,
     this.trending = false,
+    this.alwaysShowLabel = false,
+    this.actionLabel,
+    this.secondaryActionLabel,
     this.order,
+    this.compactOrder = false,
   });
 }
 
@@ -30,7 +38,16 @@ class MapFocusTarget {
   final double lng;
   final String? name;
   final String? subtitle;
-  const MapFocusTarget({required this.id, required this.lat, required this.lng, this.name, this.subtitle});
+  final String? actionLabel;
+  final String? secondaryActionLabel;
+  const MapFocusTarget(
+      {required this.id,
+      required this.lat,
+      required this.lng,
+      this.name,
+      this.subtitle,
+      this.actionLabel,
+      this.secondaryActionLabel});
 }
 
 class MapBoundsTarget {
@@ -44,10 +61,13 @@ class KakaoMapView extends StatelessWidget {
   final int level;
   final List<KakaoMapMarker> markers;
   final ValueChanged<String>? onMarkerTap;
+  final ValueChanged<String>? onMarkerSelected;
+  final ValueChanged<String>? onMarkerSecondaryTap;
   final double? myLocationLat;
   final double? myLocationLng;
   final void Function(double lat, double lng)? onMapTap;
-  final void Function(double swLat, double swLng, double neLat, double neLng)? onBoundsChanged;
+  final void Function(double swLat, double swLng, double neLat, double neLng)?
+      onBoundsChanged;
   final MapFocusTarget? focusTarget;
   final MapBoundsTarget? boundsTarget;
   final bool clusteringEnabled;
@@ -59,6 +79,8 @@ class KakaoMapView extends StatelessWidget {
     this.level = 4,
     this.markers = const [],
     this.onMarkerTap,
+    this.onMarkerSelected,
+    this.onMarkerSecondaryTap,
     this.myLocationLat,
     this.myLocationLng,
     this.onMapTap,

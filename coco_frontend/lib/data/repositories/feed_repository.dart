@@ -9,21 +9,30 @@ import '../models/feed_post.dart';
 class FeedRepository {
   final Dio _dio = DioClient.instance;
 
-  /// 최신순 피드 목록 (백엔드가 최대 50개까지 내려준다).
-  Future<List<FeedPost>> fetchFeed() async {
-    final response = await _dio.get('/api/feed');
+  /// 최신순 피드 목록 (백엔드가 최대 50개까지 내려준다). locale에 맞는 번역이 있으면
+  /// 그걸로, 없으면 한국어 원문으로 description을 내려준다(SpotRepository와 동일 패턴).
+  Future<List<FeedPost>> fetchFeed({String locale = 'ko'}) async {
+    final response = await _dio.get('/api/feed', queryParameters: {'locale': locale});
     return (response.data as List)
         .map((e) => FeedPost.fromJson(e as Map<String, dynamic>))
         .toList();
   }
 
   /// 로그인한 사용자가 글을 쓴다. 스팟 태그·코스 공유는 선택 — 로그인 안 된 상태면 백엔드가 401을 준다.
-  Future<FeedPost> createPost({String? imageUrl, String? description, int? spotId, int? routeId}) async {
+  /// locale은 description이 작성된 언어 — 백엔드가 이걸 기준으로 나머지 두 언어를 번역해 저장한다.
+  Future<FeedPost> createPost({
+    String? imageUrl,
+    String? description,
+    int? spotId,
+    int? routeId,
+    String locale = 'ko',
+  }) async {
     final response = await _dio.post('/api/feed', data: {
       'imageUrl': imageUrl,
       'description': description,
       'spotId': spotId,
       'routeId': routeId,
+      'locale': locale,
     });
     return FeedPost.fromJson(response.data as Map<String, dynamic>);
   }
@@ -40,8 +49,8 @@ class FeedRepository {
 
   /// 로그인한 사용자가 좋아요한 피드만 가져온다 — GET /api/feed/liked.
   /// my_saved_screen.dart의 "좋아요한 피드" 탭 전용.
-  Future<List<FeedPost>> fetchLikedFeed() async {
-    final response = await _dio.get('/api/feed/liked');
+  Future<List<FeedPost>> fetchLikedFeed({String locale = 'ko'}) async {
+    final response = await _dio.get('/api/feed/liked', queryParameters: {'locale': locale});
     return (response.data as List)
         .map((e) => FeedPost.fromJson(e as Map<String, dynamic>))
         .toList();
@@ -63,8 +72,8 @@ class FeedRepository {
 
   /// 로그인한 사용자가 저장한 피드 목록 — GET /api/feed/saved.
   /// my_saved_screen.dart의 "저장한 피드" 탭 전용.
-  Future<List<FeedPost>> fetchSavedFeed() async {
-    final response = await _dio.get('/api/feed/saved');
+  Future<List<FeedPost>> fetchSavedFeed({String locale = 'ko'}) async {
+    final response = await _dio.get('/api/feed/saved', queryParameters: {'locale': locale});
     return (response.data as List)
         .map((e) => FeedPost.fromJson(e as Map<String, dynamic>))
         .toList();

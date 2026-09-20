@@ -198,6 +198,8 @@
   "qnaComposerBodyHint": "この町について気になることを聞いてみてください",
   "qnaComposerSpotTagLabel": "場所タグ",
   "qnaComposerOptionalLabel": "任意",
+  "qnaComposerSosToggleLabel": "SOSとして投稿",
+  "qnaComposerSosToggleHint": "緊急の場合、コミュニティの一番上に強調表示されます",
   "qnaComposerLanguageNoticePrefix": "この質問は",
   "qnaComposerLanguageNoticeLang": "韓国語",
   "qnaComposerLanguageNoticeSuffix": "で投稿されます。ローカル住民はできるだけ同じ言語で答えます。",
@@ -308,6 +310,7 @@
   "myRoutesCourseDetailButton": "コース詳細",
   "myRoutesVisibilityPublic": "全体公開",
   "myRoutesNewRouteButton": "+ 新しいコースを作る",
+  "myRoutesCreateCourseButton": "コースを作る",
 
   "profileEditSaveButton": "保存",
   "profileEditChangePhotoButton": "写真を変更",
@@ -343,6 +346,16 @@
   },
   "mapSaveCourseButton": "コースを保存",
   "mapSaveCourseEmptyWarning": "まず保存したいスポットをブックマークしてください",
+  "mapPopupDetailAction": "詳しく見る ›",
+  "mapQuickCourseAction": "保存してコースを作る +",
+  "mapQuickCourseAddedAction": "コースに追加済み ✓",
+  "mapQuickCourseRemoveAction": "保存・コースを解除",
+  "mapQuickCourseBanner": "コース作成中 · {count}件",
+  "@mapQuickCourseBanner": {
+    "placeholders": { "count": { "type": "int" } }
+  },
+  "mapNearbyEmptyTitle": "周辺にスポットがまだありません",
+  "mapNearbyEmptySubtitle": "地図を動かすか、別のカテゴリを選んでください",
   "mapCategoryAll": "地図",
   "mapCategoryOldStore": "老舗",
   "mapCategoryAlley": "路地",
@@ -377,6 +390,11 @@
     "placeholders": { "count": { "type": "int" } }
   },
   "routeBuilderEmptyMiniMap": "スポットを追加すると経路が表示されます",
+  "routeBuilderSavedMapTitle": "私の路地マップ",
+  "routeBuilderLikedSpotsTitle": "お気に入りスポット",
+  "routeBuilderTapPinHint": "ピンをタップして場所を確認し、追加できます",
+  "routeBuilderAddAction": "追加 +",
+  "routeBuilderAddedAction": "追加済み ✓",
 
   "routePreviewStats": "スポット{count}件・{km}km・約{min}分",
   "@routePreviewStats": {

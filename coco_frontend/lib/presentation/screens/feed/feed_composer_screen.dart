@@ -240,6 +240,7 @@ class _FeedComposerScreenState extends State<FeedComposerScreen> {
         imageUrl: _uploadedImageUrls.isEmpty
             ? null
             : encodeFeedImageUrls(_uploadedImageUrls),
+        locale: context.read<LocaleController>().locale.languageCode,
       );
       if (mounted) context.pop();
     } catch (e) {

@@ -198,6 +198,8 @@
   "qnaComposerBodyHint": "Ask anything about this neighborhood",
   "qnaComposerSpotTagLabel": "Tag a Spot",
   "qnaComposerOptionalLabel": "Optional",
+  "qnaComposerSosToggleLabel": "Mark as SOS",
+  "qnaComposerSosToggleHint": "If it's urgent, it'll be pinned to the top of the community",
   "qnaComposerLanguageNoticePrefix": "This question will be posted in ",
   "qnaComposerLanguageNoticeLang": "Korean",
   "qnaComposerLanguageNoticeSuffix": ". Locals will try to reply in the same language when possible.",
@@ -308,6 +310,7 @@
   "myRoutesCourseDetailButton": "Course Details",
   "myRoutesVisibilityPublic": "Public",
   "myRoutesNewRouteButton": "+ New Course",
+  "myRoutesCreateCourseButton": "Create Course",
 
   "profileEditSaveButton": "Save",
   "profileEditChangePhotoButton": "Change Photo",
@@ -343,6 +346,16 @@
   },
   "mapSaveCourseButton": "Save Course",
   "mapSaveCourseEmptyWarning": "Bookmark a spot first to add it to a course",
+  "mapPopupDetailAction": "View details ›",
+  "mapQuickCourseAction": "Save & add to course +",
+  "mapQuickCourseAddedAction": "Added to course ✓",
+  "mapQuickCourseRemoveAction": "Remove save & course",
+  "mapQuickCourseBanner": "Building course · {count}",
+  "@mapQuickCourseBanner": {
+    "placeholders": { "count": { "type": "int" } }
+  },
+  "mapNearbyEmptyTitle": "No spots nearby yet",
+  "mapNearbyEmptySubtitle": "Move the map or choose another category",
   "mapCategoryAll": "Map",
   "mapCategoryOldStore": "Old Shops",
   "mapCategoryAlley": "Alleys",
@@ -377,6 +390,11 @@
     "placeholders": { "count": { "type": "int" } }
   },
   "routeBuilderEmptyMiniMap": "Add spots to see the route",
+  "routeBuilderSavedMapTitle": "My Alley Map",
+  "routeBuilderLikedSpotsTitle": "My Saved Spots",
+  "routeBuilderTapPinHint": "Tap a pin to check the location and add it",
+  "routeBuilderAddAction": "Add +",
+  "routeBuilderAddedAction": "Added ✓",
 
   "routePreviewStats": "{count} spots · {km}km · about {min} min",
   "@routePreviewStats": {

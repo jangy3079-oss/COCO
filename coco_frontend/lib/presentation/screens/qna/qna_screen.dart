@@ -54,8 +54,13 @@ class _QnaScreenState extends State<QnaScreen> {
     try {
       final posts = await _qnaRepository.listPosts(filter: _filter ?? 'all', sort: _sort);
       if (!mounted) return;
+      // SOS 질문은 정렬 옵션(최신순/미답변순)과 무관하게 항상 맨 위에 고정한다.
+      // List.sort는 안정 정렬이 아니라서, 각 그룹 안의 기존 순서를 지키려면
+      // 직접 둘로 나눠서 이어붙여야 한다.
+      final sosPosts = posts.where((p) => p.isSos).toList();
+      final restPosts = posts.where((p) => !p.isSos).toList();
       setState(() {
-        _posts = posts;
+        _posts = [...sosPosts, ...restPosts];
         _loading = false;
       });
     } catch (e) {
@@ -215,7 +220,7 @@ class _FilterChip extends StatelessWidget {
         child: AnimatedDefaultTextStyle(
           duration: const Duration(milliseconds: 180),
           curve: Curves.easeOut,
-          style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: selected ? Colors.white : CocoTheme.secondary),
+          style: TextStyle(fontFamily: 'NotoSansKR', fontSize: 13, fontWeight: FontWeight.w600, color: selected ? Colors.white : CocoTheme.secondary),
           child: Text(label),
         ),
       ),
@@ -234,13 +239,22 @@ class _QuestionCard extends StatelessWidget {
 
     return InkWell(
       onTap: onTap,
-      child: Padding(
+      child: Container(
+        color: post.isSos ? const Color(0xFFFFF3F2) : null,
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(
               children: [
+                if (post.isSos) ...[
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                    decoration: BoxDecoration(color: const Color(0xFFE53935), borderRadius: BorderRadius.circular(10)),
+                    child: const Text('SOS', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: Colors.white)),
+                  ),
+                  const SizedBox(width: 6),
+                ],
                 Text(post.userNickname, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Colors.grey.shade600)),
                 if (post.solved) ...[
                   const SizedBox(width: 6),
@@ -256,7 +270,7 @@ class _QuestionCard extends StatelessWidget {
             ),
             const SizedBox(height: 8),
             Text(
-              post.title,
+              post.displayTitle,
               style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700, height: 1.4, color: CocoTheme.secondary),
             ),
             const SizedBox(height: 4),

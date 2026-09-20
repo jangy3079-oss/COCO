@@ -24,9 +24,13 @@ class KakaoMapMarker {
   final String? subtitle; // 핀 탭 시 뜨는 말풍선의 보조 정보(카테고리 등)
   final bool isLocalPick; // true면 핀 색을 강조색(주황)으로
   final bool trending; // true면 핀을 더 크게
+  final bool alwaysShowLabel; // 코스 편집 지도처럼 모든 핀의 이름표를 항상 보여줄 때
+  final String? actionLabel; // 말풍선 하단 액션 문구(기본은 "자세히 보기")
+  final String? secondaryActionLabel; // 상세 보기 아래에 표시할 두 번째 액션
   // 코스("지도에서 보기")처럼 방문 순서를 핀 안에 숫자로 보여줘야 할 때만 값이 있다.
   // 값이 있으면 로컬픽(2단계)과 동일한 크기/색으로 통일되고, 그 안에 이 번호가 찍힌다.
   final int? order;
+  final bool compactOrder; // 코스 편집 지도에서 쓰는 작은 순서 핀
   const KakaoMapMarker({
     required this.id,
     required this.lat,
@@ -35,7 +39,11 @@ class KakaoMapMarker {
     this.subtitle,
     this.isLocalPick = false,
     this.trending = false,
+    this.alwaysShowLabel = false,
+    this.actionLabel,
+    this.secondaryActionLabel,
     this.order,
+    this.compactOrder = false,
   });
 }
 
@@ -45,10 +53,17 @@ class KakaoMapMarker {
 external JSPromise<JSAny?> _cocoLoadKakaoSdk(JSString appKey);
 
 @JS('cocoInitKakaoMap')
-external void _cocoInitKakaoMap(JSString divId, JSNumber lat, JSNumber lng, JSNumber level);
+external void _cocoInitKakaoMap(
+    JSString divId, JSNumber lat, JSNumber lng, JSNumber level);
 
 @JS('cocoSetKakaoMarkers')
-external void _cocoSetKakaoMarkers(JSString divId, JSString markersJson, JSFunction onMarkerClick);
+external void _cocoSetKakaoMarkers(
+  JSString divId,
+  JSString markersJson,
+  JSFunction onMarkerClick,
+  JSFunction onMarkerSelected,
+  JSFunction onMarkerSecondaryClick,
+);
 
 @JS('cocoSetKakaoCenter')
 external void _cocoSetKakaoCenter(JSString divId, JSNumber lat, JSNumber lng);
@@ -63,7 +78,8 @@ external void _cocoStopHeadingWatch(JSString divId);
 external void _cocoSetMapClickHandler(JSString divId, JSFunction onClick);
 
 @JS('cocoSetBoundsChangedHandler')
-external void _cocoSetBoundsChangedHandler(JSString divId, JSFunction onBoundsChanged);
+external void _cocoSetBoundsChangedHandler(
+    JSString divId, JSFunction onBoundsChanged);
 
 @JS('cocoFocusSpot')
 external void _cocoFocusSpot(JSString divId, JSString markerJson);
@@ -84,7 +100,16 @@ class MapFocusTarget {
   final double lng;
   final String? name;
   final String? subtitle;
-  const MapFocusTarget({required this.id, required this.lat, required this.lng, this.name, this.subtitle});
+  final String? actionLabel; // 말풍선 하단 액션 문구(기본은 "자세히 보기") — KakaoMapMarker와 동일한 필드.
+  final String? secondaryActionLabel;
+  const MapFocusTarget(
+      {required this.id,
+      required this.lat,
+      required this.lng,
+      this.name,
+      this.subtitle,
+      this.actionLabel,
+      this.secondaryActionLabel});
 }
 
 // 코스의 "지도에서 보기"처럼, 특정 스팟들이 전부 화면에 들어오도록 카메라를
@@ -102,12 +127,15 @@ class KakaoMapView extends StatefulWidget {
   final int level; // 카카오맵 확대 레벨(작을수록 확대). 기본값은 동네 골목이 보이는 정도.
   final List<KakaoMapMarker> markers;
   final ValueChanged<String>? onMarkerTap;
+  final ValueChanged<String>? onMarkerSelected;
+  final ValueChanged<String>? onMarkerSecondaryTap;
   final double? myLocationLat; // GPS로 실제 위치를 구했을 때만 값이 있음 — 지도 위 파란 점 표시용
   final double? myLocationLng;
   final void Function(double lat, double lng)? onMapTap; // 지도를 직접 눌러 좌표를 찍는 용도
   // 지도 화면(뷰포트)이 바뀔 때(드래그/줌 종료)마다 호출 — 화면에 보이는 범위만큼만
   // 서버에 다시 요청해서 핀 밀집을 막고 싶을 때 사용(뷰포트 쿼리).
-  final void Function(double swLat, double swLng, double neLat, double neLng)? onBoundsChanged;
+  final void Function(double swLat, double swLng, double neLat, double neLng)?
+      onBoundsChanged;
   final MapFocusTarget? focusTarget;
   final MapBoundsTarget? boundsTarget;
   // false면 핀끼리 겹쳐도 클러스터 버블로 뭉치지 않고 각자 그대로 그린다.
@@ -121,6 +149,8 @@ class KakaoMapView extends StatefulWidget {
     this.level = 4,
     this.markers = const [],
     this.onMarkerTap,
+    this.onMarkerSelected,
+    this.onMarkerSecondaryTap,
     this.myLocationLat,
     this.myLocationLng,
     this.onMapTap,
@@ -144,7 +174,8 @@ Future<void> _ensureKakaoSdkLoaded() {
   final appKey = dotenv.maybeGet('KAKAO_MAP_JS_KEY') ?? '';
   if (appKey.isEmpty) {
     final failed = Future<void>.error(
-      StateError('KAKAO_MAP_JS_KEY가 .env에 설정되어 있지 않습니다. coco_frontend/.env.example 참고.'),
+      StateError(
+          'KAKAO_MAP_JS_KEY가 .env에 설정되어 있지 않습니다. coco_frontend/.env.example 참고.'),
     );
     _kakaoSdkLoadFuture = failed;
     return failed;
@@ -189,15 +220,20 @@ class _KakaoMapViewState extends State<KakaoMapView> {
       setState(() => _mapReady = true);
       _updateMarkers();
       _updateMyLocation();
+      final initialBounds = widget.boundsTarget;
+      if (initialBounds != null) _fitBounds(initialBounds);
       final onMapTap = widget.onMapTap;
       if (onMapTap != null) {
-        void onClick(JSNumber lat, JSNumber lng) => onMapTap(lat.toDartDouble, lng.toDartDouble);
+        void onClick(JSNumber lat, JSNumber lng) =>
+            onMapTap(lat.toDartDouble, lng.toDartDouble);
         _cocoSetMapClickHandler(_divId.toJS, onClick.toJS);
       }
       final onBoundsChanged = widget.onBoundsChanged;
       if (onBoundsChanged != null) {
-        void onBounds(JSNumber swLat, JSNumber swLng, JSNumber neLat, JSNumber neLng) =>
-            onBoundsChanged(swLat.toDartDouble, swLng.toDartDouble, neLat.toDartDouble, neLng.toDartDouble);
+        void onBounds(JSNumber swLat, JSNumber swLng, JSNumber neLat,
+                JSNumber neLng) =>
+            onBoundsChanged(swLat.toDartDouble, swLng.toDartDouble,
+                neLat.toDartDouble, neLng.toDartDouble);
         _cocoSetBoundsChangedHandler(_divId.toJS, onBounds.toJS);
       }
     } catch (e) {
@@ -209,8 +245,10 @@ class _KakaoMapViewState extends State<KakaoMapView> {
   void didUpdateWidget(covariant KakaoMapView oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (!_mapReady) return;
-    if (oldWidget.centerLat != widget.centerLat || oldWidget.centerLng != widget.centerLng) {
-      _cocoSetKakaoCenter(_divId.toJS, widget.centerLat.toJS, widget.centerLng.toJS);
+    if (oldWidget.centerLat != widget.centerLat ||
+        oldWidget.centerLng != widget.centerLng) {
+      _cocoSetKakaoCenter(
+          _divId.toJS, widget.centerLat.toJS, widget.centerLng.toJS);
     }
     if (oldWidget.markers != widget.markers) {
       _updateMarkers();
@@ -226,6 +264,8 @@ class _KakaoMapViewState extends State<KakaoMapView> {
         'lng': focusTarget.lng,
         'name': focusTarget.name,
         'subtitle': focusTarget.subtitle,
+        'actionLabel': focusTarget.actionLabel,
+        'secondaryActionLabel': focusTarget.secondaryActionLabel,
       });
       _cocoFocusSpot(_divId.toJS, json.toJS);
     }
@@ -233,12 +273,10 @@ class _KakaoMapViewState extends State<KakaoMapView> {
     // identity(!=)로 "새 요청인지" 판단한다.
     final boundsTarget = widget.boundsTarget;
     if (boundsTarget != null && boundsTarget != oldWidget.boundsTarget) {
-      final pointsJson = jsonEncode(
-        boundsTarget.points.map((p) => {'lat': p.$1, 'lng': p.$2}).toList(),
-      );
-      _cocoFitKakaoBounds(_divId.toJS, pointsJson.toJS);
+      _fitBounds(boundsTarget);
     }
-    if (oldWidget.myLocationLat != widget.myLocationLat || oldWidget.myLocationLng != widget.myLocationLng) {
+    if (oldWidget.myLocationLat != widget.myLocationLat ||
+        oldWidget.myLocationLng != widget.myLocationLng) {
       _updateMyLocation();
     }
   }
@@ -258,12 +296,34 @@ class _KakaoMapViewState extends State<KakaoMapView> {
                 'subtitle': m.subtitle,
                 'isLocalPick': m.isLocalPick,
                 'trending': m.trending,
+                'alwaysShowLabel': m.alwaysShowLabel,
+                'actionLabel': m.actionLabel,
+                'secondaryActionLabel': m.secondaryActionLabel,
                 'order': m.order,
+                'compactOrder': m.compactOrder,
               })
           .toList(),
     );
     void onMarkerClick(JSString id) => widget.onMarkerTap?.call(id.toDart);
-    _cocoSetKakaoMarkers(_divId.toJS, markersJson.toJS, onMarkerClick.toJS);
+    void onMarkerSelected(JSString id) =>
+        widget.onMarkerSelected?.call(id.toDart);
+    void onMarkerSecondaryClick(JSString id) =>
+        widget.onMarkerSecondaryTap?.call(id.toDart);
+    _cocoSetKakaoMarkers(
+      _divId.toJS,
+      markersJson.toJS,
+      onMarkerClick.toJS,
+      onMarkerSelected.toJS,
+      onMarkerSecondaryClick.toJS,
+    );
+  }
+
+  void _fitBounds(MapBoundsTarget target) {
+    if (!_mapReady) return;
+    final pointsJson = jsonEncode(
+      target.points.map((p) => {'lat': p.$1, 'lng': p.$2}).toList(),
+    );
+    _cocoFitKakaoBounds(_divId.toJS, pointsJson.toJS);
   }
 
   void _updateMyLocation() {

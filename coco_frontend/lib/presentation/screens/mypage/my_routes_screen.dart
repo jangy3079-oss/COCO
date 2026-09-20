@@ -9,6 +9,7 @@ import '../../../core/theme/app_theme.dart';
 import '../../../l10n/generated/app_localizations.dart';
 import '../../widgets/map/kakao_map_view.dart';
 import '../map/map_mock_data.dart';
+import '../map/route_builder_screen.dart';
 
 /// "나의 골목지도"(찜한 스팟 전체를 보여주는 지도) / "코스"(내가 만든 코스) 통합 화면.
 /// MY탭 상단 모듈·메뉴에서 진입하며, initialTab으로 기본 탭을 정한다(상단 모듈은 골목지도,
@@ -30,6 +31,7 @@ class _MyRoutesScreenState extends State<MyRoutesScreen> {
   String? _expandedRouteId;
   final Map<String, _RouteViewMode> _viewModes = {};
   final TextEditingController _searchController = TextEditingController();
+  final List<MockSpot> _draftStops = [];
   String _query = '';
 
   @override
@@ -60,8 +62,16 @@ class _MyRoutesScreenState extends State<MyRoutesScreen> {
     });
   }
 
+  void _addDraftStop(MockSpot spot) {
+    if (_draftStops.any((saved) => saved.id == spot.id)) return;
+    setState(() => _draftStops.add(spot));
+  }
+
   Future<void> _createNew() async {
-    await context.push('/map/route/new');
+    if (_draftStops.isEmpty) return;
+    final initialStops = List<MockSpot>.of(_draftStops);
+    await context.push('/map/route/new', extra: initialStops);
+    _draftStops.clear();
     if (mounted) setState(() {});
   }
 
@@ -84,9 +94,6 @@ class _MyRoutesScreenState extends State<MyRoutesScreen> {
     final query = _query.trim();
 
     final likedSpots = savedSpots;
-    final filteredSpots = query.isEmpty
-        ? likedSpots
-        : likedSpots.where((s) => s.name.contains(query)).toList();
 
     final routes = mockMyRoutes;
     final filteredRoutes = query.isEmpty
@@ -95,86 +102,95 @@ class _MyRoutesScreenState extends State<MyRoutesScreen> {
 
     return Scaffold(
       backgroundColor: Colors.white,
-      floatingActionButton: PointerInterceptor(
-        child: FloatingActionButton.extended(
-          onPressed: _createNew,
-          backgroundColor: CocoTheme.primary,
-          foregroundColor: Colors.white,
-          elevation: 3,
-          label: Text(
-            l10n.myRoutesNewRouteButton,
-            style: const TextStyle(fontWeight: FontWeight.w700),
-          ),
-        ),
-      ),
       body: Stack(
         children: [
-          // 본문 — 골목지도 탭은 전체화면 지도, 코스 탭은 리스트. 둘 다 위에 블러 헤더가 뜬다.
+          // 두 탭을 항상 트리에 유지해 카카오 지도를 코스 탭에서도 미리 렌더링한다.
+          // 골목지도는 왼쪽, 코스는 오른쪽 페이지처럼 움직인다.
           Positioned.fill(
-            child: isAlley
-                ? (filteredSpots.isEmpty
-                    ? _EmptyLikedMap(onGoToMap: () => context.go('/map'))
-                    : Builder(builder: (context) {
-                        final center = spotsCenter(filteredSpots);
-                        return KakaoMapView(
-                          centerLat: center.$1,
-                          centerLng: center.$2,
-                          level: 6,
-                          markers: [
-                            for (final s in filteredSpots)
-                              KakaoMapMarker(
-                                  id: s.id,
-                                  lat: s.lat,
-                                  lng: s.lng,
-                                  name: s.name),
-                          ],
-                          onMarkerTap: (spotId) =>
-                              context.push('/map/spot/$spotId'),
-                        );
-                      }))
-                : (filteredRoutes.isEmpty
-                    ? Padding(
-                        padding: const EdgeInsets.only(top: 200),
-                        child: Center(
-                          child: Text(
-                            routes.isEmpty
-                                ? l10n.myRoutesEmptyCourseNone
-                                : l10n.myRoutesEmptySearchResult,
-                            textAlign: TextAlign.center,
-                            style: TextStyle(
-                                fontSize: 14,
-                                height: 1.7,
-                                color: Colors.grey.shade500),
-                          ),
+            child: Stack(
+              children: [
+                AnimatedSlide(
+                  offset: isAlley ? Offset.zero : const Offset(-1, 0),
+                  duration: const Duration(milliseconds: 380),
+                  curve: Curves.easeOutCubic,
+                  child: IgnorePointer(
+                    ignoring: !isAlley,
+                    child: Stack(
+                      children: [
+                        SavedSpotsCourseMap(
+                          query: isAlley ? _query : '',
+                          stops: _draftStops,
+                          onQueryChanged: (_) {},
+                          onAdd: _addDraftStop,
+                          onCreateCourse: _createNew,
+                          showHeader: false,
                         ),
-                      )
-                    : ListView(
-                        padding: const EdgeInsets.fromLTRB(20, 200, 20, 20),
-                        children: [
-                          for (final r in filteredRoutes) ...[
-                            _RouteCard(
-                              route: r,
-                              expanded: _expandedRouteId == r.id,
-                              viewMode: _viewModes[r.id] ?? _RouteViewMode.list,
-                              onToggleExpanded: () => setState(() {
-                                _expandedRouteId =
-                                    _expandedRouteId == r.id ? null : r.id;
-                              }),
-                              onViewModeChanged: (m) =>
-                                  setState(() => _viewModes[r.id] = m),
-                              onEdit: () => _editRoute(r),
-                              onViewOnMap: () =>
-                                  context.push('/map/route/preview', extra: {
-                                'name': r.name,
-                                'stops': r.stops,
-                                'routeId': r.id,
-                                'isOwner': true,
-                              }),
+                      ],
+                    ),
+                  ),
+                ),
+                AnimatedSlide(
+                  offset: isAlley ? const Offset(1, 0) : Offset.zero,
+                  duration: const Duration(milliseconds: 380),
+                  curve: Curves.easeOutCubic,
+                  child: IgnorePointer(
+                    ignoring: isAlley,
+                    child: ColoredBox(
+                      color: Colors.white,
+                      child: filteredRoutes.isEmpty
+                          ? Padding(
+                              padding: const EdgeInsets.only(top: 200),
+                              child: Center(
+                                child: Text(
+                                  routes.isEmpty
+                                      ? l10n.myRoutesEmptyCourseNone
+                                      : l10n.myRoutesEmptySearchResult,
+                                  textAlign: TextAlign.center,
+                                  style: TextStyle(
+                                      fontSize: 14,
+                                      height: 1.7,
+                                      color: Colors.grey.shade500),
+                                ),
+                              ),
+                            )
+                          : ListView(
+                              padding:
+                                  const EdgeInsets.fromLTRB(20, 200, 20, 20),
+                              children: [
+                                for (final r in filteredRoutes) ...[
+                                  _RouteCard(
+                                    route: r,
+                                    expanded: _expandedRouteId == r.id,
+                                    viewMode:
+                                        _viewModes[r.id] ?? _RouteViewMode.list,
+                                    onToggleExpanded: () => setState(() {
+                                      _expandedRouteId =
+                                          _expandedRouteId == r.id
+                                              ? null
+                                              : r.id;
+                                    }),
+                                    onViewModeChanged: (m) =>
+                                        setState(() => _viewModes[r.id] = m),
+                                    onEdit: () => _editRoute(r),
+                                    onViewOnMap: () => context.push(
+                                      '/map/route/preview',
+                                      extra: {
+                                        'name': r.name,
+                                        'stops': r.stops,
+                                        'routeId': r.id,
+                                        'isOwner': true,
+                                      },
+                                    ),
+                                  ),
+                                  const SizedBox(height: 12),
+                                ],
+                              ],
                             ),
-                            const SizedBox(height: 12),
-                          ],
-                        ],
-                      )),
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ),
           // 타이틀 자리에 탭 전환(나의 골목지도/코스) + 부제목 + 검색창 — 지도탭과 동일한
           // 블러 그라데이션 헤더. 카카오맵(HtmlElementView) 바로 위에 뜨는 인터랙티브
@@ -297,13 +313,16 @@ class _HeaderTabLabel extends StatelessWidget {
     return GestureDetector(
       onTap: onTap,
       behavior: HitTestBehavior.opaque,
-      child: Text(
-        label,
+      child: AnimatedDefaultTextStyle(
+        duration: const Duration(milliseconds: 260),
+        curve: Curves.easeOutCubic,
         style: TextStyle(
+          fontFamily: 'NotoSansKR',
           fontSize: 22,
           fontWeight: selected ? FontWeight.w800 : FontWeight.w600,
           color: selected ? CocoTheme.secondary : Colors.grey.shade400,
         ),
+        child: Text(label),
       ),
     );
   }
@@ -640,44 +659,11 @@ class _SegmentButton extends StatelessWidget {
           duration: const Duration(milliseconds: 180),
           curve: Curves.easeOut,
           style: TextStyle(
+              fontFamily: 'NotoSansKR',
               fontSize: 12,
               fontWeight: FontWeight.w600,
               color: selected ? Colors.white : CocoTheme.secondary),
           child: Text(label),
-        ),
-      ),
-    );
-  }
-}
-
-/// 골목지도 탭에서 찜한 스팟이 하나도 없을 때 보여주는 빈 상태.
-class _EmptyLikedMap extends StatelessWidget {
-  final VoidCallback onGoToMap;
-  const _EmptyLikedMap({required this.onGoToMap});
-
-  @override
-  Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context)!;
-    return Container(
-      color: const Color(0xFFEAE8E2),
-      alignment: Alignment.center,
-      child: Padding(
-        padding: const EdgeInsets.all(32),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(l10n.myPageMapCardEmpty,
-                style: TextStyle(fontSize: 14, color: Colors.grey.shade600)),
-            const SizedBox(height: 6),
-            Text(l10n.myMapEmptySubtitle,
-                style: TextStyle(fontSize: 13, color: Colors.grey.shade500)),
-            const SizedBox(height: 18),
-            FilledButton(
-              style: FilledButton.styleFrom(backgroundColor: CocoTheme.primary),
-              onPressed: onGoToMap,
-              child: Text(l10n.myMapGoToMapButton),
-            ),
-          ],
         ),
       ),
     );

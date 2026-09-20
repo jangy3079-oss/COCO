@@ -1,5 +1,7 @@
 // Spot 조회 — coco_backend GET /api/spot 연동.
 // (POST /api/spot/import는 TourAPI 수집용 관리자 트리거라 프론트에서 호출할 일 없음)
+import 'dart:typed_data';
+
 import 'package:dio/dio.dart';
 
 import '../../core/network/dio_client.dart';
@@ -97,5 +99,27 @@ class SpotRepository {
     return (response.data as List)
         .map((e) => Spot.fromJson(e as Map<String, dynamic>))
         .toList();
+  }
+
+  /// 정보가 부족한 스팟(설명/사진이 비어있는 경우, 주로 카카오 로컬 소스)에 사용자가
+  /// 소개글/사진을 채워 넣는다. description·imageBytes 중 하나만 보내도 되고,
+  /// 백엔드는 이미 값이 있는 필드는 덮어쓰지 않고 빈 필드만 채운다(요청서 Part 4).
+  /// 갱신된 스팟 전체를 GET /api/spot/{id}와 같은 모양으로 반환한다고 가정 —
+  /// 백엔드 응답 형태가 다르면 이 메서드만 맞춰 고치면 됨. 로그인 필요(401).
+  Future<Spot> enrichSpot(
+    int spotId, {
+    String? description,
+    Uint8List? imageBytes,
+    String imageFilename = 'photo.jpg',
+    String locale = 'ko',
+  }) async {
+    final trimmedDescription = description?.trim();
+    final formData = FormData.fromMap({
+      if (trimmedDescription != null && trimmedDescription.isNotEmpty) 'description': trimmedDescription,
+      if (imageBytes != null) 'image': MultipartFile.fromBytes(imageBytes, filename: imageFilename),
+      'locale': locale,
+    });
+    final response = await _dio.post('/api/spot/$spotId/enrich', data: formData);
+    return Spot.fromJson(response.data as Map<String, dynamic>);
   }
 }

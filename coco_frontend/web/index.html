@@ -56,6 +56,8 @@
     window.__cocoKakaoPolyline = {}; // divId -> 코스 순서 핀을 잇는 kakao.maps.Polyline (없으면 null)
     window.__cocoClusteringDisabled = {}; // divId -> true면 핀이 겹쳐도 뭉치지 않고 각자 그대로 그린다
     window.__cocoMarkerClickHandlers = {}; // divId -> onMarkerClick 콜백
+    window.__cocoMarkerSelectedHandlers = {}; // divId -> 말풍선을 연 마커 id 콜백
+    window.__cocoMarkerSecondaryHandlers = {}; // divId -> 말풍선의 두 번째 액션 콜백
     window.__cocoBoundsChangedHandlers = {}; // divId -> onBoundsChanged 콜백 (뷰포트 쿼리용)
     window.__cocoKakaoLoadPromise = null;
     window.__cocoKakaoCallout = {}; // divId -> 현재 열려있는 핀 정보 말풍선(CustomOverlay), 없으면 null
@@ -72,7 +74,14 @@
         '82% { transform: scale(0.99); }' +
         '100% { transform: scale(1); opacity: 1; }' +
         '}' +
-        '.coco-pop-in { transform-origin: 50% 100%; animation: cocoPopIn 0.28s cubic-bezier(0.34, 1.2, 0.64, 1) both; }';
+        '@keyframes cocoPinAdded {' +
+        '0% { transform: scale(0.72); background:#2F8FE0; }' +
+        '58% { transform: scale(1.2); background:#FF7A33; }' +
+        '78% { transform: scale(0.96); background:#FF7A33; }' +
+        '100% { transform: scale(1); background:#FF7A33; }' +
+        '}' +
+        '.coco-pop-in { transform-origin: 50% 100%; animation: cocoPopIn 0.28s cubic-bezier(0.34, 1.2, 0.64, 1) both; }' +
+        '.coco-pin-added { transform-origin:center; animation:cocoPinAdded 0.46s cubic-bezier(0.34,1.3,0.64,1) both; }';
       document.head.appendChild(style);
     })();
 
@@ -120,7 +129,7 @@
       }
 
       var detailBtn = document.createElement('div');
-      detailBtn.textContent = '자세히 보기 ›';
+      detailBtn.textContent = m.actionLabel || '자세히 보기 ›';
       detailBtn.style.cssText = 'font-size:12px;font-weight:700;color:#2F8FE0;cursor:pointer;';
       detailBtn.addEventListener('click', function (e) {
         e.stopPropagation();
@@ -128,6 +137,21 @@
         if (onMarkerClick) onMarkerClick(m.id);
       });
       card.appendChild(detailBtn);
+
+      if (m.secondaryActionLabel) {
+        var secondaryBtn = document.createElement('div');
+        secondaryBtn.textContent = m.secondaryActionLabel;
+        secondaryBtn.style.cssText =
+          'font-size:12px;font-weight:700;color:#FF7A33;cursor:pointer;margin-top:7px;padding-top:7px;' +
+          'border-top:1px solid #EEF0F2;';
+        secondaryBtn.addEventListener('click', function (e) {
+          e.stopPropagation();
+          cocoHideCallout(divId);
+          var handler = window.__cocoMarkerSecondaryHandlers[divId];
+          if (handler) handler(m.id);
+        });
+        card.appendChild(secondaryBtn);
+      }
 
       pop.appendChild(card);
 
@@ -167,6 +191,8 @@
     // 혹시 이미 그 핀이 중심이라 panTo가 아무 것도 안 움직여서 idle이 안 오는
     // 경우를 대비해 타임아웃 폴백도 같이 둔다.
     function cocoShowCalloutAfterPan(divId, map, m, onMarkerClick) {
+      var onMarkerSelected = window.__cocoMarkerSelectedHandlers[divId];
+      if (onMarkerSelected) onMarkerSelected(m.id);
       var shown = false;
       function showOnce() {
         if (shown) return;
@@ -195,6 +221,7 @@
 
     function cocoPinRadiusPx(m) {
       var hasOrder = m.order !== null && m.order !== undefined;
+      if (hasOrder && m.compactOrder) return 8;
       return (hasOrder || m.trending || m.isLocalPick ? COCO_BIG_PIN_PX : COCO_SMALL_PIN_PX) / 2;
     }
 
@@ -250,6 +277,11 @@
         for (var i = 0; i < nodes.length; i++) {
           for (var j = i + 1; j < nodes.length; j++) {
             var a = nodes[i], b = nodes[j];
+            // 코스에 담긴 순서 핀은 일반 핀이나 클러스터에 흡수하지 않는다.
+            // 주변 일반 핀끼리는 기존처럼 묶되 주황 핀과 연결선은 항상 보이게 한다.
+            var aHasOrder = a.members.some(function (m) { return m.order !== null && m.order !== undefined; });
+            var bHasOrder = b.members.some(function (m) { return m.order !== null && m.order !== undefined; });
+            if (aHasOrder || bHasOrder) continue;
             var dx = a.x - b.x, dy = a.y - b.y;
             var dist = Math.sqrt(dx * dx + dy * dy);
             if (dist < radiusOf(a) + radiusOf(b) + COCO_OVERLAP_SLACK_PX) {
@@ -302,9 +334,12 @@
         // 색은 로컬 픽/코스 순서 핀일 때만 강조색(주황) — trending만 있는 건
         // "큰 점"(색은 기본), 아무것도 없으면 "작은 점".
         var isBig = hasOrder || m.trending || m.isLocalPick;
-        var scale = shrinkScale || 1;
-        var size = (isBig ? COCO_BIG_PIN_PX : COCO_SMALL_PIN_PX) * scale;
-        var borderWidth = (isBig ? 3 : 2) * scale; // 점이 워낙 작아져서 두꺼운 테두리는 비율이 안 맞음
+        var compactOrder = hasOrder && m.compactOrder;
+        var scale = compactOrder ? 1 : (shrinkScale || 1);
+        // 코스 제작 지도에서는 담기 전 8px 파란 핀보다 큰 16px 주황 핀을 쓴다.
+        // 일반 코스 상세의 순서 핀 크기 정책은 기존 값을 그대로 유지한다.
+        var size = compactOrder ? 16 : (isBig ? COCO_BIG_PIN_PX : COCO_SMALL_PIN_PX) * scale;
+        var borderWidth = compactOrder ? 2 : (isBig ? 3 : 2) * scale;
         var color = (hasOrder || m.isLocalPick) ? '#FF7A33' : '#2F8FE0';
         var pin = document.createElement('div');
         pin.style.cssText =
@@ -312,9 +347,10 @@
           'border:' + borderWidth + 'px solid #fff;box-shadow:0 2px 6px rgba(0,0,0,0.35);cursor:pointer;' +
           (hasOrder
             ? 'display:flex;align-items:center;justify-content:center;color:#fff;' +
-              'font-family:NotoSansKR,sans-serif;font-weight:800;font-size:' + (11 * scale) + 'px;line-height:1;'
+              'font-family:NotoSansKR,sans-serif;font-weight:800;font-size:' + (compactOrder ? 8 : 11 * scale) + 'px;line-height:1;'
             : '');
         if (hasOrder) pin.textContent = String(m.order);
+        if (m.justAdded) pin.classList.add('coco-pin-added');
         // 바로 이동하지 않고, 지도를 이 핀 중심으로 부드럽게 옮긴 뒤 이름/카테고리
         // 말풍선을 띄운다 — "자세히 보기"를 한 번 더 눌러야 실제 onMarkerClick(상세
         // 화면 이동)이 호출된다.
@@ -330,7 +366,7 @@
 
         // 이름 태그는 로컬 픽/인기 핀처럼 눈에 띄어야 하는 것만 보여준다 — 평범한 스팟까지
         // 다 이름표를 달면 지도가 너무 복잡해 보여서, 작은 점은 이름 없이 점만 찍는다.
-        if (m.name && isBig) {
+        if (m.name && (isBig || m.alwaysShowLabel)) {
           var tag = document.createElement('div');
           tag.textContent = m.name;
           tag.style.cssText =
@@ -403,6 +439,8 @@
         polyline.setMap(map);
         window.__cocoKakaoPolyline[divId] = polyline;
       }
+      // 줌/이동으로 같은 마커를 다시 그릴 때 추가 애니메이션이 반복되지 않게 한다.
+      raw.forEach(function (m) { m.justAdded = false; });
     }
 
     window.cocoLoadKakaoSdk = function (appKey) {
@@ -458,11 +496,24 @@
       });
     };
 
-    window.cocoSetKakaoMarkers = function (divId, markersJson, onMarkerClick) {
+    window.cocoSetKakaoMarkers = function (divId, markersJson, onMarkerClick, onMarkerSelected, onMarkerSecondaryClick) {
       var map = window.__cocoKakaoMaps[divId];
       if (!map) return;
-      window.__cocoKakaoMarkersRaw[divId] = JSON.parse(markersJson);
+      var previous = window.__cocoKakaoMarkersRaw[divId];
+      var hadPrevious = Array.isArray(previous);
+      var previousOrderedIds = {};
+      (previous || []).forEach(function (m) {
+        if (m.order !== null && m.order !== undefined) previousOrderedIds[m.id] = true;
+      });
+      var next = JSON.parse(markersJson);
+      next.forEach(function (m) {
+        var hasOrder = m.order !== null && m.order !== undefined;
+        m.justAdded = hadPrevious && hasOrder && !previousOrderedIds[m.id];
+      });
+      window.__cocoKakaoMarkersRaw[divId] = next;
       window.__cocoMarkerClickHandlers[divId] = onMarkerClick;
+      window.__cocoMarkerSelectedHandlers[divId] = onMarkerSelected;
+      window.__cocoMarkerSecondaryHandlers[divId] = onMarkerSecondaryClick;
       cocoRenderClusters(divId);
     };
 

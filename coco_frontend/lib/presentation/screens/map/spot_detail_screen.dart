@@ -1,10 +1,14 @@
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 import '../../../core/locale/locale_controller.dart';
 import '../../../core/network/dio_client.dart';
 import '../../../core/network/login_guard.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../data/models/spot.dart' as db;
 import '../../../data/repositories/spot_repository.dart';
 import '../../../l10n/generated/app_localizations.dart';
 import 'map_mock_data.dart';
@@ -73,9 +77,12 @@ class _SpotDetailScreenState extends State<SpotDetailScreen> {
     if (dbSpotCache.containsKey(widget.spotId)) {
       final cached = dbSpotCache[widget.spotId]!;
       _loadRelatedSpots(cached);
-      if (cached.images.isEmpty) {
-        _refreshImagesInBackground();
-      }
+      // dbSpotCache는 스팟 id로만 캐싱돼 있어 locale이나 서버 번역 갱신을 못 따라간다
+      // — 다른 화면(지도 뷰포트·찜 목록·연관 스팟 등)이 이 스팟을 다른 언어로 먼저
+      // 캐싱해뒀거나, 세션 도중 서버에서 설명 번역이 새로 채워졌을 수 있다. 그래서
+      // 캐시 히트여도 항상 백그라운드에서 한 번 더 조회해 다르면 조용히 교체한다 —
+      // 사용자는 캐시된 내용을 먼저 보고, 잠깐 뒤 최신 내용으로 자연스럽게 갱신된다.
+      _refreshSpotInBackground();
     } else {
       _loadDbSpot();
     }
@@ -84,9 +91,7 @@ class _SpotDetailScreenState extends State<SpotDetailScreen> {
     refreshLikedSpots(locale: context.read<LocaleController>().locale.languageCode);
   }
 
-  // 지도/목록에서 캐시된 스팟은 images가 항상 비어있어서, 상세 화면에 들어왔을
-  // 때만 단건 조회로 캐러셀 이미지를 조용히 보강한다.
-  Future<void> _refreshImagesInBackground() async {
+  Future<void> _refreshSpotInBackground() async {
     final numId = dbSpotNumericId(widget.spotId);
     if (numId == null) return;
     try {
@@ -94,12 +99,12 @@ class _SpotDetailScreenState extends State<SpotDetailScreen> {
         numId,
         locale: context.read<LocaleController>().locale.languageCode,
       );
-      if (!mounted || fresh == null || fresh.images.isEmpty) return;
+      if (!mounted || fresh == null) return;
       final updated = mockSpotFromDb(fresh);
       dbSpotCache[widget.spotId] = updated;
       setState(() {});
     } catch (e) {
-      debugPrint('[SpotDetailScreen] 이미지 보강 조회 실패: $e');
+      debugPrint('[SpotDetailScreen] 스팟 갱신 조회 실패: $e');
     }
   }
 
@@ -196,6 +201,34 @@ class _SpotDetailScreenState extends State<SpotDetailScreen> {
     }
   }
 
+  // "정보 추가" 버튼 노출 조건 — 소개글/사진 중 하나라도 없으면 뜬다. 데모 스팟은
+  // 백엔드 행 자체가 없어 대상이 아니다.
+  bool _missingDescription(MockSpot spot) => !spot.hasDescription;
+  bool _missingPhoto(MockSpot spot) => spot.imageUrl.trim().isEmpty && spot.images.isEmpty;
+  bool _needsInfo(MockSpot spot) =>
+      dbSpotNumericId(widget.spotId) != null && (_missingDescription(spot) || _missingPhoto(spot));
+
+  Future<void> _openEnrichSheet(MockSpot spot) async {
+    if (!requireLogin(context)) return;
+    final numId = dbSpotNumericId(widget.spotId);
+    if (numId == null) return;
+    await showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (_) => _SpotEnrichSheet(
+        spotId: numId,
+        needsDescription: _missingDescription(spot),
+        needsPhoto: _missingPhoto(spot),
+        onSaved: (updated) {
+          if (!mounted) return;
+          setState(() => dbSpotCache[widget.spotId] = mockSpotFromDb(updated));
+        },
+      ),
+    );
+  }
+
   MockSpot? get _spot => dbSpotCache[widget.spotId];
 
   @override
@@ -280,6 +313,14 @@ class _SpotDetailScreenState extends State<SpotDetailScreen> {
                   ),
                   const SizedBox(height: 18),
                   if (spot.description.trim().isNotEmpty) _ExpandableDescription(text: spot.description),
+                  if (_needsInfo(spot)) ...[
+                    const SizedBox(height: 12),
+                    _EnrichPrompt(
+                      missingDescription: _missingDescription(spot),
+                      missingPhoto: _missingPhoto(spot),
+                      onTap: () => _openEnrichSheet(spot),
+                    ),
+                  ],
                   const SizedBox(height: 24),
                   const Text(
                     '이런 스팟은 어때요',
@@ -290,7 +331,10 @@ class _SpotDetailScreenState extends State<SpotDetailScreen> {
               ),
             ),
             SizedBox(
-              height: 132,
+              // 148 — 영어/일본어 스팟명은 140짜리 카드 폭에서 두 줄로 줄바꿈될 때가
+              // 많아서(예: "Busan Opera House"), 한 줄 기준(132)으로는 넘쳤다. 이름
+              // 두 줄 + 부제 한 줄까지 들어가도록 여유를 뒀다.
+              height: 148,
               child: ListView.separated(
                 scrollDirection: Axis.horizontal,
                 padding: const EdgeInsets.only(left: 20, right: 20),
@@ -658,6 +702,7 @@ class _RelatedSpotCard extends StatelessWidget {
         width: 140,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
           children: [
             Container(
               width: 140,
@@ -670,10 +715,220 @@ class _RelatedSpotCard extends StatelessWidget {
               child: Icon(spot.icon, color: spot.pinColor.withOpacity(0.5), size: 24),
             ),
             const SizedBox(height: 6),
-            Text(spot.name, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: CocoTheme.secondary)),
-            Text(spot.subtitle, style: TextStyle(fontSize: 11, color: Colors.grey.shade600)),
+            // 영어/일본어 스팟명은 두 줄로 줄바꿈될 수 있어 maxLines로 높이를 예측
+            // 가능하게 막고, 그 이상은 말줄임표로 자른다(overflow 방지).
+            Text(
+              spot.name,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: CocoTheme.secondary, height: 1.2),
+            ),
+            const SizedBox(height: 2),
+            Text(
+              spot.subtitle,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(fontSize: 11, color: Colors.grey.shade600),
+            ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+// 소개글/사진 중 하나라도 비어있는 스팟(주로 카카오 로컬 소스) 상세에 뜨는 배너.
+// 탭하면 _SpotEnrichSheet가 열린다.
+class _EnrichPrompt extends StatelessWidget {
+  final bool missingDescription;
+  final bool missingPhoto;
+  final VoidCallback onTap;
+
+  const _EnrichPrompt({
+    required this.missingDescription,
+    required this.missingPhoto,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final label = missingDescription && missingPhoto
+        ? '이 장소의 소개글과 사진이 아직 없어요'
+        : missingDescription
+            ? '이 장소의 소개글이 아직 없어요'
+            : '이 장소의 사진이 아직 없어요';
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        decoration: BoxDecoration(color: const Color(0xFFF4F8FC), borderRadius: BorderRadius.circular(12)),
+        child: Row(
+          children: [
+            const Icon(Icons.edit_note_rounded, size: 20, color: CocoTheme.primary),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(label, style: TextStyle(fontSize: 13, color: Colors.grey.shade700)),
+            ),
+            const Text('정보 추가', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: CocoTheme.primary)),
+            const Icon(Icons.chevron_right_rounded, size: 18, color: CocoTheme.primary),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// "정보 추가" 입력 폼 — 빈 필드만 골라서 보여준다(이미 값이 있는 소개글/사진은 다시
+// 안 묻는다, 백엔드도 빈 필드만 채우기로 합의됨). description·사진 중 하나만 채워도
+// 제출 가능.
+class _SpotEnrichSheet extends StatefulWidget {
+  final int spotId;
+  final bool needsDescription;
+  final bool needsPhoto;
+  final ValueChanged<db.Spot> onSaved;
+
+  const _SpotEnrichSheet({
+    required this.spotId,
+    required this.needsDescription,
+    required this.needsPhoto,
+    required this.onSaved,
+  });
+
+  @override
+  State<_SpotEnrichSheet> createState() => _SpotEnrichSheetState();
+}
+
+class _SpotEnrichSheetState extends State<_SpotEnrichSheet> {
+  final _descController = TextEditingController();
+  final _spotRepository = SpotRepository();
+  Uint8List? _imageBytes;
+  bool _submitting = false;
+
+  bool get _canSubmit {
+    if (_submitting) return false;
+    final descFilled = widget.needsDescription && _descController.text.trim().isNotEmpty;
+    final photoFilled = widget.needsPhoto && _imageBytes != null;
+    return descFilled || photoFilled;
+  }
+
+  @override
+  void dispose() {
+    _descController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _pickImage() async {
+    final picked = await ImagePicker().pickImage(source: ImageSource.gallery, imageQuality: 85);
+    if (picked == null) return;
+    final bytes = await picked.readAsBytes();
+    if (!mounted) return;
+    setState(() => _imageBytes = bytes);
+  }
+
+  Future<void> _submit() async {
+    if (!_canSubmit) return;
+    setState(() => _submitting = true);
+    try {
+      final updated = await _spotRepository.enrichSpot(
+        widget.spotId,
+        description: widget.needsDescription ? _descController.text : null,
+        imageBytes: widget.needsPhoto ? _imageBytes : null,
+        locale: context.read<LocaleController>().locale.languageCode,
+      );
+      if (!mounted) return;
+      widget.onSaved(updated);
+      Navigator.of(context).pop();
+    } catch (e) {
+      debugPrint('[SpotEnrichSheet] 정보 추가 실패: $e');
+      if (!mounted) return;
+      setState(() => _submitting = false);
+      if (isUnauthorized(e)) {
+        requireLogin(context);
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('정보 추가에 실패했어요')),
+        );
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: EdgeInsets.only(
+        left: 20,
+        right: 20,
+        top: 20,
+        bottom: MediaQuery.of(context).viewInsets.bottom + 20,
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text('정보 추가하기', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700, color: CocoTheme.secondary)),
+          const SizedBox(height: 6),
+          Text('다른 사람들에게 도움이 되는 정보를 채워주세요', style: TextStyle(fontSize: 12, color: Colors.grey.shade500)),
+          const SizedBox(height: 16),
+          if (widget.needsPhoto) ...[
+            GestureDetector(
+              onTap: _pickImage,
+              child: Container(
+                width: double.infinity,
+                height: 140,
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(12),
+                  color: const Color(0xFFF8F8F8),
+                  border: Border.all(color: Colors.grey.shade300),
+                ),
+                child: _imageBytes == null
+                    ? Center(
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(Icons.add_a_photo_outlined, color: Colors.grey.shade400, size: 26),
+                            const SizedBox(height: 6),
+                            Text('사진 추가(선택)', style: TextStyle(fontSize: 12, color: Colors.grey.shade500)),
+                          ],
+                        ),
+                      )
+                    : ClipRRect(
+                        borderRadius: BorderRadius.circular(12),
+                        child: Image.memory(_imageBytes!, fit: BoxFit.cover, width: double.infinity),
+                      ),
+              ),
+            ),
+            const SizedBox(height: 14),
+          ],
+          if (widget.needsDescription)
+            TextField(
+              controller: _descController,
+              onChanged: (_) => setState(() {}),
+              maxLines: 4,
+              maxLength: 300,
+              decoration: InputDecoration(
+                hintText: '이 장소에 대해 소개해주세요',
+                filled: true,
+                fillColor: const Color(0xFFF8F8F8),
+                contentPadding: const EdgeInsets.all(14),
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: Colors.grey.shade300)),
+                enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: Colors.grey.shade300)),
+              ),
+            ),
+          const SizedBox(height: 16),
+          FilledButton(
+            style: FilledButton.styleFrom(
+              backgroundColor: _canSubmit ? CocoTheme.primary : Colors.black.withOpacity(0.2),
+              minimumSize: const Size.fromHeight(52),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+            ),
+            onPressed: _canSubmit ? _submit : null,
+            child: Text(
+              _submitting ? '등록 중...' : '등록하기',
+              style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
+            ),
+          ),
+        ],
       ),
     );
   }

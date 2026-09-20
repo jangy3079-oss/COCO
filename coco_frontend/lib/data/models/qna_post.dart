@@ -2,6 +2,10 @@
 // QnaPostDetailResponse와 1:1 매칭.
 import '../../core/utils/backend_datetime.dart';
 
+// SOS 질문 마커 — 별도 백엔드 컬럼 없이 title 앞에 이 문자열을 붙여서 저장하고,
+// 프론트가 이걸 보고 배지 표시 + 목록 상단 고정을 한다(QnaComposerScreen에서 작성).
+const String qnaSosMarker = '[SOS] ';
+
 class QnaPost {
   final int id;
   final String userNickname;
@@ -26,6 +30,12 @@ class QnaPost {
   });
 
   bool get solved => adoptedAnswerId != null;
+
+  // SOS 기능 — 백엔드 스키마 변경 없이(별도 컬럼 추가 없이) title 앞에 마커를
+  // 붙여서 표시한다. 같은 앱을 쓰는 모든 사용자가 동일하게 파싱하므로, 마커가
+  // 실제로 서버에 저장된 title에 들어있는 한 목록/정렬에 일관되게 반영된다.
+  bool get isSos => title.startsWith(qnaSosMarker);
+  String get displayTitle => isSos ? title.substring(qnaSosMarker.length) : title;
 
   factory QnaPost.fromJson(Map<String, dynamic> json) => QnaPost(
         id: json['id'] as int,

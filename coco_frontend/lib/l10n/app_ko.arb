@@ -198,6 +198,8 @@
   "qnaComposerBodyHint": "이 동네에 대해 궁금한 걸 물어보세요",
   "qnaComposerSpotTagLabel": "장소 태그",
   "qnaComposerOptionalLabel": "선택",
+  "qnaComposerSosToggleLabel": "SOS로 올리기",
+  "qnaComposerSosToggleHint": "위급 상황이면 커뮤니티 맨 위에 강조돼서 보여요",
   "qnaComposerLanguageNoticePrefix": "이 질문은 ",
   "qnaComposerLanguageNoticeLang": "한국어",
   "qnaComposerLanguageNoticeSuffix": "로 게시돼요. 로컬 주민이 가능하면 같은 언어로 답변해요.",
@@ -308,6 +310,7 @@
   "myRoutesCourseDetailButton": "코스 상세",
   "myRoutesVisibilityPublic": "전체 공유",
   "myRoutesNewRouteButton": "+ 새 코스 만들기",
+  "myRoutesCreateCourseButton": "코스 만들기",
 
   "profileEditSaveButton": "저장",
   "profileEditChangePhotoButton": "사진 변경",
@@ -343,6 +346,16 @@
   },
   "mapSaveCourseButton": "코스 저장하기",
   "mapSaveCourseEmptyWarning": "담고 싶은 스팟을 먼저 북마크해주세요",
+  "mapPopupDetailAction": "자세히 보기 ›",
+  "mapQuickCourseAction": "찜하고 코스 만들기 +",
+  "mapQuickCourseAddedAction": "코스에 담김 ✓",
+  "mapQuickCourseRemoveAction": "찜·코스 취소",
+  "mapQuickCourseBanner": "코스 만드는 중 · {count}곳",
+  "@mapQuickCourseBanner": {
+    "placeholders": { "count": { "type": "int" } }
+  },
+  "mapNearbyEmptyTitle": "이 주변에는 아직 스팟이 없어요",
+  "mapNearbyEmptySubtitle": "지도를 움직이거나 다른 카테고리를 선택해보세요",
   "mapCategoryAll": "지도",
   "mapCategoryOldStore": "노포",
   "mapCategoryAlley": "골목",
@@ -377,6 +390,11 @@
     "placeholders": { "count": { "type": "int" } }
   },
   "routeBuilderEmptyMiniMap": "스팟을 추가하면 경로가 표시돼요",
+  "routeBuilderSavedMapTitle": "나의 골목지도",
+  "routeBuilderLikedSpotsTitle": "나의 찜한 스팟",
+  "routeBuilderTapPinHint": "핀을 눌러 위치를 확인하고 바로 담아보세요",
+  "routeBuilderAddAction": "담기 +",
+  "routeBuilderAddedAction": "담김 ✓",
 
   "routePreviewStats": "{count}개 스팟 · {km}km · 약 {min}분",
   "@routePreviewStats": {

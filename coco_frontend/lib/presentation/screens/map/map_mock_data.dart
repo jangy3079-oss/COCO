@@ -28,6 +28,10 @@ class MockSpot {
   // 사진으로 쓴다 — 사진이 없는 스팟(카카오 로컬 소스 등)은 빈 문자열.
   final String imageUrl;
   final List<String> images;
+  // description은 실제 값이 없으면 안내 문구("아직 등록된 소개글이 없어요.")로
+  // 채워지므로, description.isEmpty만으로는 "진짜 채워야 하는 스팟"을 구분할 수
+  // 없다 — 스팟 상세의 "정보 추가" 버튼 노출 여부는 이 필드로 판단한다.
+  final bool hasDescription;
 
   const MockSpot({
     required this.id,
@@ -43,6 +47,7 @@ class MockSpot {
     required this.lng,
     this.imageUrl = '',
     this.images = const [],
+    this.hasDescription = true,
   });
 
   Color get pinColor => switch (category) {
@@ -232,6 +237,7 @@ double _clamp01(double v) => v < 0.05 ? 0.05 : (v > 0.95 ? 0.95 : v);
 /// 접두어를 보고 실제 백엔드 정수 id를 뽑아낸다).
 /// (설명/부제/동네 이름처럼 백엔드가 아직 안 주는 필드는 최소한의 문구로 채운다.)
 MockSpot mockSpotFromDb(db.Spot spot) {
+  final hasDescription = spot.description?.trim().isNotEmpty == true;
   return MockSpot(
     id: 'db-${spot.id}',
     name: spot.title,
@@ -240,9 +246,8 @@ MockSpot mockSpotFromDb(db.Spot spot) {
     address: spot.address,
     // TourAPI 소스는 실제 소개글(overview)이 있지만, 카카오 로컬 소스는 API 자체에
     // 소개글 필드가 없어 null로 온다 — 그 경우만 안내 문구로 대체한다.
-    description: spot.description?.trim().isNotEmpty == true
-        ? spot.description!
-        : '아직 등록된 소개글이 없어요.',
+    description: hasDescription ? spot.description! : '아직 등록된 소개글이 없어요.',
+    hasDescription: hasDescription,
     dong: '',
     left: _clamp01((spot.lng - _dbLngMin) / (_dbLngMax - _dbLngMin)),
     top: _clamp01((_dbLatMax - spot.lat) / (_dbLatMax - _dbLatMin)), // 위도가 높을수록(북쪽) top은 작아짐

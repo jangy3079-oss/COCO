@@ -6,6 +6,7 @@ import 'package:provider/provider.dart';
 import '../../../core/locale/locale_controller.dart';
 import '../../../core/network/login_guard.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../data/models/qna_post.dart' show qnaSosMarker;
 import '../../../data/models/spot.dart';
 import '../../../data/repositories/qna_repository.dart';
 import '../../../data/repositories/spot_repository.dart';
@@ -35,6 +36,7 @@ class _QnaComposerScreenState extends State<QnaComposerScreen> {
   bool _spotSearching = false;
   Timer? _spotSearchDebounce;
   bool _submitting = false;
+  bool _isSos = false;
 
   bool get _canSubmit =>
       _titleController.text.trim().isNotEmpty &&
@@ -100,8 +102,9 @@ class _QnaComposerScreenState extends State<QnaComposerScreen> {
 
     setState(() => _submitting = true);
     try {
+      final title = _titleController.text.trim();
       await _qnaRepository.createPost(
-        title: _titleController.text.trim(),
+        title: _isSos ? '$qnaSosMarker$title' : title,
         content: _bodyController.text.trim(),
         spotId: _selectedSpot?.id,
         locale: context.read<LocaleController>().locale.languageCode,
@@ -308,6 +311,64 @@ class _QnaComposerScreenState extends State<QnaComposerScreen> {
                         ),
                       ),
                     const SizedBox(height: 20),
+                    // SOS 토글 — 켠 채로 올리면 title 앞에 마커를 붙여서 커뮤니티
+                    // 목록(qna_screen.dart)에서 배지 표시 + 맨 위 고정이 되게 한다.
+                    InkWell(
+                      onTap: () => setState(() => _isSos = !_isSos),
+                      borderRadius: BorderRadius.circular(12),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 14, vertical: 12),
+                        decoration: BoxDecoration(
+                          color: _isSos
+                              ? const Color(0xFFFFEBEE)
+                              : const Color(0xFFF8F8F8),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(
+                            color: _isSos
+                                ? const Color(0xFFE53935)
+                                : Colors.grey.shade300,
+                          ),
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(Icons.warning_amber_rounded,
+                                size: 20,
+                                color: _isSos
+                                    ? const Color(0xFFE53935)
+                                    : Colors.grey.shade500),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(l10n.qnaComposerSosToggleLabel,
+                                      style: TextStyle(
+                                          fontSize: 14,
+                                          fontWeight: FontWeight.w700,
+                                          color: _isSos
+                                              ? const Color(0xFFE53935)
+                                              : CocoTheme.secondary)),
+                                  if (_isSos) ...[
+                                    const SizedBox(height: 2),
+                                    Text(l10n.qnaComposerSosToggleHint,
+                                        style: TextStyle(
+                                            fontSize: 11.5,
+                                            color: Colors.grey.shade600)),
+                                  ],
+                                ],
+                              ),
+                            ),
+                            Switch(
+                              value: _isSos,
+                              activeColor: const Color(0xFFE53935),
+                              onChanged: (v) => setState(() => _isSos = v),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 14),
                     Container(
                       padding: const EdgeInsets.symmetric(
                           horizontal: 14, vertical: 12),

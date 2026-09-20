@@ -73,6 +73,10 @@ class _MapScreenState extends State<MapScreen> {
   // 검색 결과 탭 등으로 특정 스팟에 확대+이동+말풍선을 한 번에 요청할 때 쓴다.
   // _openSearchResult에서 매번 새 인스턴스를 만들어 넣는다.
   MapFocusTarget? _focusTarget;
+  String? _selectedSpotId;
+  // 지도에서 바로 만드는 임시 코스. 담긴 순서가 곧 코스 순서이며, 이 목록을
+  // 마커의 order로 넘겨 주황 핀과 연결선을 즉시 갱신한다.
+  final List<MockSpot> _quickRouteSpots = [];
   // 코스 필터 진입 시, 그 코스의 스팟들이 전부 화면에 들어오도록 카메라를 맞추는 요청.
   // _onCourseFilterChanged에서 매번 새 인스턴스를 만들어 넣는다.
   MapBoundsTarget? _boundsTarget;
@@ -90,7 +94,8 @@ class _MapScreenState extends State<MapScreen> {
   List<db.Spot> _dbSpots = [];
   int _dbSpotsRequestSeq = 0; // 마지막으로 보낸 뷰포트 조회 순번 — 응답이 늦게 와도 최신 것만 반영하기 위함
 
-  void _onBoundsChanged(double swLat, double swLng, double neLat, double neLng) {
+  void _onBoundsChanged(
+      double swLat, double swLng, double neLat, double neLng) {
     // 카카오맵 idle 이벤트가 (예: setCenter 직후) 동기적으로 곧바로 발생하면, 이 콜백이
     // Flutter의 build/didUpdateWidget 처리 도중에 재진입해서 "setState() called during
     // build" 예외가 난다 — 검색 결과 탭 시 지도 recenter는 되는데 핀이 안 갱신되던 원인.
@@ -150,7 +155,9 @@ class _MapScreenState extends State<MapScreen> {
             );
       if (!mounted || requestSeq != _dbSpotsRequestSeq) return;
       final filtered = isAlleyFilter
-          ? spots.where((s) => s.category == '골목' || s.title.contains('골목')).toList()
+          ? spots
+              .where((s) => s.category == '골목' || s.title.contains('골목'))
+              .toList()
           : spots;
       setState(() => _dbSpots = filtered);
       // 코스 저장 등 다른 화면에서도 id만으로 이 스팟들을 다시 찾을 수 있게 캐싱.
@@ -185,7 +192,9 @@ class _MapScreenState extends State<MapScreen> {
     if (courseMapFilter.value != null) _onCourseFilterChanged();
     // 지도 탭이 찜 버튼(하트)을 가장 먼저 보여주는 화면이라, 여기서도 한 번 실제
     // 찜 목록을 채워둔다(likedSpotIds가 비어있으면 전부 안 찜한 것처럼 보이므로).
-    refreshLikedSpots(locale: context.read<LocaleController>().locale.languageCode).then((_) {
+    refreshLikedSpots(
+            locale: context.read<LocaleController>().locale.languageCode)
+        .then((_) {
       if (mounted) setState(() {});
     });
   }
@@ -273,12 +282,17 @@ class _MapScreenState extends State<MapScreen> {
       // 검색 결과는 현재 뷰포트 조회 결과에 아직 없을 수 있다. 카메라 이동과
       // 동시에 이 스팟을 마커 목록에 넣어 말풍선만 있고 핀은 없는 상태를 막는다.
       if (searchedDbSpot != null) _dbSpots = [searchedDbSpot];
+      _selectedSpotId = spot.id;
       _focusTarget = MapFocusTarget(
         id: spot.id,
         lat: spot.lat,
         lng: spot.lng,
         name: spot.name,
         subtitle: _categoryLabel(spot.category, AppLocalizations.of(context)!),
+        actionLabel: AppLocalizations.of(context)!.mapPopupDetailAction,
+        secondaryActionLabel: _quickRouteOrder(spot.id) == null
+            ? AppLocalizations.of(context)!.mapQuickCourseAction
+            : AppLocalizations.of(context)!.mapQuickCourseRemoveAction,
       );
     });
   }
@@ -302,7 +316,8 @@ class _MapScreenState extends State<MapScreen> {
       if (permission == LocationPermission.denied) {
         permission = await Geolocator.requestPermission();
       }
-      if (permission == LocationPermission.denied || permission == LocationPermission.deniedForever) {
+      if (permission == LocationPermission.denied ||
+          permission == LocationPermission.deniedForever) {
         return;
       }
 
@@ -334,7 +349,22 @@ class _MapScreenState extends State<MapScreen> {
   }
 
   // 하단 "주변 스팟" 시트용 — 지도 마커와 동일한 기준으로 보여준다.
-  List<MockSpot> get _nearbySheetSpots => _visibleSpots;
+  List<MockSpot> get _nearbySheetSpots {
+    final spots = List<MockSpot>.of(_visibleSpots);
+    final selectedId = _selectedSpotId;
+    if (selectedId == null) return spots;
+    final selectedIndex = spots.indexWhere((spot) => spot.id == selectedId);
+    if (selectedIndex > 0) {
+      final selected = spots.removeAt(selectedIndex);
+      spots.insert(0, selected);
+    }
+    return spots;
+  }
+
+  void _onMarkerSelected(String spotId) {
+    if (!mounted || _selectedSpotId == spotId) return;
+    setState(() => _selectedSpotId = spotId);
+  }
 
   // 찜(저장) 상태는 map_mock_data.dart의 공유 likedSpotIds(실제 백엔드와 동기화)를
   // 그대로 사용한다 (스팟 상세 화면·MY탭과 동일한 상태를 공유해야 하므로 화면 로컬
@@ -370,18 +400,101 @@ class _MapScreenState extends State<MapScreen> {
     }
   }
 
+  int? _quickRouteOrder(String spotId) {
+    final index = _quickRouteSpots.indexWhere((spot) => spot.id == spotId);
+    return index < 0 ? null : index + 1;
+  }
+
+  MockSpot? _visibleSpotById(String spotId) {
+    for (final spot in _visibleSpots) {
+      if (spot.id == spotId) return spot;
+    }
+    return dbSpotCache[spotId];
+  }
+
+  Future<void> _toggleQuickRouteById(String spotId) async {
+    final spot = _visibleSpotById(spotId);
+    if (spot == null) return;
+    await _toggleQuickRoute(spot);
+  }
+
+  Future<void> _toggleQuickRoute(MockSpot spot) async {
+    if (_quickRouteSpots.any((saved) => saved.id == spot.id)) {
+      await _removeFromQuickRoute(spot);
+    } else {
+      await _addToQuickRoute(spot);
+    }
+  }
+
+  Future<void> _addToQuickRoute(MockSpot spot) async {
+    if (_quickRouteSpots.any((saved) => saved.id == spot.id)) return;
+    final numId = dbSpotNumericId(spot.id);
+    if (numId == null || !requireLogin(context)) return;
+
+    final needsSave = !likedSpotIds.contains(numId);
+    setState(() {
+      _quickRouteSpots.add(spot);
+      if (needsSave) likedSpotIds.add(numId);
+    });
+
+    if (!needsSave) return;
+    try {
+      await toggleSpotLike(numId);
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        likedSpotIds.remove(numId);
+        _quickRouteSpots.removeWhere((saved) => saved.id == spot.id);
+      });
+      if (isUnauthorized(e)) {
+        requireLogin(context);
+      } else {
+        debugPrint('[MapScreen] 빠른 코스 찜 실패: $e');
+      }
+    }
+  }
+
+  Future<void> _removeFromQuickRoute(MockSpot spot) async {
+    final numId = dbSpotNumericId(spot.id);
+    if (numId == null || !requireLogin(context)) return;
+    final removedIndex =
+        _quickRouteSpots.indexWhere((saved) => saved.id == spot.id);
+    if (removedIndex < 0) return;
+    final wasSaved = likedSpotIds.contains(numId);
+
+    setState(() {
+      _quickRouteSpots.removeAt(removedIndex);
+      if (wasSaved) likedSpotIds.remove(numId);
+    });
+
+    if (!wasSaved) return;
+    try {
+      await toggleSpotLike(numId);
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        likedSpotIds.add(numId);
+        final restoreAt = removedIndex.clamp(0, _quickRouteSpots.length);
+        _quickRouteSpots.insert(restoreAt, spot);
+      });
+      if (isUnauthorized(e)) {
+        requireLogin(context);
+      } else {
+        debugPrint('[MapScreen] 빠른 코스 취소 실패: $e');
+      }
+    }
+  }
+
   void _openSpotDetail(MockSpot spot) {
     context.push('/map/spot/${spot.id}');
   }
 
-  void _handleSaveCourse() {
-    if (savedSpots.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(AppLocalizations.of(context)!.mapSaveCourseEmptyWarning)),
-      );
-      return;
+  Future<void> _handleSaveCourse() async {
+    final initialStops = List<MockSpot>.of(_quickRouteSpots);
+    await context.push('/map/route/new', extra: initialStops);
+    if (mounted && _quickRouteSpots.isNotEmpty) {
+      setState(_quickRouteSpots.clear);
     }
-    context.push('/map/route/new', extra: savedSpots);
   }
 
   @override
@@ -407,13 +520,15 @@ class _MapScreenState extends State<MapScreen> {
                       // 스팟만 마커로 그린다(이미 MockSpot이라 db-/일반 id 구분 없이 그대로).
                       // 이 화면에서만 로컬픽(2단계) 크기/색으로 통일하고, 핀 안에 방문
                       // 순서(1,2,3...)를 적는다(order).
-                      for (final (i, spot) in courseMapFilter.value!.spots.indexed)
+                      for (final (i, spot)
+                          in courseMapFilter.value!.spots.indexed)
                         KakaoMapMarker(
                           id: spot.id,
                           lat: spot.lat,
                           lng: spot.lng,
                           name: spot.name,
                           subtitle: _categoryLabel(spot.category, l10n),
+                          actionLabel: l10n.mapPopupDetailAction,
                           order: i + 1,
                         )
                     else
@@ -427,9 +542,35 @@ class _MapScreenState extends State<MapScreen> {
                           subtitle: _categoryLabel(spot.category, l10n),
                           isLocalPick: spot.isLocalPick,
                           trending: spot.trending,
+                          order: _quickRouteOrder('db-${spot.id}'),
+                          compactOrder:
+                              _quickRouteOrder('db-${spot.id}') != null,
+                          actionLabel: l10n.mapPopupDetailAction,
+                          secondaryActionLabel:
+                              _quickRouteOrder('db-${spot.id}') == null
+                                  ? l10n.mapQuickCourseAction
+                                  : l10n.mapQuickCourseRemoveAction,
                         ),
+                    // 카테고리를 바꿔도 이미 담은 핀과 경로는 지도에 남아 있어야 한다.
+                    // 현재 조회 결과에 없는 담긴 스팟만 추가해 중복 마커는 피한다.
+                    for (final spot in _quickRouteSpots.where((saved) =>
+                        !_dbSpots
+                            .any((current) => 'db-${current.id}' == saved.id)))
+                      KakaoMapMarker(
+                        id: spot.id,
+                        lat: spot.lat,
+                        lng: spot.lng,
+                        name: spot.name,
+                        subtitle: _categoryLabel(spot.category, l10n),
+                        order: _quickRouteOrder(spot.id),
+                        compactOrder: true,
+                        actionLabel: l10n.mapPopupDetailAction,
+                        secondaryActionLabel: l10n.mapQuickCourseRemoveAction,
+                      ),
                   ],
                   onMarkerTap: (spotId) => context.push('/map/spot/$spotId'),
+                  onMarkerSelected: _onMarkerSelected,
+                  onMarkerSecondaryTap: _toggleQuickRouteById,
                   myLocationLat: _locationAvailable ? _myLat : null,
                   myLocationLng: _locationAvailable ? _myLng : null,
                   onBoundsChanged: _onBoundsChanged,
@@ -478,12 +619,17 @@ class _MapScreenState extends State<MapScreen> {
                               children: [
                                 Text(
                                   l10n.mapPageTitle,
-                                  style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w800, color: CocoTheme.secondary),
+                                  style: const TextStyle(
+                                      fontSize: 24,
+                                      fontWeight: FontWeight.w800,
+                                      color: CocoTheme.secondary),
                                 ),
                                 const SizedBox(height: 4),
                                 Text(
                                   l10n.mapPageSubtitle,
-                                  style: TextStyle(fontSize: 13, color: Colors.grey.shade600),
+                                  style: TextStyle(
+                                      fontSize: 13,
+                                      color: Colors.grey.shade600),
                                 ),
                                 const SizedBox(height: 12),
                                 Row(
@@ -496,7 +642,9 @@ class _MapScreenState extends State<MapScreen> {
                                       ),
                                     ),
                                     const SizedBox(width: 10),
-                                    _MyRoutesButton(onTap: () => context.push('/mypage/routes')),
+                                    _MyRoutesButton(
+                                        onTap: () =>
+                                            context.push('/mypage/routes')),
                                   ],
                                 ),
                                 // 검색어가 있을 때만 결과 드롭다운을 보여준다 — 목업은 즉시,
@@ -517,17 +665,30 @@ class _MapScreenState extends State<MapScreen> {
                                   _CourseFilterBanner(
                                     routeName: courseMapFilter.value!.routeName,
                                     count: courseMapFilter.value!.spots.length,
-                                    onClear: () => setState(() => courseMapFilter.value = null),
+                                    onClear: () => setState(
+                                        () => courseMapFilter.value = null),
                                   )
                                 else
                                   _CategoryChipsRow(
                                     categories: _categories,
                                     selected: _selectedCategory,
                                     onSelected: (c) {
-                                      setState(() => _selectedCategory = c);
+                                      setState(() {
+                                        _selectedCategory = c;
+                                        _selectedSpotId = null;
+                                      });
                                       _fetchDbSpots(); // 카테고리는 뷰포트 변경이 아니라서 따로 다시 조회
                                     },
                                   ),
+                                if (courseMapFilter.value == null &&
+                                    _quickRouteSpots.isNotEmpty) ...[
+                                  const SizedBox(height: 8),
+                                  _QuickCourseBanner(
+                                    count: _quickRouteSpots.length,
+                                    onClear: () =>
+                                        setState(_quickRouteSpots.clear),
+                                  ),
+                                ],
                                 // 블러가 서서히 사라질 여백(페이드 테일) — 이 구간에서
                                 // ShaderMask 알파가 1→0으로 떨어지며 블러도 함께 옅어진다.
                                 const SizedBox(height: 44),
@@ -550,13 +711,18 @@ class _MapScreenState extends State<MapScreen> {
                 builder: (context, extent, child) => Positioned(
                   left: 16,
                   right: 16,
-                  bottom: constraints.maxHeight * (extent < kSheetMidExtent ? extent : kSheetMidExtent) + 16,
+                  bottom: constraints.maxHeight *
+                          (extent < kSheetMidExtent
+                              ? extent
+                              : kSheetMidExtent) +
+                      16,
                   child: child!,
                 ),
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.end,
                   children: [
-                    _RegisterSpotButton(onTap: () => context.push('/map/register/search')),
+                    _RegisterSpotButton(
+                        onTap: () => context.push('/map/register/search')),
                     const SizedBox(width: 10),
                     _RecenterButton(onTap: _loadCurrentLocation),
                   ],
@@ -569,7 +735,11 @@ class _MapScreenState extends State<MapScreen> {
                 // likedSpotIds는 정수 집합이라, 이 위젯 트리가 기대하는 MockSpot.id
                 // 문자열('db-{id}') 모양으로 변환해서 넘긴다.
                 savedSpotIds: {for (final id in likedSpotIds) 'db-$id'},
+                quickRouteSpotIds: {
+                  for (final spot in _quickRouteSpots) spot.id
+                },
                 onToggleSaved: _toggleSaved,
+                onAddToCourse: _toggleQuickRoute,
                 onSpotTap: _openSpotDetail,
                 onSaveCourse: _handleSaveCourse,
               ),
@@ -600,7 +770,8 @@ class _MyRoutesButton extends StatelessWidget {
           child: const SizedBox(
             width: 44,
             height: 44,
-            child: Icon(Icons.route_outlined, color: CocoTheme.primary, size: 20),
+            child:
+                Icon(Icons.route_outlined, color: CocoTheme.primary, size: 20),
           ),
         ),
       ),
@@ -643,7 +814,8 @@ class _MapSearchBar extends StatelessWidget {
           suffixIcon: controller.text.isEmpty
               ? null
               : IconButton(
-                  icon: const Icon(Icons.close_rounded, color: Colors.grey, size: 20),
+                  icon: const Icon(Icons.close_rounded,
+                      color: Colors.grey, size: 20),
                   onPressed: onClear,
                 ),
           hintText: AppLocalizations.of(context)!.mapSearchHint,
@@ -684,28 +856,34 @@ class _SearchResultsDropdown extends StatelessWidget {
       child: Material(
         color: Colors.transparent,
         child: results.isEmpty
-          ? Padding(
-              padding: const EdgeInsets.symmetric(vertical: 20),
-              child: Center(
-                child: Text(AppLocalizations.of(context)!.mapSearchNoResults, style: const TextStyle(fontSize: 13, color: Colors.grey)),
+            ? Padding(
+                padding: const EdgeInsets.symmetric(vertical: 20),
+                child: Center(
+                  child: Text(AppLocalizations.of(context)!.mapSearchNoResults,
+                      style: const TextStyle(fontSize: 13, color: Colors.grey)),
+                ),
+              )
+            : ListView.separated(
+                shrinkWrap: true,
+                padding: const EdgeInsets.symmetric(vertical: 4),
+                itemCount: results.length,
+                separatorBuilder: (_, __) =>
+                    Divider(height: 1, color: Colors.black.withOpacity(0.06)),
+                itemBuilder: (context, i) {
+                  final spot = results[i];
+                  return ListTile(
+                    dense: true,
+                    leading: Icon(spot.icon, color: spot.pinColor, size: 20),
+                    title: Text(spot.name,
+                        style: const TextStyle(
+                            fontSize: 14, fontWeight: FontWeight.w600)),
+                    subtitle: Text(spot.address,
+                        style: TextStyle(
+                            fontSize: 12, color: Colors.grey.shade600)),
+                    onTap: () => onTap(spot),
+                  );
+                },
               ),
-            )
-          : ListView.separated(
-              shrinkWrap: true,
-              padding: const EdgeInsets.symmetric(vertical: 4),
-              itemCount: results.length,
-              separatorBuilder: (_, __) => Divider(height: 1, color: Colors.black.withOpacity(0.06)),
-              itemBuilder: (context, i) {
-                final spot = results[i];
-                return ListTile(
-                  dense: true,
-                  leading: Icon(spot.icon, color: spot.pinColor, size: 20),
-                  title: Text(spot.name, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
-                  subtitle: Text(spot.address, style: TextStyle(fontSize: 12, color: Colors.grey.shade600)),
-                  onTap: () => onTap(spot),
-                );
-              },
-            ),
       ),
     );
   }
@@ -733,7 +911,10 @@ class _CourseFilterBanner extends StatelessWidget {
         color: CocoTheme.primary,
         borderRadius: BorderRadius.circular(20),
         boxShadow: [
-          BoxShadow(color: Colors.black.withOpacity(0.06), blurRadius: 6, offset: const Offset(0, 2)),
+          BoxShadow(
+              color: Colors.black.withOpacity(0.06),
+              blurRadius: 6,
+              offset: const Offset(0, 2)),
         ],
       ),
       child: Row(
@@ -745,7 +926,10 @@ class _CourseFilterBanner extends StatelessWidget {
             child: Text(
               '$routeName · $count곳 보는 중',
               overflow: TextOverflow.ellipsis,
-              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 13),
+              style: const TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.w600,
+                  fontSize: 13),
             ),
           ),
           InkWell(
@@ -757,6 +941,60 @@ class _CourseFilterBanner extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// 지도 탐색 중 바로 담아 만드는 임시 코스 상태. 카테고리 칩 아래에 작게 두어
+/// 일반 지도 필터와 구분하면서도 현재 코스 작성 중임을 계속 알 수 있게 한다.
+class _QuickCourseBanner extends StatelessWidget {
+  final int count;
+  final VoidCallback onClear;
+
+  const _QuickCourseBanner({required this.count, required this.onClear});
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: Container(
+        padding: const EdgeInsets.fromLTRB(11, 5, 5, 5),
+        decoration: BoxDecoration(
+          color: CocoTheme.primary.withValues(alpha: 0.92),
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: [
+            BoxShadow(
+              color: CocoTheme.primary.withValues(alpha: 0.16),
+              blurRadius: 8,
+              offset: const Offset(0, 2),
+            ),
+          ],
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.route_rounded, size: 14, color: Colors.white),
+            const SizedBox(width: 5),
+            Text(
+              l10n.mapQuickCourseBanner(count),
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 11,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            InkWell(
+              onTap: onClear,
+              borderRadius: BorderRadius.circular(12),
+              child: const Padding(
+                padding: EdgeInsets.all(4),
+                child: Icon(Icons.close_rounded, size: 14, color: Colors.white),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -804,7 +1042,8 @@ class _CategoryChipsRowState extends State<_CategoryChipsRow> {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
-    final position = _scrollController.hasClients ? _scrollController.position : null;
+    final position =
+        _scrollController.hasClients ? _scrollController.position : null;
     final offset = position?.pixels ?? 0.0;
     final maxExtent = position?.maxScrollExtent ?? 0.0;
     // 왼쪽/오른쪽으로 "아직 스크롤할 수 있는 만큼"에 비례해 0→1로 서서히 자라는 세기.
@@ -821,7 +1060,8 @@ class _CategoryChipsRowState extends State<_CategoryChipsRow> {
     );
   }
 
-  Widget _shaderMaskedChips(AppLocalizations l10n, double leftStrength, double rightStrength) {
+  Widget _shaderMaskedChips(
+      AppLocalizations l10n, double leftStrength, double rightStrength) {
     // 흰 배경을 덧대는 게 아니라, ShaderMask로 칩 위젯 자신의 알파를 가장자리에서
     // 실제로 낮춘다 — 그래서 뒤에 뭐가 있든(지도든 뭐든) 그냥 투명하게 사라진다.
     return ShaderMask(
@@ -898,6 +1138,7 @@ class _CategoryChip extends StatelessWidget {
         child: AnimatedDefaultTextStyle(
           duration: const Duration(milliseconds: 150),
           style: TextStyle(
+            fontFamily: 'NotoSansKR',
             color: selected ? Colors.white : CocoTheme.secondary,
             fontWeight: FontWeight.w600,
             fontSize: 13,
@@ -914,7 +1155,8 @@ class _CategoryChip extends StatelessWidget {
 class MockMapBackground extends StatelessWidget {
   final List<MockSpot> spots;
   final ValueChanged<MockSpot> onSpotTap;
-  const MockMapBackground({super.key, required this.spots, required this.onSpotTap});
+  const MockMapBackground(
+      {super.key, required this.spots, required this.onSpotTap});
 
   @override
   Widget build(BuildContext context) {
@@ -928,14 +1170,44 @@ class MockMapBackground extends StatelessWidget {
             clipBehavior: Clip.hardEdge,
             children: [
               // 건물 블록
-              _block(left: w * 0.05, top: h * 0.08, width: w * 0.22, height: h * 0.16, color: const Color(0xFFE0D5C8)),
-              _block(left: w * 0.62, top: h * 0.06, width: w * 0.22, height: h * 0.12, color: const Color(0xFFE0D5C8)),
-              _block(left: w * 0.05, top: h * 0.56, width: w * 0.22, height: h * 0.20, color: const Color(0xFFE0D5C8)),
-              _block(left: w * 0.62, top: h * 0.62, width: w * 0.16, height: h * 0.14, color: const Color(0xFFE0D5C8)),
+              _block(
+                  left: w * 0.05,
+                  top: h * 0.08,
+                  width: w * 0.22,
+                  height: h * 0.16,
+                  color: const Color(0xFFE0D5C8)),
+              _block(
+                  left: w * 0.62,
+                  top: h * 0.06,
+                  width: w * 0.22,
+                  height: h * 0.12,
+                  color: const Color(0xFFE0D5C8)),
+              _block(
+                  left: w * 0.05,
+                  top: h * 0.56,
+                  width: w * 0.22,
+                  height: h * 0.20,
+                  color: const Color(0xFFE0D5C8)),
+              _block(
+                  left: w * 0.62,
+                  top: h * 0.62,
+                  width: w * 0.16,
+                  height: h * 0.14,
+                  color: const Color(0xFFE0D5C8)),
               // 공원 블록
-              _block(left: w * 0.46, top: h * 0.30, width: w * 0.28, height: h * 0.22, color: const Color(0xFFA8C9A8)),
+              _block(
+                  left: w * 0.46,
+                  top: h * 0.30,
+                  width: w * 0.28,
+                  height: h * 0.22,
+                  color: const Color(0xFFA8C9A8)),
               // 강/수변 블록
-              _block(left: w * 0.76, top: h * 0.78, width: w * 0.32, height: h * 0.32, color: const Color(0xFFB8D4E3)),
+              _block(
+                  left: w * 0.76,
+                  top: h * 0.78,
+                  width: w * 0.32,
+                  height: h * 0.32,
+                  color: const Color(0xFFB8D4E3)),
               // 도로 (세로)
               _road(left: w * 0.35, top: 0, width: 2, height: h),
               _road(left: w * 0.62, top: 0, width: 2, height: h),
@@ -943,8 +1215,14 @@ class MockMapBackground extends StatelessWidget {
               // 도로 (가로)
               _road(left: 0, top: h * 0.55, width: w, height: 2),
               // 동네 이름
-              Positioned(left: w * 0.06, top: h * 0.40, child: _neighborhoodLabel('중구')),
-              Positioned(left: w * 0.48, top: h * 0.66, child: _neighborhoodLabel('남포동')),
+              Positioned(
+                  left: w * 0.06,
+                  top: h * 0.40,
+                  child: _neighborhoodLabel('중구')),
+              Positioned(
+                  left: w * 0.48,
+                  top: h * 0.66,
+                  child: _neighborhoodLabel('남포동')),
               // 스팟 핀
               for (final spot in spots)
                 Positioned(
@@ -973,7 +1251,8 @@ class MockMapBackground extends StatelessWidget {
       width: width,
       height: height,
       child: Container(
-        decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(6)),
+        decoration:
+            BoxDecoration(color: color, borderRadius: BorderRadius.circular(6)),
       ),
     );
   }
@@ -1032,7 +1311,10 @@ class _SpotPin extends StatelessWidget {
             ),
             child: Text(
               spot.name,
-              style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: CocoTheme.secondary),
+              style: const TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                  color: CocoTheme.secondary),
             ),
           ),
           const SizedBox(height: 2),
@@ -1059,7 +1341,8 @@ class _RecenterButton extends StatelessWidget {
         child: const SizedBox(
           width: 44,
           height: 44,
-          child: Icon(Icons.my_location_rounded, color: CocoTheme.primary, size: 20),
+          child: Icon(Icons.my_location_rounded,
+              color: CocoTheme.primary, size: 20),
         ),
       ),
     );
@@ -1088,7 +1371,11 @@ class _RegisterSpotButton extends StatelessWidget {
             children: [
               const Icon(Icons.add_rounded, size: 16, color: Colors.white),
               const SizedBox(width: 6),
-              Text(AppLocalizations.of(context)!.mapRegisterSpotButton, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: Colors.white)),
+              Text(AppLocalizations.of(context)!.mapRegisterSpotButton,
+                  style: const TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                      color: Colors.white)),
             ],
           ),
         ),
@@ -1107,7 +1394,9 @@ class _NearbySpotsSheet extends StatefulWidget {
   final ValueNotifier<double> extentNotifier;
   final List<MockSpot> spots;
   final Set<String> savedSpotIds;
+  final Set<String> quickRouteSpotIds;
   final ValueChanged<String> onToggleSaved;
+  final ValueChanged<MockSpot> onAddToCourse;
   final ValueChanged<MockSpot> onSpotTap;
   final VoidCallback onSaveCourse;
 
@@ -1115,7 +1404,9 @@ class _NearbySpotsSheet extends StatefulWidget {
     required this.extentNotifier,
     required this.spots,
     required this.savedSpotIds,
+    required this.quickRouteSpotIds,
     required this.onToggleSaved,
+    required this.onAddToCourse,
     required this.onSpotTap,
     required this.onSaveCourse,
   });
@@ -1137,7 +1428,11 @@ class _NearbySpotsSheetState extends State<_NearbySpotsSheet> {
   bool _dragging = false;
 
   void _snapToNearest(double current, double maxHeight) {
-    final points = [_collapsedFloor(maxHeight), kSheetMidExtent, kSheetExpandedExtent];
+    final points = [
+      _collapsedFloor(maxHeight),
+      kSheetMidExtent,
+      kSheetExpandedExtent
+    ];
     var nearest = points.first;
     var best = (points.first - current).abs();
     for (final p in points) {
@@ -1155,7 +1450,9 @@ class _NearbySpotsSheetState extends State<_NearbySpotsSheet> {
   // 그릴 수 있어서, "핀 영역에 필요한 최소 픽셀"을 비율로 환산해 둘 중 더 큰
   // 쪽을 완전히 접힌 상태의 실제 하한으로 쓴다.
   double _collapsedFloor(double maxHeight) =>
-      kSheetCollapsedExtent > _headerMinPx / maxHeight ? kSheetCollapsedExtent : _headerMinPx / maxHeight;
+      kSheetCollapsedExtent > _headerMinPx / maxHeight
+          ? kSheetCollapsedExtent
+          : _headerMinPx / maxHeight;
 
   @override
   Widget build(BuildContext context) {
@@ -1168,9 +1465,12 @@ class _NearbySpotsSheetState extends State<_NearbySpotsSheet> {
           valueListenable: widget.extentNotifier,
           builder: (context, extent, _) {
             final sheetHeight = maxHeight * extent;
-            // 접힘 지점에 가까울 때는 리스트/버튼을 아예 안 그려서 좁은 공간에서
-            // 내용이 눌리거나 넘치지 않게 한다(픽셀 기준이라 화면 크기와 무관하게 안전).
-            final showBody = sheetHeight > _bodyMinPx;
+            // 예전에는 특정 높이 아래에서 본문을 즉시 제거해 목록과 저장 버튼이
+            // '뚝' 사라졌다. 접히는 구간의 높이를 0~1로 바꿔 투명도와 이동량에
+            // 바로 연결하면 손가락을 따라 자연스럽게 사라진다.
+            final bodyProgress =
+                ((sheetHeight - _headerMinPx) / (_bodyMinPx - _headerMinPx))
+                    .clamp(0.0, 1.0);
             // 시트를 얼마나 올렸든(=지도가 얼마나 가려졌든) 목록 자체는 항상 전체
             // "주변 스팟"을 보여준다 — 시트를 올리는 건 목록을 더 많이/편하게 보려는
             // 동작인데, 예전엔 시트가 덮은 면적만큼 목록에서도 스팟을 빼버려서 오히려
@@ -1187,85 +1487,185 @@ class _NearbySpotsSheetState extends State<_NearbySpotsSheet> {
               // 우회 방법(pointer_interceptor 패키지).
               child: PointerInterceptor(
                 child: AnimatedContainer(
-                duration: _dragging ? Duration.zero : const Duration(milliseconds: 180),
-                curve: Curves.easeOut,
-                height: sheetHeight,
-                width: double.infinity,
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
-                  boxShadow: [
-                    BoxShadow(color: Colors.black.withOpacity(0.10), blurRadius: 16),
-                  ],
-                ),
-                child: Column(
-                  children: [
-                    // 핸들 영역 — 리사이즈 드래그는 여기서만 받아서 아래 리스트의 탭 제스처와
-                    // 서로 뺏어가지 않게 분리한다. 탭하면 기본↔거의 전체화면을 토글한다.
-                    GestureDetector(
-                      behavior: HitTestBehavior.opaque,
-                      onVerticalDragStart: (_) => setState(() => _dragging = true),
-                      onVerticalDragUpdate: (details) {
-                        widget.extentNotifier.value = (widget.extentNotifier.value - details.delta.dy / maxHeight)
-                            .clamp(collapsedFloor, kSheetExpandedExtent);
-                      },
-                      onVerticalDragEnd: (_) => _snapToNearest(widget.extentNotifier.value, maxHeight),
-                      onTap: () => widget.extentNotifier.value =
-                          extent >= kSheetExpandedExtent - 0.05 ? kSheetMidExtent : kSheetExpandedExtent,
-                      child: Padding(
-                        padding: const EdgeInsets.fromLTRB(20, 10, 20, 8),
-                        child: Column(
-                          children: [
-                            Container(
-                              width: 36,
-                              height: 4,
-                              decoration: BoxDecoration(
-                                color: Colors.grey.shade300,
-                                borderRadius: BorderRadius.circular(2),
+                  duration: _dragging
+                      ? Duration.zero
+                      : const Duration(milliseconds: 180),
+                  curve: Curves.easeOut,
+                  height: sheetHeight,
+                  width: double.infinity,
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius:
+                        const BorderRadius.vertical(top: Radius.circular(24)),
+                    boxShadow: [
+                      BoxShadow(
+                          color: Colors.black.withOpacity(0.10),
+                          blurRadius: 16),
+                    ],
+                  ),
+                  child: Column(
+                    children: [
+                      // 핸들 영역 — 리사이즈 드래그는 여기서만 받아서 아래 리스트의 탭 제스처와
+                      // 서로 뺏어가지 않게 분리한다. 탭하면 기본↔거의 전체화면을 토글한다.
+                      GestureDetector(
+                        behavior: HitTestBehavior.opaque,
+                        onVerticalDragStart: (_) =>
+                            setState(() => _dragging = true),
+                        onVerticalDragUpdate: (details) {
+                          widget.extentNotifier.value =
+                              (widget.extentNotifier.value -
+                                      details.delta.dy / maxHeight)
+                                  .clamp(collapsedFloor, kSheetExpandedExtent);
+                        },
+                        onVerticalDragEnd: (_) => _snapToNearest(
+                            widget.extentNotifier.value, maxHeight),
+                        onTap: () => widget.extentNotifier.value =
+                            extent >= kSheetExpandedExtent - 0.05
+                                ? kSheetMidExtent
+                                : kSheetExpandedExtent,
+                        child: Padding(
+                          padding: const EdgeInsets.fromLTRB(20, 10, 20, 8),
+                          child: Column(
+                            children: [
+                              Container(
+                                width: 36,
+                                height: 4,
+                                decoration: BoxDecoration(
+                                  color: Colors.grey.shade300,
+                                  borderRadius: BorderRadius.circular(2),
+                                ),
                               ),
-                            ),
-                            const SizedBox(height: 10),
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: [
-                                Text(l10n.mapNearbySpotsTitle, style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
-                                Text(l10n.mapNearbySpotsCount(visibleSpots.length),
-                                    style: TextStyle(fontSize: 13, color: Colors.grey.shade600)),
-                              ],
-                            ),
-                          ],
+                              const SizedBox(height: 10),
+                              Row(
+                                mainAxisAlignment:
+                                    MainAxisAlignment.spaceBetween,
+                                children: [
+                                  Text(l10n.mapNearbySpotsTitle,
+                                      style: const TextStyle(
+                                          fontSize: 17,
+                                          fontWeight: FontWeight.w700)),
+                                  Text(
+                                      l10n.mapNearbySpotsCount(
+                                          visibleSpots.length),
+                                      style: TextStyle(
+                                          fontSize: 13,
+                                          color: Colors.grey.shade600)),
+                                ],
+                              ),
+                            ],
+                          ),
                         ),
                       ),
-                    ),
-                    if (showBody) ...[
                       Expanded(
-                        child: ListView.separated(
-                          padding: const EdgeInsets.symmetric(horizontal: 20),
-                          itemCount: visibleSpots.length,
-                          separatorBuilder: (_, __) => const Divider(height: 24),
-                          itemBuilder: (context, i) => _SpotListTile(
-                            spot: visibleSpots[i],
-                            saved: widget.savedSpotIds.contains(visibleSpots[i].id),
-                            onToggleSaved: () => widget.onToggleSaved(visibleSpots[i].id),
-                            onTap: () => widget.onSpotTap(visibleSpots[i]),
+                        child: ClipRect(
+                          child: LayoutBuilder(
+                            builder: (context, bodyConstraints) {
+                              final contentHeight =
+                                  bodyConstraints.maxHeight < _bodyMinPx
+                                      ? _bodyMinPx
+                                      : bodyConstraints.maxHeight;
+                              return OverflowBox(
+                                alignment: Alignment.topCenter,
+                                minWidth: bodyConstraints.maxWidth,
+                                maxWidth: bodyConstraints.maxWidth,
+                                minHeight: contentHeight,
+                                maxHeight: contentHeight,
+                                child: IgnorePointer(
+                                  ignoring: bodyProgress < 0.35,
+                                  child: Opacity(
+                                    opacity: bodyProgress,
+                                    child: Transform.translate(
+                                      offset:
+                                          Offset(0, 14 * (1 - bodyProgress)),
+                                      child: SizedBox(
+                                        height: contentHeight,
+                                        child: Column(
+                                          children: [
+                                            Expanded(
+                                              child: visibleSpots.isEmpty
+                                                  ? const _NearbyEmptyState()
+                                                  : ListView.separated(
+                                                      padding: const EdgeInsets
+                                                          .symmetric(
+                                                          horizontal: 20),
+                                                      itemCount:
+                                                          visibleSpots.length,
+                                                      separatorBuilder:
+                                                          (_, __) =>
+                                                              const Divider(
+                                                                  height: 24),
+                                                      itemBuilder:
+                                                          (context, i) =>
+                                                              _SpotListTile(
+                                                        spot: visibleSpots[i],
+                                                        saved: widget
+                                                            .savedSpotIds
+                                                            .contains(
+                                                                visibleSpots[i]
+                                                                    .id),
+                                                        routeAdded: widget
+                                                            .quickRouteSpotIds
+                                                            .contains(
+                                                                visibleSpots[i]
+                                                                    .id),
+                                                        onToggleSaved: () =>
+                                                            widget.onToggleSaved(
+                                                                visibleSpots[i]
+                                                                    .id),
+                                                        onAddToCourse: () =>
+                                                            widget.onAddToCourse(
+                                                                visibleSpots[
+                                                                    i]),
+                                                        onTap: () =>
+                                                            widget.onSpotTap(
+                                                                visibleSpots[
+                                                                    i]),
+                                                      ),
+                                                    ),
+                                            ),
+                                            Padding(
+                                              // 시트가 화면 맨 아래까지 꽉 차게 배치돼서(Align
+                                              // bottomCenter, SafeArea 밖) 고정 20px만으로는
+                                              // 아이폰 홈 인디케이터/제스처 내비바에 버튼 아래가
+                                              // 가려졌다 — 기기 하단 안전영역만큼 더해준다.
+                                              padding: EdgeInsets.fromLTRB(
+                                                  20,
+                                                  8,
+                                                  20,
+                                                  20 +
+                                                      MediaQuery.of(context)
+                                                          .padding
+                                                          .bottom),
+                                              child: FilledButton(
+                                                style: FilledButton.styleFrom(
+                                                  backgroundColor:
+                                                      CocoTheme.primary,
+                                                  minimumSize:
+                                                      const Size.fromHeight(48),
+                                                  elevation: 3,
+                                                  shadowColor: CocoTheme
+                                                      .primary
+                                                      .withOpacity(0.35),
+                                                ),
+                                                onPressed: widget.onSaveCourse,
+                                                child: Text(
+                                                    l10n.mapSaveCourseButton),
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              );
+                            },
                           ),
-                        ),
-                      ),
-                      Padding(
-                        padding: const EdgeInsets.fromLTRB(20, 8, 20, 20),
-                        child: FilledButton(
-                          style: FilledButton.styleFrom(
-                            backgroundColor: CocoTheme.primary,
-                            minimumSize: const Size.fromHeight(48),
-                          ),
-                          onPressed: widget.onSaveCourse,
-                          child: Text(l10n.mapSaveCourseButton),
                         ),
                       ),
                     ],
-                  ],
+                  ),
                 ),
-              ),
               ),
             );
           },
@@ -1275,58 +1675,169 @@ class _NearbySpotsSheetState extends State<_NearbySpotsSheet> {
   }
 }
 
+class _NearbyEmptyState extends StatelessWidget {
+  const _NearbyEmptyState();
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 32),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 42,
+              height: 42,
+              decoration: BoxDecoration(
+                color: CocoTheme.primary.withValues(alpha: 0.08),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(
+                Icons.location_searching_rounded,
+                color: CocoTheme.primary,
+                size: 21,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              l10n.mapNearbyEmptyTitle,
+              textAlign: TextAlign.center,
+              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700),
+            ),
+            const SizedBox(height: 3),
+            Text(
+              l10n.mapNearbyEmptySubtitle,
+              textAlign: TextAlign.center,
+              style: TextStyle(fontSize: 11, color: Colors.grey.shade500),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class _SpotListTile extends StatelessWidget {
   final MockSpot spot;
   final bool saved;
+  final bool routeAdded;
   final VoidCallback onToggleSaved;
+  final VoidCallback onAddToCourse;
   final VoidCallback onTap;
 
   const _SpotListTile({
     required this.spot,
     required this.saved,
+    required this.routeAdded,
     required this.onToggleSaved,
+    required this.onAddToCourse,
     required this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(12),
-      child: Row(
-        children: [
-          Container(
-            width: 56,
-            height: 56,
-            alignment: Alignment.center,
-            decoration: BoxDecoration(
-              color: spot.pinColor.withOpacity(0.12),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Icon(spot.icon, color: spot.pinColor, size: 24),
+    return Container(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(14),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+          child: Row(
+            children: [
+              Container(
+                width: 56,
+                height: 56,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: spot.pinColor.withOpacity(0.12),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Icon(spot.icon, color: spot.pinColor, size: 24),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(spot.name,
+                        style: const TextStyle(
+                            fontWeight: FontWeight.w700, fontSize: 14)),
+                    const SizedBox(height: 2),
+                    Text(spot.subtitle,
+                        style: TextStyle(
+                            fontSize: 12, color: Colors.grey.shade600)),
+                  ],
+                ),
+              ),
+              IconButton(
+                onPressed: onToggleSaved,
+                icon: Icon(saved
+                    ? Icons.bookmark_rounded
+                    : Icons.bookmark_border_rounded),
+                color: saved ? CocoTheme.primary : Colors.grey.shade500,
+              ),
+              const SizedBox(width: 4),
+              SizedBox(
+                width: 48,
+                height: 48,
+                child: Center(
+                  child: AnimatedSwitcher(
+                    duration: const Duration(milliseconds: 180),
+                    transitionBuilder: (child, animation) => FadeTransition(
+                      opacity: animation,
+                      child: ScaleTransition(scale: animation, child: child),
+                    ),
+                    child: routeAdded
+                        ? TweenAnimationBuilder<double>(
+                            key: const ValueKey('route-added'),
+                            tween: Tween(begin: 0.65, end: 1),
+                            duration: const Duration(milliseconds: 420),
+                            curve: Curves.easeOutBack,
+                            builder: (context, scale, child) => Transform.scale(
+                              scale: scale,
+                              child: child,
+                            ),
+                            child: Material(
+                              color: const Color(0xFFFF7A33),
+                              shape: const CircleBorder(),
+                              child: InkWell(
+                                onTap: onAddToCourse,
+                                customBorder: const CircleBorder(),
+                                child: const SizedBox(
+                                  width: 36,
+                                  height: 36,
+                                  child: Icon(
+                                    Icons.add_rounded,
+                                    size: 22,
+                                    color: Colors.white,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          )
+                        : IconButton(
+                            key: const ValueKey('route-not-added'),
+                            onPressed: onAddToCourse,
+                            icon: Icon(
+                              Icons.add_rounded,
+                              size: 25,
+                              color: Colors.grey.shade500,
+                            ),
+                            padding: EdgeInsets.zero,
+                            constraints: const BoxConstraints.tightFor(
+                              width: 36,
+                              height: 36,
+                            ),
+                          ),
+                  ),
+                ),
+              ),
+            ],
           ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(spot.name, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14)),
-                const SizedBox(height: 2),
-                Text(spot.subtitle, style: TextStyle(fontSize: 12, color: Colors.grey.shade600)),
-              ],
-            ),
-          ),
-          IconButton(
-            onPressed: onToggleSaved,
-            icon: Icon(saved ? Icons.bookmark_rounded : Icons.bookmark_border_rounded),
-            color: saved ? CocoTheme.primary : Colors.grey.shade500,
-          ),
-          IconButton(
-            onPressed: () {},
-            icon: const Icon(Icons.ios_share_rounded),
-            color: Colors.grey.shade500,
-          ),
-        ],
+        ),
       ),
     );
   }

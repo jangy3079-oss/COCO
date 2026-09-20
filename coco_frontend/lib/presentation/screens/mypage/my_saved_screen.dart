@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:provider/provider.dart';
+import '../../../core/locale/locale_controller.dart';
 import '../../../core/network/login_guard.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../data/repositories/feed_repository.dart';
@@ -39,7 +41,9 @@ class _MySavedScreenState extends State<MySavedScreen> {
   Future<void> _loadLikedFeed() async {
     setState(() => _loadingLiked = true);
     try {
-      final posts = await _feedRepository.fetchLikedFeed();
+      final posts = await _feedRepository.fetchLikedFeed(
+        locale: context.read<LocaleController>().locale.languageCode,
+      );
       if (!mounted) return;
       setState(() {
         _likedItems = posts.map(feedItemFromPost).toList();
@@ -54,7 +58,9 @@ class _MySavedScreenState extends State<MySavedScreen> {
   Future<void> _loadSavedFeed() async {
     setState(() => _loadingSaved = true);
     try {
-      final posts = await _feedRepository.fetchSavedFeed();
+      final posts = await _feedRepository.fetchSavedFeed(
+        locale: context.read<LocaleController>().locale.languageCode,
+      );
       if (!mounted) return;
       setState(() {
         _savedItems = posts.map(feedItemFromPost).toList();
@@ -326,7 +332,7 @@ class _FilterChip extends StatelessWidget {
         child: AnimatedDefaultTextStyle(
           duration: const Duration(milliseconds: 180),
           curve: Curves.easeOut,
-          style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: selected ? Colors.white : CocoTheme.secondary),
+          style: TextStyle(fontFamily: 'NotoSansKR', fontSize: 12, fontWeight: FontWeight.w600, color: selected ? Colors.white : CocoTheme.secondary),
           child: Text(label),
         ),
       ),
