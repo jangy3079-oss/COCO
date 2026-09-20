@@ -12,11 +12,11 @@ import java.util.Optional;
 @Repository
 public interface SpotRepository extends JpaRepository<Spot, Long> {
 
-    // TourAPI 수집 시 이미 가져온 콘텐츠인지 중복 체크용
-    Optional<Spot> findByTourApiid(String tourApiid);
+    // TourAPI 수집 시 이미 가져온 콘텐츠인지 중복 체크용 — 중복 행이 있어도 안 죽도록 First를 붙여 방어
+    Optional<Spot> findFirstByTourApiid(String tourApiid);
 
-    // 카카오 로컬 수집 시 이미 가져온 장소인지 중복 체크용
-    Optional<Spot> findByKakaoPlaceId(String kakaoPlaceId);
+    // 카카오 로컬 수집 시 이미 가져온 장소인지 중복 체크용 — 중복 행이 있어도 안 죽도록 First를 붙여 방어
+    Optional<Spot> findFirstByKakaoPlaceId(String kakaoPlaceId);
 
     // 카카오 로컬 수집 시 TourAPI로 이미 저장된 장소와 중복인지(같은 실제 장소) 체크할 때
     // 비교 기준으로 삼을 TourAPI 출처 스팟 전체 조회용

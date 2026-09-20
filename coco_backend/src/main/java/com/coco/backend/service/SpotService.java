@@ -59,10 +59,10 @@ public class SpotService {
         int inserted = 0;
 
         for (var c : candidates) {
-            Optional<Spot> existing = spotRepository.findByTourApiid(c.tourApiId());
+            Optional<Spot> existing = spotRepository.findFirstByTourApiid(c.tourApiId());
             if (existing.isPresent()) {
                 // 이미 있는 스팟은 번역을 다시 돌리지 않고 원문 필드만 최신화한다.
-                // findByTourApiid()가 리포지토리 메서드 단위 트랜잭션이라 반환된 엔티티는 이미
+                // findFirstByTourApiid()가 리포지토리 메서드 단위 트랜잭션이라 반환된 엔티티는 이미
                 // detached 상태 — 필드를 바꾼 뒤 명시적으로 save()해야 DB에 반영된다.
                 String description = tourApiService.fetchOverview(c.tourApiId());
                 Spot spot = existing.get();
@@ -223,29 +223,38 @@ public class SpotService {
         int inserted = 0;
 
         for (var c : candidates) {
-            if (spotRepository.findByKakaoPlaceId(c.kakaoPlaceId()).isPresent()) continue;
+            try {
+                if (spotRepository.findFirstByKakaoPlaceId(c.kakaoPlaceId()).isPresent()) continue;
 
-            if (isDuplicateOfTourApiSpot(c, tourApiSpotsByNormalizedTitle)) continue;
+                if (isDuplicateOfTourApiSpot(c, tourApiSpotsByNormalizedTitle)) continue;
 
-            // 카카오 로컬 소스는 description 자체가 없으니 title 번역만 받는다(rewriteAndTranslate에
-            // description=null을 넘기면 프롬프트가 description 관련 필드를 전부 null로 응답한다).
-            var localized = translationService.rewriteAndTranslate(c.title(), null);
+                // 카카오 로컬 소스는 description 자체가 없으니 title 번역만 받는다(rewriteAndTranslate에
+                // description=null을 넘기면 프롬프트가 description 관련 필드를 전부 null로 응답한다).
+                var localized = translationService.rewriteAndTranslate(c.title(), null);
 
-            Spot spot = Spot.builder()
-                    .kakaoPlaceId(c.kakaoPlaceId())
-                    .titleKo(c.title())
-                    .titleEn(localized != null ? localized.titleEn() : null)
-                    .titleJa(localized != null ? localized.titleJa() : null)
-                    .lat(c.lat())
-                    .lng(c.lng())
-                    .address(c.address())
-                    .category(c.category())
-                    .build();
-            spotRepository.save(spot);
-            inserted++;
+                Spot spot = Spot.builder()
+                        .kakaoPlaceId(truncate(c.kakaoPlaceId(), 20))
+                        .titleKo(truncate(c.title(), 100))
+                        .titleEn(localized != null ? truncate(localized.titleEn(), 100) : null)
+                        .titleJa(localized != null ? truncate(localized.titleJa(), 100) : null)
+                        .lat(c.lat())
+                        .lng(c.lng())
+                        .address(truncate(c.address(), 200))
+                        .category(c.category())
+                        .build();
+                spotRepository.save(spot);
+                inserted++;
+            } catch (Exception e) {
+                log.error("카카오 로컬 스팟 저장 실패 (kakaoPlaceId={}), 건너뜀", c.kakaoPlaceId(), e);
+            }
         }
         log.info("카카오 로컬 스팟 임포트 완료: 후보 {}건 중 신규 {}건 저장", candidates.size(), inserted);
         return inserted;
+    }
+
+    private String truncate(String value, int maxLength) {
+        if (value == null || value.length() <= maxLength) return value;
+        return value.substring(0, maxLength);
     }
 
     /**
