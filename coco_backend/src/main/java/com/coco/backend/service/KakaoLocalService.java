@@ -122,26 +122,32 @@ public class KakaoLocalService {
     // 너무 좁거나 넓으면 조정이 필요할 수 있음.
     private static final String BUSAN_RECT = "128.74,34.87,129.32,35.41";
 
+    // 행정동=법정동이 그대로 같고 법정동 이름에도 숫자가 들어가는 예외(1978년 리 단위 통합 시
+    // 숫자 붙은 채로 법정동이 됨) — legalDongGuess()에서 숫자를 떼면 안 되는 동들.
+    private static final Set<String> LEGAL_DONG_EXCEPTIONS = Set.of("대저1동", "대저2동");
+
     /** 관광 관련 카테고리 + 공원 키워드로 좁힌 후보 목록을 가져온다. */
     public List<KakaoLocalCandidate> fetchCandidates() {
         List<KakaoLocalCandidate> result = new ArrayList<>();
         Set<String> seenPlaceIds = new HashSet<>();
 
         for (String dong : TARGET_DONGS) {
+            String legalDong = legalDongGuess(dong);
+
             // 공원/골목 전용 키워드 검색이 카테고리 그룹 루프보다 더 정확한 판단이라, 이 둘을
             // 먼저 돌려서 dedup 셋(seenPlaceIds)을 채운다. 이렇게 해야 뒤에 도는 뭉뚱그린
             // 카테고리 루프(AT4 등)가 같은 장소를 만나도 이미 dedup에 걸려서 잘못된 카테고리로
             // 덮어쓰지 못한다.
             try {
-                for (JsonNode item : callKeywordSearch(dong + PARK_KEYWORD_SUFFIX, null)) {
-                    addCandidate(result, seenPlaceIds, item, dong, "공원");
+                for (JsonNode item : callKeywordSearch(legalDong + PARK_KEYWORD_SUFFIX, null)) {
+                    addCandidate(result, seenPlaceIds, item, legalDong, "공원");
                 }
             } catch (Exception e) {
                 log.warn("카카오 로컬 공원 조회 실패 (dong={}): {}", dong, e.getMessage());
             }
             try {
-                for (JsonNode item : callKeywordSearch(dong + ALLEY_KEYWORD_SUFFIX, null)) {
-                    addCandidate(result, seenPlaceIds, item, dong, "골목");
+                for (JsonNode item : callKeywordSearch(legalDong + ALLEY_KEYWORD_SUFFIX, null)) {
+                    addCandidate(result, seenPlaceIds, item, legalDong, "골목");
                 }
             } catch (Exception e) {
                 log.warn("카카오 로컬 골목 조회 실패 (dong={}): {}", dong, e.getMessage());
@@ -150,8 +156,8 @@ public class KakaoLocalService {
             for (String categoryGroupCode : TARGET_CATEGORY_GROUP_CODES) {
                 try {
                     String cocoCategory = mapToCocoCategory(categoryGroupCode);
-                    for (JsonNode item : callKeywordSearch(dong, categoryGroupCode)) {
-                        addCandidate(result, seenPlaceIds, item, dong, cocoCategory);
+                    for (JsonNode item : callKeywordSearch(legalDong, categoryGroupCode)) {
+                        addCandidate(result, seenPlaceIds, item, legalDong, cocoCategory);
                     }
                 } catch (Exception e) {
                     log.warn("카카오 로컬 조회 실패 (dong={}, categoryGroupCode={}): {}", dong, categoryGroupCode, e.getMessage());
@@ -160,6 +166,16 @@ public class KakaoLocalService {
         }
         log.info("카카오 로컬 후보 수집 완료: {}건", result.size());
         return result;
+    }
+
+    /**
+     * 행정동 이름(TARGET_DONGS)에서 카카오 지번 주소 매칭에 쓸 법정동 이름을 추정한다.
+     * 카카오 address_name은 법정동 기준이라 "우1동" 같은 번호 붙은 행정동은 실제 주소에
+     * "우동"으로만 나온다 — LEGAL_DONG_EXCEPTIONS에 있는 동은 예외로 숫자를 그대로 둔다.
+     */
+    private String legalDongGuess(String dong) {
+        if (LEGAL_DONG_EXCEPTIONS.contains(dong)) return dong;
+        return dong.replaceAll("\\d+동$", "동");
     }
 
     private void addCandidate(List<KakaoLocalCandidate> result, Set<String> seenPlaceIds,
