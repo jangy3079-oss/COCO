@@ -115,7 +115,7 @@ public class FeedService {
      * 가져온다(SpotService.getLikedSpots와 동일한 패턴). 여기 있다는 것 자체가 좋아요를
      * 눌렀다는 뜻이므로 liked는 항상 true로 채운다.
      */
-    public List<FeedPostResponse> getLikedFeed(Long userId) {
+    public List<FeedPostResponse> getLikedFeed(Long userId, String locale) {
         List<FeedPost> posts = feedPostLikeRepository.findPostsByUserId(userId);
         if (posts.isEmpty()) return List.of();
 
@@ -123,14 +123,13 @@ public class FeedService {
         Map<Long, Boolean> trendingBySpotId = trendingBySpotId(posts);
         Set<Long> savedPostIds = new HashSet<>(feedPostSaveRepository.findSavedPostIds(userId, postIds));
 
-        // 이 두 엔드포인트는 아직 locale 파라미터를 안 받으니(이번 범위 밖) 기본 ko로 응답한다.
         return posts.stream()
                 .map(p -> toResponse(
                         p,
                         p.getSpot() != null && Boolean.TRUE.equals(trendingBySpotId.get(p.getSpot().getId())),
                         true,
                         savedPostIds.contains(p.getId()),
-                        "ko"))
+                        locale))
                 .toList();
     }
 
@@ -138,7 +137,7 @@ public class FeedService {
      * 마이페이지 "저장한 피드" 탭용 — getLikedFeed()와 완전히 동일한 패턴이다. 여기 있다는 것
      * 자체가 저장했다는 뜻이므로 saved는 항상 true로 채운다.
      */
-    public List<FeedPostResponse> getSavedFeed(Long userId) {
+    public List<FeedPostResponse> getSavedFeed(Long userId, String locale) {
         List<FeedPost> posts = feedPostSaveRepository.findPostsByUserId(userId);
         if (posts.isEmpty()) return List.of();
 
@@ -146,14 +145,13 @@ public class FeedService {
         Map<Long, Boolean> trendingBySpotId = trendingBySpotId(posts);
         Set<Long> likedPostIds = new HashSet<>(feedPostLikeRepository.findLikedPostIds(userId, postIds));
 
-        // 이 두 엔드포인트는 아직 locale 파라미터를 안 받으니(이번 범위 밖) 기본 ko로 응답한다.
         return posts.stream()
                 .map(p -> toResponse(
                         p,
                         p.getSpot() != null && Boolean.TRUE.equals(trendingBySpotId.get(p.getSpot().getId())),
                         likedPostIds.contains(p.getId()),
                         true,
-                        "ko"))
+                        locale))
                 .toList();
     }
 

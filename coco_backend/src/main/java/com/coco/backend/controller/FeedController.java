@@ -96,24 +96,24 @@ public class FeedController {
 
     /** 현재 로그인한 유저가 좋아요한 피드 목록 — GET /api/feed(최신 50개 캡)와 달리 캡 없이 전체. */
     @GetMapping("/liked")
-    public ResponseEntity<?> getLikedFeed() {
+    public ResponseEntity<?> getLikedFeed(@RequestParam(defaultValue = "ko") String locale) {
         Long userId = currentUserId();
         if (userId == null) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
                     .body(new ErrorResponse("로그인이 필요합니다."));
         }
-        return ResponseEntity.ok(feedService.getLikedFeed(userId));
+        return ResponseEntity.ok(feedService.getLikedFeed(userId, locale));
     }
 
     /** 현재 로그인한 유저가 저장한 피드 목록 — getLikedFeed와 동일한 형태(캡 없이 전체). */
     @GetMapping("/saved")
-    public ResponseEntity<?> getSavedFeed() {
+    public ResponseEntity<?> getSavedFeed(@RequestParam(defaultValue = "ko") String locale) {
         Long userId = currentUserId();
         if (userId == null) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
                     .body(new ErrorResponse("로그인이 필요합니다."));
         }
-        return ResponseEntity.ok(feedService.getSavedFeed(userId));
+        return ResponseEntity.ok(feedService.getSavedFeed(userId, locale));
     }
 
     @GetMapping("/{id}/comments")

@@ -7,10 +7,13 @@ import com.coco.backend.service.KakaoLocalService;
 import com.coco.backend.service.SpotService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 
+import java.io.IOException;
 import java.util.List;
 import java.util.Map;
 
@@ -104,6 +107,31 @@ public class SpotController {
     @PostMapping("/backfill")
     public ResponseEntity<Map<String, Integer>> backfillMissingTourApiContent() {
         return ResponseEntity.ok(spotService.backfillMissingTourApiContent());
+    }
+
+    /**
+     * 카카오 로컬 소스라 설명/사진이 비어있는 스팟에 유저가 직접 정보를 채워 넣는다.
+     * description, photo 둘 다 선택값(하나만 보내도 됨). 이미 채워진 필드는 덮어쓰지 않는다.
+     */
+    @PostMapping(value = "/{id}/enrich", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ResponseEntity<?> enrichSpot(@PathVariable Long id,
+                                         @RequestParam(required = false) String description,
+                                         @RequestParam(required = false) MultipartFile photo) {
+        if (currentUserId() == null) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                    .body(new ErrorResponse("로그인이 필요합니다."));
+        }
+        try {
+            SpotService.EnrichResult result = spotService.enrichSpot(id, description, photo);
+            return ResponseEntity.ok(Map.of(
+                    "descriptionFilled", result.descriptionFilled(),
+                    "photoFilled", result.photoFilled()
+            ));
+        } catch (IllegalArgumentException | IllegalStateException e) {
+            return ResponseEntity.badRequest().body(new ErrorResponse(e.getMessage()));
+        } catch (IOException e) {
+            return ResponseEntity.internalServerError().body(new ErrorResponse("이미지 업로드에 실패했습니다."));
+        }
     }
 
     /** 스팟 찜 토글 — 이미 찜했으면 취소, 아니면 새로 찜한다. */

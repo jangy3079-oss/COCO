@@ -26,6 +26,9 @@ server:
 # (working directory 기준 상대경로 — 배포 시 절대경로로 바꾸고 싶으면 UPLOAD_DIR로 오버라이드)
 app:
   upload-dir: ${UPLOAD_DIR:uploads}
+  # true면 스팟 등록 신청 시 관리자 승인 없이 바로 spots 테이블에 반영한다(콘테스트 데모용).
+  # 나중에 실제 승인 플로우를 만들면 false로 바꾸거나 이 분기 자체를 지우면 된다.
+  demo-mode: ${DEMO_MODE:true}
 
 jwt:
   secret: ${JWT_SECRET:coco-secret-key-for-development-only}

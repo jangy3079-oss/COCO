@@ -13,9 +13,12 @@ import com.coco.backend.repository.SpotRepository;
 import com.coco.backend.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.multipart.MultipartFile;
 
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
@@ -38,6 +41,10 @@ public class SpotService {
     private final FeedPostRepository feedPostRepository;
     private final SpotLikeRepository spotLikeRepository;
     private final UserRepository userRepository;
+    private final FileStorageService fileStorageService;
+
+    @Value("${app.demo-mode:true}")
+    private boolean demoMode;
 
     // "인기 핀"(trending) 판정 기준값. 아직 실사용 데이터가 없어 임의로 정한 값이라,
     // 실제 유저 활동이 쌓이면 데모/운영 상황에 맞게 조정 필요.
@@ -474,4 +481,48 @@ public class SpotService {
         };
         return desc != null ? desc : s.getDescription();
     }
+
+    /**
+     * "정보 추가"(enrich) — 카카오 로컬 소스라 설명/사진이 비어있는 스팟에 유저가 직접
+     * 채워 넣는다. 이미 있는 필드는 절대 덮어쓰지 않고 비어있는 것만 채운다(중복 방지).
+     * demo-mode(app.demo-mode)일 때만 즉시 반영 — 1번(등록 즉시반영)과 같은 패턴.
+     */
+    @Transactional
+    public EnrichResult enrichSpot(Long spotId, String description, MultipartFile photo) throws IOException {
+        if (!demoMode) {
+            throw new IllegalStateException("현재 정보 추가 기능은 준비 중입니다.");
+        }
+
+        Spot spot = spotRepository.findById(spotId)
+                .orElseThrow(() -> new IllegalArgumentException("스팟을 찾을 수 없습니다."));
+
+        boolean descriptionFilled = false;
+        if (description != null && !description.isBlank()
+                && (spot.getDescription() == null || spot.getDescription().isBlank())) {
+            var localized = translationService.rewriteAndTranslate(spot.getTitleKo(), description);
+            descriptionFilled = spot.fillDescriptionIfEmpty(
+                    localized != null && localized.descriptionKo() != null
+                            ? localized.descriptionKo() : description,
+                    localized != null ? localized.descriptionEn() : null,
+                    localized != null ? localized.descriptionJa() : null
+            );
+            if (descriptionFilled) spotRepository.save(spot);
+        }
+
+        boolean photoFilled = false;
+        if (photo != null && !photo.isEmpty()
+                && spotImageRepository.findBySpot_IdOrderBySortOrderAsc(spot.getId()).isEmpty()) {
+            String imageUrl = fileStorageService.store(photo, "spot");
+            spotImageRepository.save(SpotImage.builder()
+                    .spot(spot)
+                    .imageUrl(imageUrl)
+                    .sortOrder(0)
+                    .build());
+            photoFilled = true;
+        }
+
+        return new EnrichResult(descriptionFilled, photoFilled);
+    }
+
+    public record EnrichResult(boolean descriptionFilled, boolean photoFilled) {}
 }

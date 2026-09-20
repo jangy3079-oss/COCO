@@ -122,6 +122,19 @@ public class Spot {
         if (descriptionJa != null) this.descriptionJa = descriptionJa;
     }
 
+    /**
+     * "정보 추가"(enrich) 전용 — 이미 description이 있으면 아무것도 안 하고 false를
+     * 반환한다(중복/덮어쓰기 방지). 비어있을 때만 채우고 true를 반환한다.
+     */
+    public boolean fillDescriptionIfEmpty(String description, String descriptionEn, String descriptionJa) {
+        if (this.description != null && !this.description.isBlank()) return false;
+        if (description == null || description.isBlank()) return false;
+        this.description = description;
+        this.descriptionEn = descriptionEn;
+        this.descriptionJa = descriptionJa;
+        return true;
+    }
+
     // TourAPI 재import 시 이미 있는 스팟(contentid 동일)을 갱신(SpotService.importFromTourApi)하는
     // 전용 메서드 — 번역(title/description en·ja)은 최초 1회 값을 그대로 유지하고 여기서 건드리지 않는다.
     public void updateFromTourApi(String titleKo, String address, Double lat, Double lng, String imageUrl,

@@ -19,4 +19,5 @@ public class SpotRegistrationResponse {
     private String status;
     @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss")
     private LocalDateTime createdAt;
+    private Long spotId; // demo-mode로 즉시 생성된 spots 행의 id. register() 응답에만 채워짐.
 }
