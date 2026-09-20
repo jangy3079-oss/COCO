@@ -256,7 +256,7 @@ public class FeedService {
                 .imageUrl(p.getImageUrl())
                 .description(resolveDescription(p, locale))
                 .spotId(spot != null ? spot.getId() : null)
-                .spotName(spot != null ? spot.getTitleKo() : null)
+                .spotName(spot != null ? resolveSpotTitle(spot, locale) : null)
                 .lat(spot != null ? spot.getLat() : null)
                 .lng(spot != null ? spot.getLng() : null)
                 .routeId(p.getRoute() != null ? p.getRoute().getId() : null)
@@ -267,6 +267,16 @@ public class FeedService {
                 .liked(liked)
                 .saved(saved)
                 .build();
+    }
+
+    /** locale(ko/en/ja)에 맞는 장소명을 고른다. 번역이 없거나 비어 있으면 한국어로 폴백한다. */
+    private String resolveSpotTitle(Spot spot, String locale) {
+        String title = switch (locale == null ? "" : locale) {
+            case "en" -> spot.getTitleEn();
+            case "ja" -> spot.getTitleJa();
+            default -> spot.getTitleKo();
+        };
+        return title != null && !title.isBlank() ? title : spot.getTitleKo();
     }
 
     /** locale(ko/en/ja)에 맞는 description을 고른다. 해당 언어 번역이 없으면 한국어로 폴백한다. */
