@@ -44,7 +44,13 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ErrorResponse> handleGeneral(Exception e) {
         log.error("처리되지 않은 예외 발생", e);
+        // TODO: 임시 디버그용 — 원인 확인 끝나면 아래 한 줄로 되돌릴 것:
+        // new ErrorResponse("서버 오류가 발생했습니다.")
+        Throwable root = e;
+        while (root.getCause() != null && root.getCause() != root) root = root.getCause();
+        String debugMessage = e.getClass().getSimpleName() + ": " + e.getMessage()
+                + (root != e ? " | root cause: " + root.getClass().getSimpleName() + ": " + root.getMessage() : "");
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                .body(new ErrorResponse("서버 오류가 발생했습니다."));
+                .body(new ErrorResponse(debugMessage));
     }
 }
