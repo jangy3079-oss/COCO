@@ -11,6 +11,9 @@ import '../../../data/repositories/feed_repository.dart';
 import '../../../l10n/generated/app_localizations.dart';
 import 'busan_district_map.dart';
 import 'feed_mock_data.dart';
+import '../../../core/network/auth_token_store.dart';
+import '../../../data/repositories/route_repository.dart';
+import '../map/map_mock_data.dart' show MockSpot, mockSpotFromRouteStop;
 
 String _localizedFeedRegion(String region, String languageCode) {
   const english = <String, String>{
@@ -1484,6 +1487,35 @@ class _ActionIcon extends StatelessWidget {
   }
 }
 
+/// 랭킹 리스트의 코스 카드를 탭하면 코스 상세(route_preview_screen)로 이동한다.
+/// 실제 게시물은 FeedPostResponse가 스팟 목록을 안 내려줘서(feed_mock_data.dart 주석
+/// 참고) routeId로 먼저 조회해야 한다 — feed_post_detail_screen.dart의
+/// _openRoutePreview와 동일한 패턴.
+Future<void> _openRouteFromRankRow(BuildContext context, FeedItem item) async {
+  final numId = int.tryParse(item.routeId ?? '');
+  var stops = item.routeStops;
+  if ((stops == null || stops.isEmpty) && numId != null) {
+    try {
+      final route = await RouteRepository().getById(numId);
+      stops = route.spots.map(mockSpotFromRouteStop).toList();
+    } catch (e) {
+      debugPrint('[FeedScreen] 코스 조회 실패: $e');
+      return;
+    }
+  }
+  if (stops == null || stops.isEmpty) return; // 스팟 정보를 못 가져오면 이동하지 않는다
+  if (!context.mounted) return;
+  final isOwner = numId != null
+      ? (AuthTokenStore.nickname != null && AuthTokenStore.nickname == item.author)
+      : item.source == FeedSource.user;
+  context.push('/map/route/preview', extra: {
+    'name': item.displayTitle,
+    'stops': stops,
+    'routeId': item.routeId,
+    'isOwner': isOwner,
+  });
+}
+
 /// 골목지도 탭 전용 랭킹 리스트 — 카드 피드 대신 순위·통계 중심으로 보여준다.
 class _RouteRankingList extends StatelessWidget {
   final List<FeedItem> items;
@@ -1525,82 +1557,87 @@ class _RouteRankRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
       decoration: BoxDecoration(
           border: Border(
               bottom: BorderSide(color: Colors.black.withOpacity(0.06)))),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.center,
-        children: [
-          SizedBox(
-            width: 26,
-            child: Text(
-              '$rank',
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w700,
-                  color: rank == 1
-                      ? CocoTheme.primary
-                      : Colors.black.withOpacity(0.3)),
-            ),
-          ),
-          const SizedBox(width: 12),
-          const _RouteThumb(),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(item.displayTitle,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w600,
-                        color: CocoTheme.secondary)),
-                const SizedBox(height: 3),
-                Text(
-                    '@${item.author} · ${item.dong} · ${l10n.feedRankSpotCount(item.stopCount ?? 0)}',
-                    style: TextStyle(
-                        fontSize: 12, color: Colors.black.withOpacity(0.45))),
-                const SizedBox(height: 5),
-                Text(
-                    l10n.feedRankStatsLine(
-                        item.saveCount, item.likeCount, item.shares),
-                    style: TextStyle(
-                        fontSize: 11, color: Colors.black.withOpacity(0.4))),
-              ],
-            ),
-          ),
-          const SizedBox(width: 8),
-          InkWell(
-            onTap: onToggleSave,
-            borderRadius: BorderRadius.circular(16),
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
-              decoration: BoxDecoration(
-                color: item.saved ? const Color(0xFFFF5A36) : Colors.white,
+      child: InkWell(
+        onTap: () => _openRouteFromRankRow(context, item),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              SizedBox(
+                width: 26,
+                child: Text(
+                  '$rank',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w700,
+                      color: rank == 1
+                          ? CocoTheme.primary
+                          : Colors.black.withOpacity(0.3)),
+                ),
+              ),
+              const SizedBox(width: 12),
+              const _RouteThumb(),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(item.displayTitle,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
+                            color: CocoTheme.secondary)),
+                    const SizedBox(height: 3),
+                    Text(
+                        '@${item.author} · ${item.dong} · ${l10n.feedRankSpotCount(item.stopCount ?? 0)}',
+                        style: TextStyle(
+                            fontSize: 12, color: Colors.black.withOpacity(0.45))),
+                    const SizedBox(height: 5),
+                    Text(
+                        l10n.feedRankStatsLine(
+                            item.saveCount, item.likeCount, item.shares),
+                        style: TextStyle(
+                            fontSize: 11, color: Colors.black.withOpacity(0.4))),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              InkWell(
+                onTap: onToggleSave,
                 borderRadius: BorderRadius.circular(16),
-                border: Border.all(
-                    color: item.saved
-                        ? const Color(0xFFFF5A36)
-                        : Colors.grey.shade300),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+                  decoration: BoxDecoration(
+                    color: item.saved ? const Color(0xFFFF5A36) : Colors.white,
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(
+                        color: item.saved
+                            ? const Color(0xFFFF5A36)
+                            : Colors.grey.shade300),
+                  ),
+                  child: Text(
+                    item.saved
+                        ? l10n.feedSaveButtonSaved
+                        : l10n.feedSaveButtonUnsaved,
+                    style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: item.saved
+                            ? Colors.white
+                            : Colors.black.withOpacity(0.6)),
+                  ),
+                ),
               ),
-              child: Text(
-                item.saved
-                    ? l10n.feedSaveButtonSaved
-                    : l10n.feedSaveButtonUnsaved,
-                style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                    color: item.saved
-                        ? Colors.white
-                        : Colors.black.withOpacity(0.6)),
-              ),
-            ),
+            ],
           ),
-        ],
+        ),
       ),
     );
   }
