@@ -2,6 +2,8 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:provider/provider.dart';
+import '../../../core/locale/locale_controller.dart';
 import '../../../core/network/login_guard.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../data/repositories/route_repository.dart';
@@ -43,6 +45,7 @@ class _RouteBuilderScreenState extends State<RouteBuilderScreen> {
   final Set<String> _addedDuringSearch = {};
   final _routeRepository = RouteRepository();
   bool _saving = false;
+  bool _loadingSavedSpots = false;
 
   @override
   void dispose() {
@@ -51,8 +54,15 @@ class _RouteBuilderScreenState extends State<RouteBuilderScreen> {
     super.dispose();
   }
 
-  void _openSearch() {
+  Future<void> _openSearch() async {
+    if (_loadingSavedSpots) return;
+    setState(() => _loadingSavedSpots = true);
+    await refreshLikedSpots(
+      locale: context.read<LocaleController>().locale.languageCode,
+    );
+    if (!mounted) return;
     setState(() {
+      _loadingSavedSpots = false;
       _searchOpen = true;
       _addedDuringSearch.clear();
     });
@@ -252,14 +262,26 @@ class _RouteBuilderScreenState extends State<RouteBuilderScreen> {
                   Padding(
                     padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
                     child: OutlinedButton(
-                      onPressed: _openSearch,
+                      onPressed: _loadingSavedSpots ? null : _openSearch,
                       style: OutlinedButton.styleFrom(
                         minimumSize: const Size.fromHeight(48),
                         backgroundColor: CocoTheme.primary.withOpacity(0.08),
                         side: BorderSide(color: CocoTheme.primary, style: BorderStyle.solid, width: 1.5),
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                       ),
-                      child: Text(l10n.routeBuilderAddSpotButton, style: const TextStyle(color: CocoTheme.primary, fontWeight: FontWeight.w600)),
+                      child: _loadingSavedSpots
+                          ? const SizedBox(
+                              width: 20,
+                              height: 20,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: CocoTheme.primary,
+                              ),
+                            )
+                          : Text(l10n.routeBuilderAddSpotButton,
+                              style: const TextStyle(
+                                  color: CocoTheme.primary,
+                                  fontWeight: FontWeight.w600)),
                     ),
                   ),
                 ],

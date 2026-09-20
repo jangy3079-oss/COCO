@@ -53,8 +53,19 @@
   "feedFilterSheetTitle": "Feed Filters",
   "feedFilterReset": "Reset",
   "feedFilterDongLabel": "Neighborhood",
-  "feedFilterCurrentLocationPlaceholder": "Current location: Nampo-dong, Jung-gu",
+  "feedFilterNearLabel": "Near {dong}",
+  "@feedFilterNearLabel": {
+    "placeholders": { "dong": { "type": "String" } }
+  },
   "feedFilterSortLabel": "Sort",
+  "feedFilterBusanAll": "All Busan",
+  "feedFilterDistrictAll": "All {district}",
+  "@feedFilterDistrictAll": {
+    "placeholders": { "district": { "type": "String" } }
+  },
+  "feedFilterSortLatest": "Latest",
+  "feedFilterSortLikes": "Most liked",
+  "feedFilterSortSaves": "Most saved",
   "feedFilterApplyButton": "View {count} posts",
   "@feedFilterApplyButton": {
     "placeholders": { "count": { "type": "int" } }

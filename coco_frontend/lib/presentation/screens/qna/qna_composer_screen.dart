@@ -23,6 +23,7 @@ class QnaComposerScreen extends StatefulWidget {
 class _QnaComposerScreenState extends State<QnaComposerScreen> {
   final _titleController = TextEditingController();
   final _bodyController = TextEditingController();
+  final _spotController = TextEditingController();
   final _qnaRepository = QnaRepository();
   final _spotRepository = SpotRepository();
 
@@ -44,12 +45,18 @@ class _QnaComposerScreenState extends State<QnaComposerScreen> {
   void dispose() {
     _titleController.dispose();
     _bodyController.dispose();
+    _spotController.dispose();
     _spotSearchDebounce?.cancel();
     super.dispose();
   }
 
   void _onSpotQueryChanged(String query) {
-    setState(() => _spotQuery = query);
+    setState(() {
+      _spotQuery = query;
+      if (_selectedSpot != null && query != _selectedSpot!.title) {
+        _selectedSpot = null;
+      }
+    });
     _spotSearchDebounce?.cancel();
     final q = query.trim();
     if (q.isEmpty) {
@@ -78,7 +85,11 @@ class _QnaComposerScreenState extends State<QnaComposerScreen> {
   void _selectSpot(Spot spot) {
     setState(() {
       _selectedSpot = spot;
-      _spotQuery = '';
+      _spotQuery = spot.title;
+      _spotController.text = spot.title;
+      _spotController.selection = TextSelection.collapsed(
+        offset: _spotController.text.length,
+      );
       _spotResults = [];
     });
   }
@@ -118,52 +129,42 @@ class _QnaComposerScreenState extends State<QnaComposerScreen> {
     final l10n = AppLocalizations.of(context)!;
     return Scaffold(
       backgroundColor: Colors.white,
-      body: SafeArea(
-        child: Column(
-          children: [
-            SizedBox(
-              height: 56,
-              child: Stack(
-                alignment: Alignment.center,
-                children: [
-                  Positioned(
-                    left: 4,
-                    child: IconButton(
-                      onPressed: () => context.pop(),
-                      icon: const Icon(
-                        Icons.close_rounded,
-                        size: 21,
-                        color: Color(0xFF9AA0A6),
-                      ),
-                    ),
-                  ),
-                  Text(
-                    l10n.qnaComposerTitle,
-                    style: const TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w700,
-                      color: CocoTheme.secondary,
-                    ),
-                  ),
-                  Positioned(
-                    right: 8,
-                    child: TextButton(
-                      onPressed: _canSubmit ? _submit : null,
-                      child: Text(
-                        l10n.feedPostDetailCommentSubmit,
-                        style: TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w700,
-                          color: _canSubmit
-                              ? CocoTheme.primary
-                              : Colors.grey.shade400,
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
+      appBar: AppBar(
+        backgroundColor: Colors.white,
+        surfaceTintColor: Colors.transparent,
+        elevation: 0,
+        leading: IconButton(
+          onPressed: () => context.pop(),
+          icon: const Icon(
+            Icons.close_rounded,
+            size: 21,
+            color: Color(0xFF9AA0A6),
+          ),
+        ),
+        title: Text(
+          l10n.qnaComposerTitle,
+          style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w800),
+        ),
+        centerTitle: true,
+        actions: [
+          TextButton(
+            onPressed: _canSubmit ? _submit : null,
+            child: Text(
+              l10n.feedPostDetailCommentSubmit,
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w700,
+                color: _canSubmit ? CocoTheme.primary : Colors.grey.shade400,
               ),
             ),
+          ),
+          const SizedBox(width: 8),
+        ],
+      ),
+      body: SafeArea(
+        top: false,
+        child: Column(
+          children: [
             Expanded(
               child: SingleChildScrollView(
                 padding: const EdgeInsets.all(16),
@@ -217,73 +218,95 @@ class _QnaComposerScreenState extends State<QnaComposerScreen> {
                       ],
                     ),
                     const SizedBox(height: 10),
-                    if (_selectedSpot != null)
-                      Wrap(
-                        spacing: 8,
-                        runSpacing: 8,
-                        children: [
-                          _SpotTagChip(
-                            label: _selectedSpot!.title,
-                            selected: true,
-                            onTap: () => setState(() => _selectedSpot = null),
-                          ),
-                        ],
-                      )
-                    else ...[
-                      TextField(
-                        onChanged: _onSpotQueryChanged,
-                        style: const TextStyle(fontSize: 13),
-                        decoration: InputDecoration(
-                          hintText: l10n.feedComposerLocationSearchHint,
-                          isDense: true,
-                          filled: true,
-                          fillColor: const Color(0xFFF8F8F8),
-                          contentPadding: const EdgeInsets.symmetric(
-                              horizontal: 14, vertical: 12),
-                          border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(10),
-                              borderSide:
-                                  BorderSide(color: Colors.grey.shade300)),
-                          enabledBorder: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(10),
-                              borderSide:
-                                  BorderSide(color: Colors.grey.shade300)),
+                    TextField(
+                      controller: _spotController,
+                      onChanged: _onSpotQueryChanged,
+                      style: const TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w700,
+                      ),
+                      decoration: InputDecoration(
+                        hintText: l10n.feedComposerLocationSearchHint,
+                        hintStyle: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w700,
+                          color: Colors.black.withValues(alpha: 0.38),
+                        ),
+                        prefixIcon: const Icon(
+                          Icons.place_outlined,
+                          color: CocoTheme.primary,
+                        ),
+                        suffixIcon: _selectedSpot == null
+                            ? null
+                            : const Icon(
+                                Icons.check_circle_rounded,
+                                color: CocoTheme.primary,
+                              ),
+                        filled: true,
+                        fillColor: const Color(0xFFF8FAFC),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(14),
+                          borderSide: BorderSide.none,
                         ),
                       ),
-                      if (_spotSearching)
-                        const Padding(
-                          padding: EdgeInsets.symmetric(vertical: 12),
-                          child: Center(
-                              child: SizedBox(
-                                  width: 16,
-                                  height: 16,
-                                  child: CircularProgressIndicator(
-                                      strokeWidth: 2))),
-                        )
-                      else if (_spotQuery.trim().isNotEmpty &&
-                          _spotResults.isEmpty)
-                        Padding(
-                          padding: const EdgeInsets.symmetric(vertical: 12),
-                          child: Text(l10n.feedComposerLocationNoResults,
-                              style: TextStyle(
-                                  fontSize: 13, color: Colors.grey.shade500)),
-                        )
-                      else if (_spotResults.isNotEmpty)
-                        Padding(
-                          padding: const EdgeInsets.only(top: 8),
-                          child: Wrap(
-                            spacing: 8,
-                            runSpacing: 8,
-                            children: [
-                              for (final spot in _spotResults)
-                                _SpotTagChip(
-                                    label: spot.title,
-                                    selected: false,
-                                    onTap: () => _selectSpot(spot)),
-                            ],
+                    ),
+                    if (_spotSearching)
+                      const Padding(
+                        padding: EdgeInsets.symmetric(vertical: 14),
+                        child: Center(
+                          child: SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(strokeWidth: 2),
                           ),
                         ),
-                    ],
+                      )
+                    else if (_spotResults.isNotEmpty)
+                      Container(
+                        margin: const EdgeInsets.only(top: 8),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(14),
+                          border: Border.all(
+                            color: Colors.black.withValues(alpha: 0.08),
+                          ),
+                        ),
+                        child: Column(
+                          children: [
+                            for (final spot in _spotResults)
+                              ListTile(
+                                dense: true,
+                                onTap: () => _selectSpot(spot),
+                                title: Text(
+                                  spot.title,
+                                  style: const TextStyle(
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                                subtitle: Text(
+                                  spot.address,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                                trailing:
+                                    const Icon(Icons.chevron_right_rounded),
+                              ),
+                          ],
+                        ),
+                      )
+                    else if (_spotQuery.trim().isNotEmpty &&
+                        _selectedSpot == null)
+                      Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        child: Text(
+                          l10n.feedComposerLocationNoResults,
+                          style: TextStyle(
+                            fontSize: 13,
+                            color: Colors.grey.shade500,
+                          ),
+                        ),
+                      ),
                     const SizedBox(height: 20),
                     Container(
                       padding: const EdgeInsets.symmetric(
@@ -316,42 +339,6 @@ class _QnaComposerScreenState extends State<QnaComposerScreen> {
               ),
             ),
           ],
-        ),
-      ),
-    );
-  }
-}
-
-class _SpotTagChip extends StatelessWidget {
-  final String label;
-  final bool selected;
-  final VoidCallback onTap;
-  const _SpotTagChip(
-      {required this.label, required this.selected, required this.onTap});
-
-  @override
-  Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(18),
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 180),
-        curve: Curves.easeOut,
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-        decoration: BoxDecoration(
-          color: selected ? const Color(0xFFE6F1FB) : Colors.white,
-          borderRadius: BorderRadius.circular(18),
-          border: Border.all(
-              color: selected ? CocoTheme.primary : Colors.grey.shade300),
-        ),
-        child: AnimatedDefaultTextStyle(
-          duration: const Duration(milliseconds: 180),
-          curve: Curves.easeOut,
-          style: TextStyle(
-              fontSize: 13,
-              fontWeight: FontWeight.w500,
-              color: selected ? CocoTheme.primary : Colors.grey.shade700),
-          child: Text(label),
         ),
       ),
     );

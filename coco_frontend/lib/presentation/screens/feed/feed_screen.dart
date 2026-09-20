@@ -1,12 +1,118 @@
 import 'dart:async';
 import 'dart:math';
 import 'package:flutter/material.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/network/dio_client.dart';
+import '../../../data/reference/busan_dong_data.dart';
 import '../../../data/repositories/feed_repository.dart';
 import '../../../l10n/generated/app_localizations.dart';
+import 'busan_district_map.dart';
 import 'feed_mock_data.dart';
+
+String _localizedFeedRegion(String region, String languageCode) {
+  const english = <String, String>{
+    '강서구': 'Gangseo-gu',
+    '사상구': 'Sasang-gu',
+    '사하구': 'Saha-gu',
+    '영도구': 'Yeongdo-gu',
+    '남구': 'Nam-gu',
+    '부산진구': 'Busanjin-gu',
+    '수영구': 'Suyeong-gu',
+    '해운대구': 'Haeundae-gu',
+    '북구': 'Buk-gu',
+    '동래·연제': 'Dongnae · Yeonje',
+    '중·동·서구': 'Jung · Dong · Seo',
+    '금정구': 'Geumjeong-gu',
+    '기장군': 'Gijang-gun',
+  };
+  const japanese = <String, String>{
+    '강서구': '江西区',
+    '사상구': '沙上区',
+    '사하구': '沙下区',
+    '영도구': '影島区',
+    '남구': '南区',
+    '부산진구': '釜山鎮区',
+    '수영구': '水営区',
+    '해운대구': '海雲台区',
+    '북구': '北区',
+    '동래·연제': '東莱・蓮堤',
+    '중·동·서구': '中・東・西区',
+    '금정구': '金井区',
+    '기장군': '機張郡',
+  };
+  if (languageCode == 'en') return english[region] ?? region;
+  if (languageCode == 'ja') return japanese[region] ?? region;
+  return region;
+}
+
+String _localizedDongLabel(
+    String id, AppLocalizations l10n, String languageCode) {
+  if (id == kAllDongId) return l10n.feedFilterBusanAll;
+  final parts = id.split('|');
+  if (parts.length != 2) return l10n.feedFilterBusanAll;
+  if (parts[1] == '__구전체__') {
+    return l10n.feedFilterDistrictAll(
+      _localizedFeedRegion(parts[0], languageCode),
+    );
+  }
+  final dong = normalizeBusanDongName(parts[1]);
+  return languageCode == 'ko' ? dong : _romanizeAdministrativeName(dong);
+}
+
+String _romanizeAdministrativeName(String name) {
+  const initials = <String>[
+    'g', 'kk', 'n', 'd', 'tt', 'r', 'm', 'b', 'pp', 's', 'ss', '',
+    'j', 'jj', 'ch', 'k', 't', 'p', 'h'
+  ];
+  const vowels = <String>[
+    'a', 'ae', 'ya', 'yae', 'eo', 'e', 'yeo', 'ye', 'o', 'wa', 'wae',
+    'oe', 'yo', 'u', 'wo', 'we', 'wi', 'yu', 'eu', 'ui', 'i'
+  ];
+  const finals = <String>[
+    '', 'k', 'k', 'ks', 'n', 'nj', 'nh', 't', 'l', 'lk', 'lm', 'lb',
+    'ls', 'lt', 'lp', 'lh', 'm', 'p', 'ps', 't', 't', 'ng', 't', 't',
+    'k', 't', 'p', 'h'
+  ];
+  const suffixes = <String, String>{
+    '동': '-dong',
+    '읍': '-eup',
+    '면': '-myeon',
+    '리': '-ri',
+  };
+  var stem = name;
+  var suffix = '';
+  for (final entry in suffixes.entries) {
+    if (stem.endsWith(entry.key)) {
+      stem = stem.substring(0, stem.length - 1);
+      suffix = entry.value;
+      break;
+    }
+  }
+  final buffer = StringBuffer();
+  for (final rune in stem.runes) {
+    if (rune < 0xAC00 || rune > 0xD7A3) {
+      buffer.writeCharCode(rune);
+      continue;
+    }
+    final syllable = rune - 0xAC00;
+    buffer
+      ..write(initials[syllable ~/ 588])
+      ..write(vowels[(syllable % 588) ~/ 28])
+      ..write(finals[syllable % 28]);
+  }
+  final romanized = buffer.toString();
+  if (romanized.isEmpty) return name;
+  return '${romanized[0].toUpperCase()}${romanized.substring(1)}$suffix';
+}
+
+String _localizedSortLabel(String sortBy, AppLocalizations l10n) =>
+    switch (sortBy) {
+      'likes' => l10n.feedFilterSortLikes,
+      'saves' => l10n.feedFilterSortSaves,
+      _ => l10n.feedFilterSortLatest,
+    };
 
 class FeedScreen extends StatefulWidget {
   const FeedScreen({super.key});
@@ -17,7 +123,10 @@ class FeedScreen extends StatefulWidget {
 
 class _FeedScreenState extends State<FeedScreen> {
   FeedPostType? _typeFilter; // null = 전체
-  String _dongId = 'nampo'; // feedDongOptions 참고. 'all' = 전체 동네
+  String _dongId = kAllDongId; // busanGuList 기반 dongId. 기본은 부산 전체이고
+  // GPS 조회에 성공하면 _resolveDefaultDong()이 가장 가까운 동으로 바꿔준다.
+  String _defaultDongId = kAllDongId; // "초기화" 버튼이 되돌아갈 기본값
+  String? _myNearestDongId; // 필터 시트에서 "내 위치 기준" 배지를 붙일 동
   String _sortBy = 'latest'; // latest | likes | saves
   int _visibleCount = 5;
   bool _loadingMore = false;
@@ -32,6 +141,38 @@ class _FeedScreenState extends State<FeedScreen> {
     super.initState();
     _scrollController.addListener(_onScroll);
     _loadRealPosts();
+    _resolveDefaultDong();
+  }
+
+  // 위치 권한이 있으면 내 위치에서 가장 가까운 동을 기본 동네 필터로 쓰고,
+  // 권한이 없거나 조회에 실패하면 "부산 전체"를 기본값으로 유지한다
+  // (map_screen.dart의 _loadCurrentLocation과 동일한 패턴).
+  Future<void> _resolveDefaultDong() async {
+    try {
+      final serviceEnabled = await Geolocator.isLocationServiceEnabled();
+      if (!serviceEnabled) return;
+
+      var permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+      }
+      if (permission == LocationPermission.denied ||
+          permission == LocationPermission.deniedForever) {
+        return;
+      }
+
+      final position = await Geolocator.getCurrentPosition(
+          desiredAccuracy: LocationAccuracy.medium);
+      final nearest = nearestDongId(position.latitude, position.longitude);
+      if (!mounted || nearest == null) return;
+      setState(() {
+        _myNearestDongId = nearest;
+        _dongId = nearest;
+        _defaultDongId = nearest;
+      });
+    } catch (_) {
+      // 위치 조회 실패 시 "부산 전체" 기본값 유지 — 조용히 무시.
+    }
   }
 
   @override
@@ -54,11 +195,13 @@ class _FeedScreenState extends State<FeedScreen> {
   bool get _isRankingView => _typeFilter == FeedPostType.route;
 
   List<FeedItem> get _filteredSorted {
-    // 실제 DB 게시물(_realItems)은 동네 정보가 아직 백엔드에서 안 내려와서
-    // dongId가 'all'로 세팅돼 있다 — 동네 필터와 무관하게 항상 포함시킨다.
-    // 타입 필터만 적용(코스 필터 시엔 spot 타입 게시물이 제외됨).
+    // 타입 필터(전체/일상/코스)와 동네 필터(반경 기반 근접 매칭, matchesDongFilter
+    // 참고)를 함께 적용한다. 좌표가 없는 게시물(스팟 태그 없이 쓴 글)은 동네
+    // 필터와 무관하게 항상 포함된다.
     var list = _realItems
         .where((it) => _typeFilter == null || it.type == _typeFilter)
+        .where((it) =>
+            matchesDongFilter(lat: it.lat, lng: it.lng, dongId: _dongId))
         .toList();
 
     switch (_sortBy) {
@@ -99,6 +242,10 @@ class _FeedScreenState extends State<FeedScreen> {
     await showModalBottomSheet(
       context: context,
       isScrollControlled: true,
+      sheetAnimationStyle: const AnimationStyle(
+        duration: Duration(milliseconds: 380),
+        reverseDuration: Duration(milliseconds: 300),
+      ),
       backgroundColor: Colors.white,
       shape: const RoundedRectangleBorder(
           borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
@@ -107,10 +254,11 @@ class _FeedScreenState extends State<FeedScreen> {
           dongId: _dongId,
           sortBy: _sortBy,
           resultCount: _filteredSorted.length,
+          myNearestDongId: _myNearestDongId,
           onDongSelected: (id) => setSheetState(() => _dongId = id),
           onSortSelected: (v) => setSheetState(() => _sortBy = v),
           onReset: () => setSheetState(() {
-            _dongId = 'nampo';
+            _dongId = _defaultDongId;
             _sortBy = 'latest';
           }),
           onApply: () => Navigator.of(sheetContext).pop(),
@@ -173,8 +321,10 @@ class _FeedScreenState extends State<FeedScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    final languageCode = Localizations.localeOf(context).languageCode;
     final visibleItems = _filteredSorted.take(_visibleCount).toList();
-    final isDefaultFilter = _dongId == 'nampo' && _sortBy == 'latest';
+    final isDefaultFilter = _dongId == _defaultDongId && _sortBy == 'latest';
 
     return Scaffold(
       backgroundColor: Colors.white,
@@ -187,7 +337,8 @@ class _FeedScreenState extends State<FeedScreen> {
       body: SafeArea(
         child: Column(
           children: [
-            _FeedHeaderBar(dongLabel: feedDongLabel(_dongId)),
+            _FeedHeaderBar(
+                dongLabel: _localizedDongLabel(_dongId, l10n, languageCode)),
             // 필터 영역 — 스크롤 여부와 상관없이 항상 고정으로 보여준다.
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 14, 16, 0),
@@ -206,7 +357,7 @@ class _FeedScreenState extends State<FeedScreen> {
               child: Align(
                 alignment: Alignment.centerLeft,
                 child: Text(
-                  '${feedDongLabel(_dongId)} · ${feedSortLabels[_sortBy]}',
+                  '${_localizedDongLabel(_dongId, l10n, languageCode)} · ${_localizedSortLabel(_sortBy, l10n)}',
                   style: TextStyle(
                       fontSize: 12, color: Colors.black.withOpacity(0.4)),
                 ),
@@ -415,6 +566,8 @@ class _FilterRow extends StatelessWidget {
         InkWell(
           onTap: onOpenSheet,
           borderRadius: BorderRadius.circular(19),
+          splashColor: Colors.black.withOpacity(0.08),
+          highlightColor: Colors.black.withOpacity(0.08),
           child: Container(
             width: 38,
             height: 38,
@@ -504,11 +657,15 @@ class _TypeChip extends StatelessWidget {
   }
 }
 
-/// 필터 아이콘 탭 시 뜨는 바텀시트 — 동네 칩 + 정렬 칩 + 적용 버튼.
-class _FilterSheet extends StatelessWidget {
+/// 필터 아이콘 탭 시 뜨는 바텀시트 — 구 선택 → 동 칩이 부드럽게 펼쳐지는 동네 필터 +
+/// 정렬 칩 + 적용 버튼. 부산 16개 구·군 전체(busanGuList)를 다루다 보니 동 목록이
+/// 길어질 수 있어(중구만 41개) 가운데 영역만 스크롤되게 하고 손잡이/제목/적용
+/// 버튼은 고정한다.
+class _FilterSheet extends StatefulWidget {
   final String dongId;
   final String sortBy;
   final int resultCount;
+  final String? myNearestDongId;
   final ValueChanged<String> onDongSelected;
   final ValueChanged<String> onSortSelected;
   final VoidCallback onReset;
@@ -518,6 +675,7 @@ class _FilterSheet extends StatelessWidget {
     required this.dongId,
     required this.sortBy,
     required this.resultCount,
+    required this.myNearestDongId,
     required this.onDongSelected,
     required this.onSortSelected,
     required this.onReset,
@@ -525,123 +683,238 @@ class _FilterSheet extends StatelessWidget {
   });
 
   @override
+  State<_FilterSheet> createState() => _FilterSheetState();
+}
+
+class _FilterSheetState extends State<_FilterSheet> {
+  String? _expandedGu;
+  late bool _sheetExpanded;
+
+  @override
+  void initState() {
+    super.initState();
+    // 시트를 열었을 때 이미 특정 동/구가 선택돼 있으면 그 구를 펼친 채로 보여준다.
+    _expandedGu = _guOf(widget.dongId);
+    _sheetExpanded = _expandedGu != null;
+  }
+
+  @override
+  void didUpdateWidget(covariant _FilterSheet oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // "초기화" 버튼 등으로 바깥에서 dongId가 바뀌면 펼침 상태도 맞춰준다.
+    if (oldWidget.dongId != widget.dongId) {
+      final gu = _guOf(widget.dongId);
+      _expandedGu = gu;
+      if (gu != null) _sheetExpanded = true;
+    }
+  }
+
+  String? _guOf(String dongId) {
+    final parts = dongId.split('|');
+    return parts.length == 2 ? parts.first : null;
+  }
+
+  List<String> _dongsOf(String regionName) {
+    final guNames = busanGusForFeedRegion(regionName);
+    final names = <String>{};
+    for (final gu in busanGuList) {
+      if (!guNames.contains(gu.name)) continue;
+      for (final dong in gu.dongs) {
+        names.add(normalizeBusanDongName(dong.name));
+      }
+    }
+    return names.toList();
+  }
+
+  @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
+    final languageCode = Localizations.localeOf(context).languageCode;
+    final expandedGu = _expandedGu;
+    final screenHeight = MediaQuery.sizeOf(context).height;
     return SafeArea(
-      child: Padding(
-        padding: const EdgeInsets.only(top: 14, bottom: 16),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Center(
-              child: Container(
-                  width: 36,
-                  height: 4,
-                  decoration: BoxDecoration(
-                      color: Colors.black.withOpacity(0.15),
-                      borderRadius: BorderRadius.circular(2))),
-            ),
-            const SizedBox(height: 14),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text(l10n.feedFilterSheetTitle,
-                      style: const TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w700,
-                          color: CocoTheme.secondary)),
-                  TextButton(
-                    onPressed: onReset,
-                    style: TextButton.styleFrom(
-                        padding: EdgeInsets.zero, minimumSize: Size.zero),
-                    child: Text(l10n.feedFilterReset,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 420),
+        curve: Curves.easeOutCubic,
+        height: screenHeight * (_sheetExpanded ? 0.90 : 0.64),
+        child: Padding(
+          padding: const EdgeInsets.only(top: 14),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Center(
+                child: Container(
+                    width: 36,
+                    height: 4,
+                    decoration: BoxDecoration(
+                        color: Colors.black.withOpacity(0.15),
+                        borderRadius: BorderRadius.circular(2))),
+              ),
+              const SizedBox(height: 14),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 20),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(l10n.feedFilterSheetTitle,
+                        style: const TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w700,
+                            color: CocoTheme.secondary)),
+                    TextButton(
+                      onPressed: widget.onReset,
+                      style: TextButton.styleFrom(
+                          padding: EdgeInsets.zero, minimumSize: Size.zero),
+                      child: Text(l10n.feedFilterReset,
+                          style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w500,
+                              color: Colors.black.withOpacity(0.4))),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 8),
+              Expanded(
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.symmetric(horizontal: 20),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Text(l10n.feedFilterDongLabel,
+                              style: TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w600,
+                                  color: Colors.black.withOpacity(0.45))),
+                          if (widget.myNearestDongId != null) ...[
+                            const SizedBox(width: 8),
+                            Text(
+                                l10n.feedFilterNearLabel(_localizedDongLabel(
+                                    widget.myNearestDongId!,
+                                    l10n,
+                                    languageCode)),
+                                style: TextStyle(
+                                    fontSize: 11,
+                                    color: Colors.black.withOpacity(0.32))),
+                          ],
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      _SheetChip(
+                        label:
+                            _localizedDongLabel(kAllDongId, l10n, languageCode),
+                        selected: widget.dongId == kAllDongId,
+                        onTap: () => widget.onDongSelected(kAllDongId),
+                      ),
+                      const SizedBox(height: 10),
+                      // 실제 부산 행정경계 지도에서 구를 직접 탭해서 고른다 — 탭한 구가
+                      // 파란 테두리 + 하늘색 채움으로 표시되고, 바로 아래 그 구의 동
+                      // 목록이 펼쳐진다.
+                      BusanDistrictMap(
+                        selectedRegion: expandedGu,
+                        onRegionTap: (region) => setState(() {
+                          _sheetExpanded = true;
+                          _expandedGu = _expandedGu == region ? null : region;
+                        }),
+                      ),
+                      if (expandedGu != null)
+                        TweenAnimationBuilder<double>(
+                          key: ValueKey(expandedGu),
+                          tween: Tween(begin: 0, end: 1),
+                          duration: const Duration(milliseconds: 340),
+                          curve: Curves.easeOutCubic,
+                          child: Padding(
+                            padding: const EdgeInsets.only(top: 10),
+                            child: Wrap(
+                              spacing: 8,
+                              runSpacing: 8,
+                              children: [
+                                _SheetChip(
+                                  label: _localizedDongLabel(
+                                      makeGuAllId(expandedGu),
+                                      l10n,
+                                      languageCode),
+                                  selected:
+                                      widget.dongId == makeGuAllId(expandedGu),
+                                  onTap: () => widget
+                                      .onDongSelected(makeGuAllId(expandedGu)),
+                                ),
+                                for (final dong in _dongsOf(expandedGu))
+                                  _SheetChip(
+                                    label: dong,
+                                    selected: widget.dongId ==
+                                        makeDongId(expandedGu, dong),
+                                    icon: widget.myNearestDongId ==
+                                            makeDongId(expandedGu, dong)
+                                        ? Icons.location_on_rounded
+                                        : null,
+                                    onTap: () => widget.onDongSelected(
+                                        makeDongId(expandedGu, dong)),
+                                  ),
+                              ],
+                            ),
+                          ),
+                          builder: (context, value, child) {
+                            return Opacity(
+                              opacity: value,
+                              child: Transform.translate(
+                                offset: Offset(0, 22 * (1 - value)),
+                                child: child,
+                              ),
+                            );
+                          },
+                        ),
+                      const SizedBox(height: 16),
+                    ],
+                  ),
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 8, 20, 0),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(l10n.feedFilterSortLabel,
                         style: TextStyle(
                             fontSize: 12,
-                            fontWeight: FontWeight.w500,
-                            color: Colors.black.withOpacity(0.4))),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 8),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20),
-              child: Row(
-                children: [
-                  Text(l10n.feedFilterDongLabel,
-                      style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
-                          color: Colors.black.withOpacity(0.45))),
-                  const SizedBox(width: 8),
-                  Text(l10n.feedFilterCurrentLocationPlaceholder,
-                      style: TextStyle(
-                          fontSize: 11, color: Colors.black.withOpacity(0.32))),
-                ],
-              ),
-            ),
-            const SizedBox(height: 8),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20),
-              child: Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: [
-                  for (final d in feedDongOptions)
-                    _SheetChip(
-                      label: d.label,
-                      selected: dongId == d.id,
-                      icon: d.near ? Icons.location_on_rounded : null,
-                      onTap: () => onDongSelected(d.id),
+                            fontWeight: FontWeight.w600,
+                            color: Colors.black.withOpacity(0.45))),
+                    const SizedBox(height: 8),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: [
+                        for (final entry in feedSortLabels.entries)
+                          _SheetChip(
+                            label: _localizedSortLabel(entry.key, l10n),
+                            selected: widget.sortBy == entry.key,
+                            onTap: () => widget.onSortSelected(entry.key),
+                          ),
+                      ],
                     ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 16),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20),
-              child: Text(l10n.feedFilterSortLabel,
-                  style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                      color: Colors.black.withOpacity(0.45))),
-            ),
-            const SizedBox(height: 8),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20),
-              child: Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: [
-                  for (final entry in feedSortLabels.entries)
-                    _SheetChip(
-                      label: entry.value,
-                      selected: sortBy == entry.key,
-                      onTap: () => onSortSelected(entry.key),
-                    ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 18),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20),
-              child: FilledButton(
-                style: FilledButton.styleFrom(
-                  backgroundColor: CocoTheme.primary,
-                  minimumSize: const Size.fromHeight(50),
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(14)),
+                  ],
                 ),
-                onPressed: onApply,
-                child: Text(l10n.feedFilterApplyButton(resultCount),
-                    style: const TextStyle(
-                        fontSize: 15, fontWeight: FontWeight.w700)),
               ),
-            ),
-          ],
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 14, 20, 16),
+                child: FilledButton(
+                  style: FilledButton.styleFrom(
+                    backgroundColor: CocoTheme.primary,
+                    minimumSize: const Size.fromHeight(50),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(14)),
+                  ),
+                  onPressed: widget.onApply,
+                  child: Text(l10n.feedFilterApplyButton(widget.resultCount),
+                      style: const TextStyle(
+                          fontSize: 15, fontWeight: FontWeight.w700)),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );

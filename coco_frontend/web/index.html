@@ -476,6 +476,16 @@
     // 영역만큼만 서버에 다시 요청해서 표시하고 싶을 때(핀 밀집 방지) 사용.
     window.cocoSetBoundsChangedHandler = function (divId, onBoundsChanged) {
       window.__cocoBoundsChangedHandlers[divId] = onBoundsChanged;
+      // The map can finish its first bounds event before Flutter registers this
+      // callback. Send the current bounds immediately so the first category tap
+      // can request markers without requiring an extra pan/zoom.
+      var map = window.__cocoKakaoMaps[divId];
+      if (map && onBoundsChanged) {
+        var bounds = map.getBounds();
+        var sw = bounds.getSouthWest();
+        var ne = bounds.getNorthEast();
+        onBoundsChanged(sw.getLat(), sw.getLng(), ne.getLat(), ne.getLng());
+      }
     };
 
     window.cocoSetKakaoCenter = function (divId, lat, lng) {

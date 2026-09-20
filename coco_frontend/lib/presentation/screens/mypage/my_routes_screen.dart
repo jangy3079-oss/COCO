@@ -3,6 +3,8 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:pointer_interceptor/pointer_interceptor.dart';
+import 'package:provider/provider.dart';
+import '../../../core/locale/locale_controller.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../l10n/generated/app_localizations.dart';
 import '../../widgets/map/kakao_map_view.dart';
@@ -33,7 +35,12 @@ class _MyRoutesScreenState extends State<MyRoutesScreen> {
   @override
   void initState() {
     super.initState();
-    refreshMyRoutes().then((_) {
+    Future.wait([
+      refreshMyRoutes(),
+      refreshLikedSpots(
+        locale: context.read<LocaleController>().locale.languageCode,
+      ),
+    ]).then((_) {
       if (mounted) setState(() {});
     });
   }
@@ -61,7 +68,11 @@ class _MyRoutesScreenState extends State<MyRoutesScreen> {
   Future<void> _editRoute(MockRoute route) async {
     await context.push(
       '/map/route/new',
-      extra: {'editingRouteId': route.id, 'initialName': route.name, 'initialStops': route.stops},
+      extra: {
+        'editingRouteId': route.id,
+        'initialName': route.name,
+        'initialStops': route.stops
+      },
     );
     if (mounted) setState(() {});
   }
@@ -73,13 +84,29 @@ class _MyRoutesScreenState extends State<MyRoutesScreen> {
     final query = _query.trim();
 
     final likedSpots = savedSpots;
-    final filteredSpots = query.isEmpty ? likedSpots : likedSpots.where((s) => s.name.contains(query)).toList();
+    final filteredSpots = query.isEmpty
+        ? likedSpots
+        : likedSpots.where((s) => s.name.contains(query)).toList();
 
     final routes = mockMyRoutes;
-    final filteredRoutes = query.isEmpty ? routes : routes.where((r) => r.name.contains(query)).toList();
+    final filteredRoutes = query.isEmpty
+        ? routes
+        : routes.where((r) => r.name.contains(query)).toList();
 
     return Scaffold(
       backgroundColor: Colors.white,
+      floatingActionButton: PointerInterceptor(
+        child: FloatingActionButton.extended(
+          onPressed: _createNew,
+          backgroundColor: CocoTheme.primary,
+          foregroundColor: Colors.white,
+          elevation: 3,
+          label: Text(
+            l10n.myRoutesNewRouteButton,
+            style: const TextStyle(fontWeight: FontWeight.w700),
+          ),
+        ),
+      ),
       body: Stack(
         children: [
           // 본문 — 골목지도 탭은 전체화면 지도, 코스 탭은 리스트. 둘 다 위에 블러 헤더가 뜬다.
@@ -94,9 +121,15 @@ class _MyRoutesScreenState extends State<MyRoutesScreen> {
                           centerLng: center.$2,
                           level: 6,
                           markers: [
-                            for (final s in filteredSpots) KakaoMapMarker(id: s.id, lat: s.lat, lng: s.lng, name: s.name),
+                            for (final s in filteredSpots)
+                              KakaoMapMarker(
+                                  id: s.id,
+                                  lat: s.lat,
+                                  lng: s.lng,
+                                  name: s.name),
                           ],
-                          onMarkerTap: (spotId) => context.push('/map/spot/$spotId'),
+                          onMarkerTap: (spotId) =>
+                              context.push('/map/spot/$spotId'),
                         );
                       }))
                 : (filteredRoutes.isEmpty
@@ -104,9 +137,14 @@ class _MyRoutesScreenState extends State<MyRoutesScreen> {
                         padding: const EdgeInsets.only(top: 200),
                         child: Center(
                           child: Text(
-                            routes.isEmpty ? l10n.myRoutesEmptyCourseNone : l10n.myRoutesEmptySearchResult,
+                            routes.isEmpty
+                                ? l10n.myRoutesEmptyCourseNone
+                                : l10n.myRoutesEmptySearchResult,
                             textAlign: TextAlign.center,
-                            style: TextStyle(fontSize: 14, height: 1.7, color: Colors.grey.shade500),
+                            style: TextStyle(
+                                fontSize: 14,
+                                height: 1.7,
+                                color: Colors.grey.shade500),
                           ),
                         ),
                       )
@@ -119,11 +157,14 @@ class _MyRoutesScreenState extends State<MyRoutesScreen> {
                               expanded: _expandedRouteId == r.id,
                               viewMode: _viewModes[r.id] ?? _RouteViewMode.list,
                               onToggleExpanded: () => setState(() {
-                                _expandedRouteId = _expandedRouteId == r.id ? null : r.id;
+                                _expandedRouteId =
+                                    _expandedRouteId == r.id ? null : r.id;
                               }),
-                              onViewModeChanged: (m) => setState(() => _viewModes[r.id] = m),
+                              onViewModeChanged: (m) =>
+                                  setState(() => _viewModes[r.id] = m),
                               onEdit: () => _editRoute(r),
-                              onViewOnMap: () => context.push('/map/route/preview', extra: {
+                              onViewOnMap: () =>
+                                  context.push('/map/route/preview', extra: {
                                 'name': r.name,
                                 'stops': r.stops,
                                 'routeId': r.id,
@@ -132,7 +173,6 @@ class _MyRoutesScreenState extends State<MyRoutesScreen> {
                             ),
                             const SizedBox(height: 12),
                           ],
-                          _NewRouteButton(onTap: _createNew),
                         ],
                       )),
           ),
@@ -178,19 +218,34 @@ class _MyRoutesScreenState extends State<MyRoutesScreen> {
                             children: [
                               Row(
                                 children: [
-                                  IconButton(onPressed: () => context.pop(), icon: const Icon(Icons.arrow_back_rounded)),
+                                  IconButton(
+                                      onPressed: () => context.pop(),
+                                      icon:
+                                          const Icon(Icons.arrow_back_rounded)),
                                   const SizedBox(width: 2),
-                                  _HeaderTabLabel(label: l10n.myPageMapCardTitle, selected: isAlley, onTap: () => _switchTab('alley')),
+                                  _HeaderTabLabel(
+                                      label: l10n.myPageMapCardTitle,
+                                      selected: isAlley,
+                                      onTap: () => _switchTab('alley')),
                                   const SizedBox(width: 14),
-                                  _HeaderTabLabel(label: l10n.myRoutesTabCourse, selected: !isAlley, onTap: () => _switchTab('course')),
+                                  _HeaderTabLabel(
+                                      label: l10n.myRoutesTabCourse,
+                                      selected: !isAlley,
+                                      onTap: () => _switchTab('course')),
                                 ],
                               ),
                               const SizedBox(height: 6),
                               Padding(
                                 padding: const EdgeInsets.only(left: 12),
                                 child: Text(
-                                  isAlley ? l10n.myRoutesAlleySubtitle(likedSpots.length) : l10n.myRoutesCourseSubtitle(routes.length),
-                                  style: TextStyle(fontSize: 13, color: Colors.grey.shade600),
+                                  isAlley
+                                      ? l10n.myRoutesAlleySubtitle(
+                                          likedSpots.length)
+                                      : l10n.myRoutesCourseSubtitle(
+                                          routes.length),
+                                  style: TextStyle(
+                                      fontSize: 13,
+                                      color: Colors.grey.shade600),
                                 ),
                               ),
                               const SizedBox(height: 12),
@@ -198,7 +253,9 @@ class _MyRoutesScreenState extends State<MyRoutesScreen> {
                                 padding: const EdgeInsets.only(left: 12),
                                 child: _RoutesSearchBar(
                                   controller: _searchController,
-                                  hintText: isAlley ? l10n.myRoutesSearchHintSpots : l10n.myRoutesSearchHintCourse,
+                                  hintText: isAlley
+                                      ? l10n.myRoutesSearchHintSpots
+                                      : l10n.myRoutesSearchHintCourse,
                                   onChanged: (v) => setState(() => _query = v),
                                   onClear: () => setState(() {
                                     _query = '';
@@ -232,7 +289,8 @@ class _HeaderTabLabel extends StatelessWidget {
   final String label;
   final bool selected;
   final VoidCallback onTap;
-  const _HeaderTabLabel({required this.label, required this.selected, required this.onTap});
+  const _HeaderTabLabel(
+      {required this.label, required this.selected, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
@@ -290,7 +348,8 @@ class _RoutesSearchBar extends StatelessWidget {
           suffixIcon: controller.text.isEmpty
               ? null
               : IconButton(
-                  icon: const Icon(Icons.close_rounded, color: Colors.grey, size: 20),
+                  icon: const Icon(Icons.close_rounded,
+                      color: Colors.grey, size: 20),
                   onPressed: onClear,
                 ),
           hintText: hintText,
@@ -351,7 +410,10 @@ class _RouteCard extends StatelessWidget {
                             Flexible(
                               child: Text(route.name,
                                   overflow: TextOverflow.ellipsis,
-                                  style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: CocoTheme.secondary)),
+                                  style: const TextStyle(
+                                      fontSize: 15,
+                                      fontWeight: FontWeight.w700,
+                                      color: CocoTheme.secondary)),
                             ),
                             const SizedBox(width: 6),
                             _VisibilityBadge(isPublic: route.isPublic),
@@ -359,22 +421,30 @@ class _RouteCard extends StatelessWidget {
                         ),
                         const SizedBox(height: 4),
                         Text(
-                          l10n.myRoutesStopsDistance(route.stops.length, route.distanceKm.toStringAsFixed(1)),
-                          style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+                          l10n.myRoutesStopsDistance(route.stops.length,
+                              route.distanceKm.toStringAsFixed(1)),
+                          style: TextStyle(
+                              fontSize: 12, color: Colors.grey.shade600),
                         ),
                         const SizedBox(height: 3),
                         Text(
                           route.isPublic
-                              ? l10n.myRoutesStatsPublic(route.likes, route.saves, route.shares)
+                              ? l10n.myRoutesStatsPublic(
+                                  route.likes, route.saves, route.shares)
                               : route.isDraft
                                   ? l10n.myRoutesPrivateDraft
                                   : l10n.myRoutesPrivate,
-                          style: TextStyle(fontSize: 12, color: Colors.grey.shade500),
+                          style: TextStyle(
+                              fontSize: 12, color: Colors.grey.shade500),
                         ),
                       ],
                     ),
                   ),
-                  Icon(expanded ? Icons.expand_less_rounded : Icons.expand_more_rounded, color: Colors.grey.shade500),
+                  Icon(
+                      expanded
+                          ? Icons.expand_less_rounded
+                          : Icons.expand_more_rounded,
+                      color: Colors.grey.shade500),
                 ],
               ),
             ),
@@ -403,12 +473,18 @@ class _RouteCard extends StatelessWidget {
                                   centerLng: center.$2,
                                   level: 6,
                                   markers: [
-                                    for (final s in route.stops) KakaoMapMarker(id: s.id, lat: s.lat, lng: s.lng, name: s.name),
+                                    for (final s in route.stops)
+                                      KakaoMapMarker(
+                                          id: s.id,
+                                          lat: s.lat,
+                                          lng: s.lng,
+                                          name: s.name),
                                   ],
                                 );
                               }),
                             ),
-                            const Positioned.fill(child: ColoredBox(color: Colors.transparent)),
+                            const Positioned.fill(
+                                child: ColoredBox(color: Colors.transparent)),
                           ],
                         ),
                       ),
@@ -422,12 +498,22 @@ class _RouteCard extends StatelessWidget {
                               children: [
                                 SizedBox(
                                   width: 20,
-                                  child: Text('${i + 1}', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: CocoTheme.primary)),
+                                  child: Text('${i + 1}',
+                                      style: const TextStyle(
+                                          fontSize: 13,
+                                          fontWeight: FontWeight.w700,
+                                          color: CocoTheme.primary)),
                                 ),
                                 Expanded(
-                                  child: Text(route.stops[i].name, style: const TextStyle(fontSize: 13, color: CocoTheme.secondary)),
+                                  child: Text(route.stops[i].name,
+                                      style: const TextStyle(
+                                          fontSize: 13,
+                                          color: CocoTheme.secondary)),
                                 ),
-                                Text(route.stops[i].dong, style: TextStyle(fontSize: 12, color: Colors.grey.shade500)),
+                                Text(route.stops[i].dong,
+                                    style: TextStyle(
+                                        fontSize: 12,
+                                        color: Colors.grey.shade500)),
                               ],
                             ),
                           ),
@@ -438,14 +524,20 @@ class _RouteCard extends StatelessWidget {
               padding: const EdgeInsets.fromLTRB(14, 8, 14, 14),
               child: Row(
                 children: [
-                  Expanded(child: _SegmentButton(label: l10n.myRoutesEditButton, selected: false, onTap: onEdit)),
+                  Expanded(
+                      child: _SegmentButton(
+                          label: l10n.myRoutesEditButton,
+                          selected: false,
+                          onTap: onEdit)),
                   const SizedBox(width: 8),
                   Expanded(
                     child: _SegmentButton(
                       label: l10n.myRoutesViewOnMapButton,
                       selected: viewMode == _RouteViewMode.map,
                       onTap: () => onViewModeChanged(
-                        viewMode == _RouteViewMode.map ? _RouteViewMode.list : _RouteViewMode.map,
+                        viewMode == _RouteViewMode.map
+                            ? _RouteViewMode.list
+                            : _RouteViewMode.map,
                       ),
                     ),
                   ),
@@ -476,11 +568,21 @@ class _RouteThumb extends StatelessWidget {
     return Container(
       width: 44,
       height: 44,
-      decoration: BoxDecoration(color: const Color(0xFFEAE8E2), borderRadius: BorderRadius.circular(10)),
+      decoration: BoxDecoration(
+          color: const Color(0xFFEAE8E2),
+          borderRadius: BorderRadius.circular(10)),
       child: Stack(
         children: [
-          Positioned(left: 10, top: 8, child: Icon(Icons.location_on_rounded, size: 16, color: CocoTheme.primary)),
-          Positioned(right: 10, bottom: 8, child: Icon(Icons.location_on_rounded, size: 16, color: CocoTheme.primary)),
+          Positioned(
+              left: 10,
+              top: 8,
+              child: Icon(Icons.location_on_rounded,
+                  size: 16, color: CocoTheme.primary)),
+          Positioned(
+              right: 10,
+              bottom: 8,
+              child: Icon(Icons.location_on_rounded,
+                  size: 16, color: CocoTheme.primary)),
         ],
       ),
     );
@@ -502,7 +604,10 @@ class _VisibilityBadge extends StatelessWidget {
       ),
       child: Text(
         isPublic ? l10n.myRoutesVisibilityPublic : l10n.myRoutesPrivate,
-        style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: isPublic ? CocoTheme.primary : Colors.grey.shade600),
+        style: TextStyle(
+            fontSize: 11,
+            fontWeight: FontWeight.w700,
+            color: isPublic ? CocoTheme.primary : Colors.grey.shade600),
       ),
     );
   }
@@ -512,7 +617,8 @@ class _SegmentButton extends StatelessWidget {
   final String label;
   final bool selected;
   final VoidCallback onTap;
-  const _SegmentButton({required this.label, required this.selected, required this.onTap});
+  const _SegmentButton(
+      {required this.label, required this.selected, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
@@ -527,12 +633,16 @@ class _SegmentButton extends StatelessWidget {
         decoration: BoxDecoration(
           color: selected ? CocoTheme.primary : Colors.white,
           borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: selected ? CocoTheme.primary : Colors.grey.shade300),
+          border: Border.all(
+              color: selected ? CocoTheme.primary : Colors.grey.shade300),
         ),
         child: AnimatedDefaultTextStyle(
           duration: const Duration(milliseconds: 180),
           curve: Curves.easeOut,
-          style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: selected ? Colors.white : CocoTheme.secondary),
+          style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              color: selected ? Colors.white : CocoTheme.secondary),
           child: Text(label),
         ),
       ),
@@ -556,9 +666,11 @@ class _EmptyLikedMap extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Text(l10n.myPageMapCardEmpty, style: TextStyle(fontSize: 14, color: Colors.grey.shade600)),
+            Text(l10n.myPageMapCardEmpty,
+                style: TextStyle(fontSize: 14, color: Colors.grey.shade600)),
             const SizedBox(height: 6),
-            Text(l10n.myMapEmptySubtitle, style: TextStyle(fontSize: 13, color: Colors.grey.shade500)),
+            Text(l10n.myMapEmptySubtitle,
+                style: TextStyle(fontSize: 13, color: Colors.grey.shade500)),
             const SizedBox(height: 18),
             FilledButton(
               style: FilledButton.styleFrom(backgroundColor: CocoTheme.primary),
@@ -567,29 +679,6 @@ class _EmptyLikedMap extends StatelessWidget {
             ),
           ],
         ),
-      ),
-    );
-  }
-}
-
-class _NewRouteButton extends StatelessWidget {
-  final VoidCallback onTap;
-  const _NewRouteButton({required this.onTap});
-
-  @override
-  Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context)!;
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(16),
-      child: Container(
-        alignment: Alignment.center,
-        padding: const EdgeInsets.symmetric(vertical: 16),
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: Colors.grey.shade300, style: BorderStyle.solid),
-        ),
-        child: Text(l10n.myRoutesNewRouteButton, style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Colors.grey.shade600)),
       ),
     );
   }

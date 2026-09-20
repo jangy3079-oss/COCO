@@ -53,8 +53,19 @@
   "feedFilterSheetTitle": "フィードフィルター",
   "feedFilterReset": "リセット",
   "feedFilterDongLabel": "地域",
-  "feedFilterCurrentLocationPlaceholder": "現在地 中区 南浦洞",
+  "feedFilterNearLabel": "現在地に近い{dong}",
+  "@feedFilterNearLabel": {
+    "placeholders": { "dong": { "type": "String" } }
+  },
   "feedFilterSortLabel": "並び替え",
+  "feedFilterBusanAll": "釜山全域",
+  "feedFilterDistrictAll": "{district}全域",
+  "@feedFilterDistrictAll": {
+    "placeholders": { "district": { "type": "String" } }
+  },
+  "feedFilterSortLatest": "新着順",
+  "feedFilterSortLikes": "いいねが多い順",
+  "feedFilterSortSaves": "保存が多い順",
   "feedFilterApplyButton": "{count}件の投稿を見る",
   "@feedFilterApplyButton": {
     "placeholders": { "count": { "type": "int" } }

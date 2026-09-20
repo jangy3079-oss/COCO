@@ -53,8 +53,19 @@
   "feedFilterSheetTitle": "피드 필터",
   "feedFilterReset": "초기화",
   "feedFilterDongLabel": "동네",
-  "feedFilterCurrentLocationPlaceholder": "현재 위치 중구 남포동",
+  "feedFilterNearLabel": "내 위치 기준 {dong}",
+  "@feedFilterNearLabel": {
+    "placeholders": { "dong": { "type": "String" } }
+  },
   "feedFilterSortLabel": "정렬",
+  "feedFilterBusanAll": "부산 전체",
+  "feedFilterDistrictAll": "{district} 전체",
+  "@feedFilterDistrictAll": {
+    "placeholders": { "district": { "type": "String" } }
+  },
+  "feedFilterSortLatest": "최신순",
+  "feedFilterSortLikes": "좋아요 많은 순",
+  "feedFilterSortSaves": "저장 많은 순",
   "feedFilterApplyButton": "{count}개 게시물 보기",
   "@feedFilterApplyButton": {
     "placeholders": { "count": { "type": "int" } }

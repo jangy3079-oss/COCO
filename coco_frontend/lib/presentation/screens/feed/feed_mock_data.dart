@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:geolocator/geolocator.dart';
 import '../map/map_mock_data.dart' show MockSpot;
 import '../../../data/models/feed_post.dart';
+import '../../../data/reference/busan_dong_data.dart';
 
 // feed_posts 테이블은 실제 연동 완료(FeedRepository) — 이 파일은 이제 목업 데이터가
 // 아니라 피드 화면들이 공유하는 FeedItem 모델 + 실제 백엔드 응답(FeedPost/
@@ -23,26 +25,81 @@ class FeedComment {
   String get authorInitial => author.isNotEmpty ? author.substring(0, 1) : '';
 }
 
-/// 동네(동) 필터 옵션. 레퍼런스의 필터 바텀시트("동네" 섹션)에서 쓰는
-/// 칩 목록 — near가 true인 동네엔 위치 아이콘이 붙는다(현재 위치 기준 가까운 동네).
-class FeedDongOption {
-  final String id;
-  final String label;
-  final bool near;
-  const FeedDongOption(
-      {required this.id, required this.label, this.near = false});
+/// 동네(구/동) 필터 — busan_dong_data.dart(부산 16개 구·군 전체, OpenStreetMap
+/// 지오코딩 기반 대표좌표 테이블)를 기준으로 한다.
+/// dongId 형식: 부산 전체는 [kAllDongId], 특정 구를 통째로 고르면
+/// '구이름|$_guAllSuffix', 특정 동을 고르면 '구이름|동이름'.
+/// 실제 행정동 경계 데이터가 아니라 동별 대표 좌표 기반 반경 매칭이라
+/// ([matchesDongFilter]) 동 경계에 걸친 스팟도 자연스럽게 같이 보인다 — 의도된 동작.
+const kAllDongId = 'all';
+const _guAllSuffix = '__구전체__';
+
+String makeDongId(String gu, String dong) => '$gu|$dong';
+String makeGuAllId(String gu) => '$gu|$_guAllSuffix';
+
+/// 필터 헤더/카드 배지에 보여줄 짧은 라벨.
+String feedDongLabel(String id) {
+  if (id == kAllDongId) return '부산 전체';
+  final parts = id.split('|');
+  if (parts.length != 2) return '부산 전체';
+  final gu = parts[0], dong = parts[1];
+  return dong == _guAllSuffix ? '$gu 전체' : normalizeBusanDongName(dong);
 }
 
-const feedDongOptions = [
-  FeedDongOption(id: 'nampo', label: '남포동', near: true),
-  FeedDongOption(id: 'gwangbok', label: '광복동'),
-  FeedDongOption(id: 'yeongju', label: '영주동'),
-  FeedDongOption(id: 'all', label: '전체 동네'),
-];
+/// dongId가 가리키는 기준 좌표(들) — 반경 매칭에 쓴다. 못 찾으면 빈 리스트.
+List<BusanDong> _dongTargets(String id) {
+  final parts = id.split('|');
+  if (parts.length != 2) return const [];
+  final guNames = busanGusForFeedRegion(parts[0]);
+  final dongs = <BusanDong>[
+    for (final gu in busanGuList)
+      if (guNames.contains(gu.name)) ...gu.dongs,
+  ];
+  if (parts[1] == _guAllSuffix) return dongs;
+  return dongs
+      .where((d) => normalizeBusanDongName(d.name) == parts[1])
+      .toList();
+}
 
-String feedDongLabel(String id) => feedDongOptions
-    .firstWhere((d) => d.id == id, orElse: () => feedDongOptions.last)
-    .label;
+/// 기장군은 읍/면 단위라 지역이 넓어 반경을 더 크게 잡는다.
+double _radiusKmFor(String gu) => gu == '기장군' ? 3.0 : 1.0;
+
+/// 게시물 좌표가 선택한 동네 필터에 "근처"로 포함되는지. 위치 정보가 없는
+/// 게시물(스팟 태그 없이 쓴 글)은 필터와 무관하게 항상 포함시킨다 — 동네
+/// 필터 때문에 위치 없는 글이 숨어버리면 더 이상하기 때문.
+bool matchesDongFilter(
+    {required double? lat, required double? lng, required String dongId}) {
+  if (dongId == kAllDongId) return true;
+  if (lat == null || lng == null) return true;
+  final targets = _dongTargets(dongId);
+  if (targets.isEmpty) return true;
+  final radiusM = _radiusKmFor(dongId.split('|').first) * 1000;
+  for (final t in targets) {
+    if (Geolocator.distanceBetween(lat, lng, t.lat, t.lng) <= radiusM) {
+      return true;
+    }
+  }
+  return false;
+}
+
+/// 좌표에서 가장 가까운 동의 dongId(카드에 표시할 대표 동네 라벨용). 실패 시 null.
+String? nearestDongId(double lat, double lng) {
+  String? bestId;
+  var bestDist = double.infinity;
+  for (final g in busanGuList) {
+    for (final d in g.dongs) {
+      final dist = Geolocator.distanceBetween(lat, lng, d.lat, d.lng);
+      if (dist < bestDist) {
+        bestDist = dist;
+        bestId = makeDongId(
+          busanFeedRegionForGu(g.name),
+          normalizeBusanDongName(d.name),
+        );
+      }
+    }
+  }
+  return bestId;
+}
 
 /// 정렬 옵션 — 최신순 / 좋아요 많은 순 / 저장 많은 순 (레퍼런스 기준, 예전 "거리순"은 제외됨).
 const feedSortLabels = {
@@ -60,7 +117,9 @@ class FeedItem {
   final String title; // 카드 제목 (장소명과 별개의 한 줄 헤드라인)
   final String desc;
   final String neighborhood; // 구 단위 (상세 화면 표기용)
-  final String dongId; // 동 단위 필터용 (feedDongOptions의 id)
+  final String dongId; // 동 단위 필터용 (busanGuList 기반 dongId, makeDongId 참고)
+  final double? lat; // 태그된 스팟의 좌표(동네 필터 반경 매칭용) — 없으면 null
+  final double? lng;
   final int distanceMin;
   final int likes; // 기본 좋아요 수 (liked 토글과 별개)
   final int saves; // 기본 저장 수 (saved 토글과 별개)
@@ -99,6 +158,8 @@ class FeedItem {
     required this.desc,
     required this.neighborhood,
     required this.dongId,
+    this.lat,
+    this.lng,
     required this.distanceMin,
     required this.likes,
     required this.saves,
@@ -139,15 +200,19 @@ class FeedItem {
 }
 
 /// 실제 백엔드 게시물(FeedPost)을 목업 기반 FeedItem 리스트에 합쳐서 보여주기 위한 변환.
-/// 스팟의 동/구·카테고리 등 FeedPostResponse가 안 내려주는 값들은 아직 매칭할 방법이
-/// 없어 임시값(dongId 'all', category '골목')으로 채운다 — 동네 필터에 안 걸리게 하려면
-/// "전체 동네"를 선택해야 보인다는 뜻. ts는 실제 생성 시각(ms)을 그대로 써서 정렬 시
-/// 항상 목업 시드 데이터보다 위(최신)로 올라오게 한다.
+/// FeedPostResponse가 동/구 이름을 직접 내려주진 않지만 스팟 좌표(lat/lng)는 내려주므로,
+/// busan_dong_data.dart 테이블에서 가장 가까운 동을 찾아 dongId/neighborhood를 채운다.
+/// 좌표가 없는 글(스팟 태그 없이 쓴 글)은 dongId를 kAllDongId로 둬서 동네 필터와
+/// 무관하게 항상 노출된다(matchesDongFilter도 동일 규칙을 적용). category는 아직
+/// FeedPostResponse가 안 내려줘서 '골목' 고정값. ts는 실제 생성 시각(ms)을 그대로 써서
+/// 정렬 시 항상 목업 시드 데이터보다 위(최신)로 올라오게 한다.
 ///
 /// FeedItem.likeCount는 "likes(내가 안 눌렀을 때의 기준값) + (liked?1:0)"로 계산되는데,
 /// 백엔드 likeCount는 이미 내 좋아요까지 포함된 총합이라 그대로 넣으면 liked=true일 때
 /// 1 중복 계산된다. 그래서 이미 눌렀던 상태면 likes를 1 빼서 넣어 getter 계산이 맞게 한다.
 FeedItem feedItemFromPost(FeedPost p) {
+  final resolvedDongId =
+      (p.lat != null && p.lng != null) ? nearestDongId(p.lat!, p.lng!) : null;
   return FeedItem(
     id: 'real-${p.id}',
     source: FeedSource.user,
@@ -155,8 +220,10 @@ FeedItem feedItemFromPost(FeedPost p) {
     category: '골목',
     place: p.spotName ?? '', // 스팟 태그 없이 쓴 글이면 빈 문자열 — 카드/상세에서 위치 배지 숨김
     desc: p.description ?? '',
-    neighborhood: '',
-    dongId: 'all',
+    neighborhood: resolvedDongId != null ? feedDongLabel(resolvedDongId) : '',
+    dongId: resolvedDongId ?? kAllDongId,
+    lat: p.lat,
+    lng: p.lng,
     distanceMin: 0,
     // likeCount 중복 계산 방지: 백엔드 likeCount는 내 좋아요 포함 총합 — liked=true면 1 빼서 넣는다.
     likes: p.likeCount - (p.liked ? 1 : 0),

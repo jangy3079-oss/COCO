@@ -258,10 +258,21 @@ class _MapScreenState extends State<MapScreen> {
   // 탭했을 때와 같은 말풍선(뿅 애니메이션 포함)을 띄운다 — "자세히 보기"까지
   // 눌러야 상세로 이동하는 흐름은 핀 탭과 동일하게 유지.
   void _openSearchResult(MockSpot spot) {
+    final numericId = dbSpotNumericId(spot.id);
+    db.Spot? searchedDbSpot;
+    for (final candidate in _searchDbResults) {
+      if (candidate.id == numericId) {
+        searchedDbSpot = candidate;
+        break;
+      }
+    }
     _clearSearch();
     setState(() {
       // 검색 결과도 해당 카테고리 선택 상태에서만 핀으로 표시한다.
       _selectedCategory = spot.category;
+      // 검색 결과는 현재 뷰포트 조회 결과에 아직 없을 수 있다. 카메라 이동과
+      // 동시에 이 스팟을 마커 목록에 넣어 말풍선만 있고 핀은 없는 상태를 막는다.
+      if (searchedDbSpot != null) _dbSpots = [searchedDbSpot];
       _focusTarget = MapFocusTarget(
         id: spot.id,
         lat: spot.lat,
